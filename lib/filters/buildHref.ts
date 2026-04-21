@@ -1,0 +1,46 @@
+import type { Filters } from "@/lib/types";
+
+export interface HrefInput {
+  pathNeighborhood?: string;
+  pathCategory?: string;
+  filters: Partial<Filters>;
+}
+
+export function buildHref({
+  pathNeighborhood,
+  pathCategory,
+  filters,
+}: HrefInput): string {
+  const segments = ["explore"];
+  if (pathNeighborhood) segments.push(pathNeighborhood);
+  if (pathCategory) segments.push(pathCategory);
+  const base = "/" + segments.join("/");
+
+  const sp = new URLSearchParams();
+
+  if (filters.type && filters.type !== "all") sp.set("type", filters.type);
+  if (filters.date && filters.date !== "any") sp.set("date", filters.date);
+  if (filters.from) sp.set("from", filters.from);
+  if (filters.to) sp.set("to", filters.to);
+
+  const extraHoods = (filters.neighborhoods ?? []).filter(
+    (h) => h !== pathNeighborhood,
+  );
+  if (extraHoods.length) sp.set("hoods", extraHoods.join(","));
+
+  const extraCats = (filters.categories ?? []).filter(
+    (c) => c !== pathCategory,
+  );
+  if (extraCats.length) sp.set("cats", extraCats.join(","));
+
+  if (filters.lifestyle && filters.lifestyle.length) {
+    sp.set("lifestyle", filters.lifestyle.join(","));
+  }
+  if (filters.freeOnly) sp.set("free", "1");
+  if (filters.q) sp.set("q", filters.q);
+  if (filters.view === "map") sp.set("view", "map");
+  if (filters.venue) sp.set("venue", filters.venue);
+
+  const qs = sp.toString();
+  return qs ? `${base}?${qs}` : base;
+}
