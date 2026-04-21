@@ -45,11 +45,11 @@ function PinMarker({ type }: { type: ListingType }) {
   if (type === "event") {
     // Outlined calendar: rounded rect body + header divider + two pegs on top
     iconPath = (
-      <g fill="none" stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="10" y="11" width="12" height="10.5" rx="1.5" />
-        <line x1="10" y1="14" x2="22" y2="14" />
-        <line x1="13.5" y1="9" x2="13.5" y2="11.5" />
-        <line x1="18.5" y1="9" x2="18.5" y2="11.5" />
+      <g fill="none" stroke="#fff" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="11" y="11.5" width="10" height="8.5" rx="1.3" />
+        <line x1="11" y1="14" x2="21" y2="14" />
+        <line x1="13.8" y1="10" x2="13.8" y2="11.8" />
+        <line x1="18.2" y1="10" x2="18.2" y2="11.8" />
       </g>
     );
   } else if (type === "deal") {
@@ -57,9 +57,9 @@ function PinMarker({ type }: { type: ListingType }) {
     iconPath = (
       <text
         x="16"
-        y="19.5"
+        y="19"
         textAnchor="middle"
-        fontSize="14"
+        fontSize="12.5"
         fontWeight="900"
         fill="#fff"
         fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -70,10 +70,12 @@ function PinMarker({ type }: { type: ListingType }) {
   } else {
     // Solid star
     iconPath = (
-      <polygon
-        points="16 8 17.9 12.6 23 13 19 16.2 20.2 21 16 18.4 11.8 21 13 16.2 9 13 14.1 12.6"
-        fill="#fff"
-      />
+      <g transform="translate(16 14.5) scale(0.82) translate(-16 -14.5)">
+        <polygon
+          points="16 8 17.9 12.6 23 13 19 16.2 20.2 21 16 18.4 11.8 21 13 16.2 9 13 14.1 12.6"
+          fill="#fff"
+        />
+      </g>
     );
   }
 
@@ -110,7 +112,7 @@ function CompactCard({
       href={href}
       onMouseEnter={() => onHover(listing.id)}
       onMouseLeave={() => onHover(null)}
-      className={`group border-border flex gap-3 rounded-xl border p-2.5 transition-all ${
+      className={`group border-border flex gap-3 rounded-xl border p-2.5 pr-4 transition-all ${
         active ? "border-dark shadow-md" : "bg-white hover:border-dark"
       }`}
     >
@@ -141,8 +143,8 @@ export function MapView({ listings }: Props) {
   const [activeId, setActiveId] = useState<number | null>(null);
 
   return (
-    <div className="border-border grid overflow-hidden rounded-2xl border bg-white" style={{ gridTemplateColumns: "380px 1fr", minHeight: 600 }}>
-      <aside className="border-border max-h-[calc(100vh-220px)] overflow-y-auto border-r px-3 py-3">
+    <div className="border-border grid overflow-hidden rounded-2xl border bg-white" style={{ gridTemplateColumns: "380px 1fr", height: "calc(100vh - 220px)", minHeight: 600 }}>
+      <aside className="border-border overflow-y-auto border-r px-4 py-3">
         {listings.length === 0 ? (
           <p className="text-gray px-3 py-6 text-sm">No results.</p>
         ) : (

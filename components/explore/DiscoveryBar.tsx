@@ -129,7 +129,7 @@ export function DiscoveryBar() {
   const catOptions = CATEGORIES.filter((c) => c.slug !== pathCategory);
 
   return (
-    <div className="bg-bg border-border sticky top-[130px] z-30 border-b">
+    <div className="bg-bg border-border border-b">
       <div className="mx-auto max-w-[1100px] px-7 pb-3 pt-4">
         <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
           <div className="relative flex-1">
