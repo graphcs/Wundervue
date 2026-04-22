@@ -2,18 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 import { Pill } from "@/components/ui/Pill";
-import { DropdownPill } from "./DropdownPill";
 import { MultiDropdownPill } from "./MultiDropdownPill";
+import { DateDropdown } from "./DateDropdown";
 import { useFilters } from "@/lib/hooks/useFilters";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { CATEGORIES } from "@/lib/data/categories";
-import {
-  LIFESTYLE_TAGS,
-  DATE_PRESETS,
-  TYPE_FILTERS,
-} from "@/lib/filters/types";
-import type { LifestyleTag, TypeFilter, DatePreset } from "@/lib/types";
+import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
+import type { LifestyleTag, TypeFilter } from "@/lib/types";
 
 function SearchIcon() {
   return (
@@ -157,7 +153,16 @@ export function DiscoveryBar() {
             <Pill
               key={t.id}
               active={filters.type === t.id}
-              onClick={() => replaceFilters({ type: t.id as TypeFilter })}
+              onClick={() =>
+                replaceFilters({
+                  type:
+                    t.id === "all"
+                      ? "all"
+                      : filters.type === t.id
+                        ? "all"
+                        : (t.id as TypeFilter),
+                })
+              }
             >
               {t.label}
             </Pill>
@@ -165,11 +170,13 @@ export function DiscoveryBar() {
 
           <div className="mx-1.5 h-[18px] w-px bg-[#d5d5d5]" />
 
-          <DropdownPill<DatePreset>
-            label="Date"
-            options={DATE_PRESETS}
+          <DateDropdown
             value={filters.date}
-            onChange={(v) => replaceFilters({ date: v })}
+            from={filters.from}
+            to={filters.to}
+            onChange={({ date, from, to }) =>
+              replaceFilters({ date, from, to })
+            }
           />
 
           <MultiDropdownPill

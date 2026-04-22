@@ -68,11 +68,32 @@ export function MultiDropdownPill({
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(opt.slug)}
-                  className="accent-coral h-4 w-4"
+                  className="sr-only"
                 />
-                <span className={checked ? "text-dark font-bold" : "text-dark"}>
-                  {opt.label}
+                <span
+                  aria-hidden="true"
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-[1.5px] transition-colors ${
+                    checked
+                      ? "bg-dark border-dark"
+                      : "border-chrome bg-white"
+                  }`}
+                >
+                  {checked && (
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
                 </span>
+                <span className="text-dark font-normal">{opt.label}</span>
               </label>
             );
           })}
