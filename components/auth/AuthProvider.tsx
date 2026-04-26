@@ -9,7 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { mockAuthRepo } from "@/lib/auth/mockAuthRepo";
+import { supabaseAuthRepo } from "@/lib/auth/supabaseAuthRepo";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type {
   Profile,
   Session,
@@ -24,8 +25,10 @@ export interface AuthContextValue {
   isLoggedIn: boolean;
   signIn: (input: SignInInput) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   onboardingOpen: boolean;
   openOnboarding: (step?: number) => void;
   closeOnboarding: () => void;
@@ -62,32 +65,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [manageSubOpen, setManageSubOpen] = useState(false);
 
   useEffect(() => {
-    setSession(mockAuthRepo.getSession());
-    setProfile(mockAuthRepo.getProfile());
-    setHydrated(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [s, p] = await Promise.all([
+          supabaseAuthRepo.getSession(),
+          supabaseAuthRepo.getProfile(),
+        ]);
+        if (cancelled) return;
+        setSession(s);
+        setProfile(p);
+      } catch (err) {
+        console.error("[AuthProvider] hydration failed", err);
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+
+    const supabase = getSupabaseBrowserClient();
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event: string) => {
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setProfile(null);
+        return;
+      }
+      try {
+        const [s, p] = await Promise.all([
+          supabaseAuthRepo.getSession(),
+          supabaseAuthRepo.getProfile(),
+        ]);
+        setSession(s);
+        setProfile(p);
+      } catch (err) {
+        console.error("[AuthProvider] auth state change failed", err);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = useCallback(async (input: SignInInput) => {
-    const { session: s, profile: p } = await mockAuthRepo.signIn(input);
+    const { session: s, profile: p } = await supabaseAuthRepo.signIn(input);
     setSession(s);
     setProfile(p);
   }, []);
 
   const signUp = useCallback(async (input: SignUpInput) => {
-    const { session: s, profile: p } = await mockAuthRepo.signUp(input);
+    const { session: s, profile: p } = await supabaseAuthRepo.signUp(input);
     setSession(s);
     setProfile(p);
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    await supabaseAuthRepo.signInWithGoogle(redirectTo);
+  }, []);
+
   const signOut = useCallback(async () => {
-    await mockAuthRepo.signOut();
+    await supabaseAuthRepo.signOut();
     setSession(null);
     setProfile(null);
   }, []);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
-    const next = await mockAuthRepo.updateProfile(patch);
+    const next = await supabaseAuthRepo.updateProfile(patch);
     setProfile(next);
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    const redirectTo = `${window.location.origin}/auth/reset`;
+    await supabaseAuthRepo.resetPassword(email, redirectTo);
   }, []);
 
   const openOnboarding = useCallback((step: number = 0) => {
@@ -118,8 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoggedIn: Boolean(session),
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       updateProfile,
+      resetPassword,
       onboardingOpen,
       openOnboarding,
       closeOnboarding,
@@ -146,8 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       updateProfile,
+      resetPassword,
       onboardingOpen,
       openOnboarding,
       closeOnboarding,

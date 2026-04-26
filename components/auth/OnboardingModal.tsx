@@ -92,11 +92,21 @@ function PrimaryButton({
   );
 }
 
-function GoogleButton({ children }: { children: React.ReactNode }) {
+function GoogleButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
-      className="border-border hover:border-dark flex items-center justify-center gap-2.5 rounded-pill border px-4 py-3 text-[13px] font-medium transition-colors"
+      onClick={onClick}
+      disabled={disabled}
+      className="border-border hover:border-dark flex items-center justify-center gap-2.5 rounded-pill border px-4 py-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
     >
       <GoogleIcon />
       {children}
@@ -112,7 +122,9 @@ export function OnboardingModal() {
     initialOnboardingStep,
     signUp,
     signIn,
+    signInWithGoogle,
     updateProfile,
+    resetPassword,
   } = useAuthContext();
 
   const [step, setStep] = useState<Step>(0);
@@ -125,6 +137,7 @@ export function OnboardingModal() {
   const [lifestyle, setLifestyle] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     if (onboardingOpen) {
@@ -161,6 +174,7 @@ export function OnboardingModal() {
       setHoods(new Set());
       setLifestyle(new Set());
       setError(null);
+      setResetSent(false);
     }, 200);
   };
 
@@ -198,6 +212,33 @@ export function OnboardingModal() {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signInWithGoogle();
+      // Browser is redirecting; nothing else to do.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+      setSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Enter your email above first");
+      return;
+    }
+    setError(null);
+    try {
+      await resetPassword(email);
+      setResetSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send reset");
     }
   };
 
@@ -260,16 +301,22 @@ export function OnboardingModal() {
               <h2 className="text-dark mb-2 text-[22px] font-medium">Welcome back</h2>
               <p className="text-gray mb-5 text-[13px]">Log in to your Wundervue account.</p>
               <div className="flex flex-col gap-3">
-                <GoogleButton>Log in with Google</GoogleButton>
+                <GoogleButton onClick={handleGoogle} disabled={submitting}>
+                  Log in with Google
+                </GoogleButton>
                 <Divider />
                 <form onSubmit={handleLogin} className="flex flex-col gap-3">
                   <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" required autoFocus />
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-baseline justify-between">
                       <span className="text-dark text-[12px] font-medium">Password</span>
-                      <a href="#" className="text-coral text-[11px] font-medium hover:underline">
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        className="text-coral text-[11px] font-medium hover:underline"
+                      >
                         Forgot password?
-                      </a>
+                      </button>
                     </div>
                     <input
                       type="password"
@@ -280,6 +327,11 @@ export function OnboardingModal() {
                     />
                   </div>
                   {error && <p className="text-coral text-xs">{error}</p>}
+                  {resetSent && (
+                    <p className="text-graphite text-xs">
+                      Check your email for a password reset link.
+                    </p>
+                  )}
                   <PrimaryButton type="submit" disabled={!email || password.length < 6 || submitting}>
                     Log In
                   </PrimaryButton>
@@ -299,7 +351,9 @@ export function OnboardingModal() {
               <h2 className="text-dark mb-2 text-[22px] font-medium">Create your account</h2>
               <p className="text-gray mb-5 text-[13px]">Start exploring Denver&apos;s best events and deals.</p>
               <div className="flex flex-col gap-3">
-                <GoogleButton>Continue with Google</GoogleButton>
+                <GoogleButton onClick={handleGoogle} disabled={submitting}>
+                  Continue with Google
+                </GoogleButton>
                 <Divider />
                 <form onSubmit={handleSignup} className="flex flex-col gap-3">
                   <Field label="Full Name" value={name} onChange={setName} placeholder="Jane Doe" required autoFocus />
