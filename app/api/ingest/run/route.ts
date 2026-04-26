@@ -1,0 +1,38 @@
+import type { NextRequest } from "next/server";
+import { ingestSource } from "@/lib/ingest/orchestrator";
+import { getSource } from "@/lib/ingest/sources";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
+function authorized(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const header = request.headers.get("authorization");
+  return header === `Bearer ${secret}`;
+}
+
+async function handle(request: NextRequest): Promise<Response> {
+  if (!authorized(request)) {
+    return new Response("unauthorized", { status: 401 });
+  }
+  const sourceId = request.nextUrl.searchParams.get("source");
+  if (!sourceId) {
+    return new Response("missing source", { status: 400 });
+  }
+  const source = getSource(sourceId);
+  if (!source) {
+    return new Response(`unknown source: ${sourceId}`, { status: 404 });
+  }
+  const result = await ingestSource(source);
+  const status = result.status === "failed" ? 500 : 200;
+  return Response.json(result, { status });
+}
+
+export async function GET(request: NextRequest) {
+  return handle(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handle(request);
+}

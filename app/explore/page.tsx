@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LISTINGS } from "@/lib/data/listings";
+import { getMergedListings } from "@/lib/data/listings.server";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
 import { ExploreResults } from "@/components/explore/ExploreResults";
@@ -17,6 +17,7 @@ interface PageProps {
 export default async function ExplorePage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const filters = parseSearchParams(sp);
-  const listings = applyFilters(LISTINGS, filters);
+  const all = await getMergedListings();
+  const listings = applyFilters(all, filters);
   return <ExploreResults listings={listings} view={filters.view} />;
 }

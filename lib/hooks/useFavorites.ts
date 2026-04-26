@@ -12,19 +12,19 @@ export class FavoriteLimitReached extends Error {
   }
 }
 
-function readInitial(): Set<number> {
+function readInitial(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Set();
-    const arr = JSON.parse(raw) as number[];
-    return new Set(arr);
+    const arr = JSON.parse(raw) as Array<string | number>;
+    return new Set(arr.map((v) => String(v)));
   } catch {
     return new Set();
   }
 }
 
-function persist(set: Set<number>) {
+function persist(set: Set<string>) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
@@ -34,7 +34,7 @@ function persist(set: Set<number>) {
 }
 
 export function useFavorites() {
-  const [favorites, setFavorites] = useState<Set<number>>(() => new Set());
+  const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -43,12 +43,12 @@ export function useFavorites() {
   }, []);
 
   const isFavorited = useCallback(
-    (id: number) => favorites.has(id),
+    (id: string) => favorites.has(id),
     [favorites],
   );
 
   const toggle = useCallback(
-    (id: number, opts: { plan?: "free" | "insider" } = {}) => {
+    (id: string, opts: { plan?: "free" | "insider" } = {}) => {
       setFavorites((prev) => {
         const next = new Set(prev);
         if (next.has(id)) {

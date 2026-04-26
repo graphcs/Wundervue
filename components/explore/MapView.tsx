@@ -6,19 +6,22 @@ import type { Listing, ListingType } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 
-const MAP_POSITIONS: Record<number, { top: string; left: string }> = {
-  1: { top: "22%", left: "62%" },
-  2: { top: "18%", left: "24%" },
-  3: { top: "28%", left: "35%" },
-  4: { top: "12%", left: "80%" },
-  5: { top: "65%", left: "60%" },
-  6: { top: "48%", left: "40%" },
-  7: { top: "20%", left: "20%" },
-  8: { top: "55%", left: "30%" },
-  9: { top: "72%", left: "48%" },
-  10: { top: "45%", left: "44%" },
-  11: { top: "30%", left: "32%" },
-  12: { top: "25%", left: "58%" },
+// Placeholder positions for fixture listings (ids "1"–"12"). Real lat/lng-based
+// positioning lands when the Mapbox/Google Maps integration ships. Listings
+// without a key here (e.g. scraped UUID-keyed rows) are skipped on the map.
+const MAP_POSITIONS: Record<string, { top: string; left: string }> = {
+  "1": { top: "22%", left: "62%" },
+  "2": { top: "18%", left: "24%" },
+  "3": { top: "28%", left: "35%" },
+  "4": { top: "12%", left: "80%" },
+  "5": { top: "65%", left: "60%" },
+  "6": { top: "48%", left: "40%" },
+  "7": { top: "20%", left: "20%" },
+  "8": { top: "55%", left: "30%" },
+  "9": { top: "72%", left: "48%" },
+  "10": { top: "45%", left: "44%" },
+  "11": { top: "30%", left: "32%" },
+  "12": { top: "25%", left: "58%" },
 };
 
 const HOOD_LABELS = [
@@ -101,7 +104,7 @@ function CompactCard({
 }: {
   listing: Listing;
   active: boolean;
-  onHover: (id: number | null) => void;
+  onHover: (id: string | null) => void;
 }) {
   const href =
     listing.type === "deal"
@@ -140,7 +143,7 @@ function CompactCard({
 }
 
 export function MapView({ listings }: Props) {
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   return (
     <div className="border-border grid overflow-hidden rounded-2xl border bg-white" style={{ gridTemplateColumns: "380px 1fr", height: "calc(100vh - 220px)", minHeight: 600 }}>

@@ -6,7 +6,7 @@ import { useAuthContext } from "@/components/auth/AuthProvider";
 import { HeartIcon } from "./icons";
 
 interface Props {
-  listingId: number;
+  listingId: string;
 }
 
 export function FavoriteToggle({ listingId }: Props) {

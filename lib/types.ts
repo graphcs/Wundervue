@@ -9,7 +9,7 @@ export type LifestyleTag =
 export type ListingSource = "Instagram" | "Website" | "Meetup";
 
 export interface Listing {
-  id: number;
+  id: string;
   slug: string;
   type: ListingType;
   title: string;

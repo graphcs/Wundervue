@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LISTINGS, getListingBySlug } from "@/lib/data/listings";
+import { LISTINGS } from "@/lib/data/listings";
+import { getListingBySlugAsync } from "@/lib/data/listings.server";
 import { ListingDetailView } from "@/components/detail/ListingDetailView";
 import { MoreFromVenue } from "@/components/detail/MoreFromVenue";
 
@@ -17,7 +18,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const listing = getListingBySlug(slug);
+  const listing = await getListingBySlugAsync(slug);
   if (!listing || listing.type === "deal") return { title: "Event not found" };
   return {
     title: listing.title,
@@ -33,7 +34,7 @@ export async function generateMetadata({
 
 export default async function EventPage({ params }: PageProps) {
   const { slug } = await params;
-  const listing = getListingBySlug(slug);
+  const listing = await getListingBySlugAsync(slug);
   if (!listing || listing.type === "deal") notFound();
 
   return (
