@@ -17,12 +17,13 @@ export default function ResetPasswordPage() {
     // Supabase parses the recovery token from the URL hash and emits
     // PASSWORD_RECOVERY. If the user landed here directly (not via the
     // email link), getSession returns null and the form stays disabled.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event: string) => {
       if (event === "PASSWORD_RECOVERY") setReady(true);
     });
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
       if (data.session) setReady(true);
-    });
+    })();
     return () => sub.subscription.unsubscribe();
   }, []);
 
