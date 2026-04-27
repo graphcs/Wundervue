@@ -1,6 +1,7 @@
 create table public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   name text not null default '',
+  -- keep plan values in sync with the Plan type in lib/auth/types.ts
   plan text not null default 'free' check (plan in ('free', 'insider')),
   interests text[] not null default '{}',
   neighborhoods text[] not null default '{}',

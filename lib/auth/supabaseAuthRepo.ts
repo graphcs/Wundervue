@@ -9,6 +9,7 @@ import type {
   Session,
   SignInInput,
   SignUpInput,
+  SignUpResult,
 } from "./types";
 
 interface ProfileRow {
@@ -26,7 +27,6 @@ export function mapSession(s: SupaSession | null): Session | null {
   return {
     userId: s.user.id,
     email: s.user.email ?? "",
-    createdAt: new Date(s.user.created_at).toISOString(),
   };
 }
 
@@ -68,11 +68,22 @@ async function fetchProfile(): Promise<Profile | null> {
 }
 
 async function requireProfileAfterAuth(): Promise<Profile> {
-  // Trigger creates the row; brief retry covers replication lag.
-  for (let i = 0; i < 5; i++) {
+  // The on-signup trigger creates the row; this retry covers replication lag.
+  // ~2.5s budget across 10 attempts (250ms each) covers a slow trigger
+  // without making the success path noticeably slower.
+  for (let i = 0; i < 10; i++) {
     const profile = await fetchProfile();
     if (profile) return profile;
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  // Persistent profile-fetch failure leaves the supabase session set but no
+  // profile in our state — the UI would say "logged in" with no name on next
+  // load. Roll back so cookies match the UI state and the user can retry.
+  try {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+  } catch {
+    // best-effort rollback; we still want to surface the original failure
   }
   throw new Error("Profile not found after sign-in");
 }
@@ -101,7 +112,7 @@ export const supabaseAuthRepo: AuthRepo = {
     return { session: mapSession(data.session)!, profile };
   },
 
-  async signUp({ name, email, password }: SignUpInput) {
+  async signUp({ name, email, password }: SignUpInput): Promise<SignUpResult> {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -110,10 +121,10 @@ export const supabaseAuthRepo: AuthRepo = {
     });
     if (error) throw new Error(error.message);
     if (!data.session) {
-      // Email confirmations may be enabled — surface a clear error.
-      throw new Error(
-        "Account created. Check your email to confirm before signing in.",
-      );
+      // Email confirmations are enabled on this Supabase project. Account
+      // exists but isn't usable yet — caller should render an info message,
+      // not an error.
+      return { pendingConfirmation: true, email };
     }
     const profile = await requireProfileAfterAuth();
     return { session: mapSession(data.session)!, profile };

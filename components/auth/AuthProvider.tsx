@@ -24,6 +24,7 @@ import type {
   Session,
   SignInInput,
   SignUpInput,
+  SignUpResult,
 } from "@/lib/auth/types";
 
 export interface AuthContextValue {
@@ -32,7 +33,7 @@ export interface AuthContextValue {
   profile: Profile | null;
   isLoggedIn: boolean;
   signIn: (input: SignInInput) => Promise<void>;
-  signUp: (input: SignUpInput) => Promise<void>;
+  signUp: (input: SignUpInput) => Promise<SignUpResult>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
@@ -146,10 +147,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(p);
   }, []);
 
-  const signUp = useCallback(async (input: SignUpInput) => {
-    const { session: s, profile: p } = await supabaseAuthRepo.signUp(input);
-    setSession(s);
-    setProfile(p);
+  const signUp = useCallback(async (input: SignUpInput): Promise<SignUpResult> => {
+    const result = await supabaseAuthRepo.signUp(input);
+    if ("pendingConfirmation" in result) {
+      // Account exists but needs email confirmation; do not mark as logged in.
+      return result;
+    }
+    setSession(result.session);
+    setProfile(result.profile);
+    return result;
   }, []);
 
   const signInWithGoogle = useCallback(async () => {

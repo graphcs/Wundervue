@@ -138,6 +138,9 @@ export function OnboardingModal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (onboardingOpen) {
@@ -175,6 +178,7 @@ export function OnboardingModal() {
       setLifestyle(new Set());
       setError(null);
       setResetSent(false);
+      setPendingConfirmationEmail(null);
     }, 200);
   };
 
@@ -189,9 +193,16 @@ export function OnboardingModal() {
     e.preventDefault();
     if (submitting) return;
     setError(null);
+    setPendingConfirmationEmail(null);
     setSubmitting(true);
     try {
-      await signUp({ name, email, password });
+      const result = await signUp({ name, email, password });
+      if ("pendingConfirmation" in result) {
+        // Email confirmation is required — show an info message instead of
+        // advancing into onboarding (the user isn't signed in yet).
+        setPendingConfirmationEmail(result.email);
+        return;
+      }
       setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
@@ -360,6 +371,12 @@ export function OnboardingModal() {
                   <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" required />
                   <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="At least 6 characters" required />
                   {error && <p className="text-coral text-xs">{error}</p>}
+                  {pendingConfirmationEmail && (
+                    <p className="text-graphite text-xs">
+                      Account created. Check {pendingConfirmationEmail} to
+                      confirm your email before signing in.
+                    </p>
+                  )}
                   <PrimaryButton type="submit" disabled={!name || !email || password.length < 6 || submitting}>
                     Continue
                   </PrimaryButton>

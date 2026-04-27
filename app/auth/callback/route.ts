@@ -4,7 +4,11 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const rawNext = searchParams.get("next") ?? "/";
+  // Only allow same-origin path-relative redirects. Reject protocol-relative
+  // ("//evil.com") and absolute URLs to prevent OAuth open-redirect phishing.
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
 
   if (code) {
     const supabase = await getSupabaseServerClient();
