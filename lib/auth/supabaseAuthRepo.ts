@@ -21,7 +21,7 @@ interface ProfileRow {
   created_at: string;
 }
 
-function mapSession(s: SupaSession | null): Session | null {
+export function mapSession(s: SupaSession | null): Session | null {
   if (!s) return null;
   return {
     userId: s.user.id,
@@ -30,7 +30,7 @@ function mapSession(s: SupaSession | null): Session | null {
   };
 }
 
-function mapProfile(row: ProfileRow, user: User): Profile {
+function mapProfile(row: ProfileRow, user: User | { id: string; email?: string | null }): Profile {
   return {
     userId: row.user_id,
     name: row.name,
@@ -43,19 +43,28 @@ function mapProfile(row: ProfileRow, user: User): Profile {
   };
 }
 
+// Lock-free profile fetch — does NOT call supabase.auth.getUser(), so it is
+// safe to invoke from inside an onAuthStateChange callback (which itself runs
+// while supabase-js holds the auth lock during _initialize / _recoverAndRefresh).
+export async function fetchProfileForUser(
+  userId: string,
+  email: string | null,
+): Promise<Profile | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+  if (error || !data) return null;
+  return mapProfile(data as ProfileRow, { id: userId, email });
+}
+
 async function fetchProfile(): Promise<Profile | null> {
   const supabase = getSupabaseBrowserClient();
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes.user) return null;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", userRes.user.id)
-    .single();
-  if (error || !data) return null;
-
-  return mapProfile(data as ProfileRow, userRes.user);
+  return fetchProfileForUser(userRes.user.id, userRes.user.email ?? null);
 }
 
 async function requireProfileAfterAuth(): Promise<Profile> {

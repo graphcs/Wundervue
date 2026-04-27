@@ -9,8 +9,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { supabaseAuthRepo } from "@/lib/auth/supabaseAuthRepo";
+import {
+  fetchProfileForUser,
+  mapSession,
+  supabaseAuthRepo,
+} from "@/lib/auth/supabaseAuthRepo";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type {
+  AuthChangeEvent,
+  Session as SupaSession,
+} from "@supabase/supabase-js";
 import type {
   Profile,
   Session,
@@ -66,6 +74,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Fallback: if supabase-js gets stuck (e.g. an expired-session refresh
+    // hang inside its navigator-locks lock), unblock the UI after this
+    // deadline so the header is interactive. We do NOT clear cookies or
+    // mark the user signed out — if auth resolves later we apply the
+    // result then, so a slow load just delays the avatar instead of
+    // logging the user out.
+    const HYDRATE_DEADLINE_MS = 8000;
+    const deadline = setTimeout(() => {
+      if (!cancelled) setHydrated(true);
+    }, HYDRATE_DEADLINE_MS);
+
     (async () => {
       try {
         const [s, p] = await Promise.all([
@@ -78,31 +97,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("[AuthProvider] hydration failed", err);
       } finally {
-        if (!cancelled) setHydrated(true);
+        if (!cancelled) {
+          clearTimeout(deadline);
+          setHydrated(true);
+        }
       }
     })();
 
     const supabase = getSupabaseBrowserClient();
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event: string) => {
-      if (event === "SIGNED_OUT") {
+    // IMPORTANT: this callback runs from inside supabase-js's auth lock during
+    // _initialize / _recoverAndRefresh. Calling supabase.auth.getSession() or
+    // .getUser() here would re-enter the lock and deadlock with _initialize,
+    // which leaves the UI permanently in the "not hydrated" state and looks
+    // like a forced sign-out on refresh. Use the session passed in directly,
+    // and fetch the profile via a query that doesn't touch auth.* methods.
+    const { data: sub } = supabase.auth.onAuthStateChange((
+      event: AuthChangeEvent,
+      supaSession: SupaSession | null,
+    ) => {
+      if (event === "SIGNED_OUT" || !supaSession) {
         setSession(null);
         setProfile(null);
         return;
       }
-      try {
-        const [s, p] = await Promise.all([
-          supabaseAuthRepo.getSession(),
-          supabaseAuthRepo.getProfile(),
-        ]);
-        setSession(s);
-        setProfile(p);
-      } catch (err) {
-        console.error("[AuthProvider] auth state change failed", err);
-      }
+      setSession(mapSession(supaSession));
+      void fetchProfileForUser(
+        supaSession.user.id,
+        supaSession.user.email ?? null,
+      )
+        .then((p) => {
+          if (!cancelled) setProfile(p);
+        })
+        .catch((err) => {
+          console.error("[AuthProvider] profile fetch failed", err);
+        });
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(deadline);
       sub.subscription.unsubscribe();
     };
   }, []);
