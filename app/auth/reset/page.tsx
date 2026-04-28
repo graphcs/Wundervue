@@ -35,10 +35,14 @@ export default function ResetPasswordPage() {
       const supabase = getSupabaseBrowserClient();
       const { error: updateErr } = await supabase.auth.updateUser({ password });
       if (updateErr) throw new Error(updateErr.message);
-      // Sign out the recovery session so it can't be reused as a normal
-      // session (e.g. by someone with brief physical access to the email link).
-      await supabase.auth.signOut();
       setDone(true);
+      // Best-effort: invalidate the recovery session so the email link can't
+      // be reused (e.g. by someone with brief physical access). Don't gate
+      // the success UI on this — the password change is already committed
+      // server-side, and showing an error here would mislead the user.
+      supabase.auth.signOut().catch((signOutErr: unknown) => {
+        console.warn("[reset] post-update signOut failed", signOutErr);
+      });
       setTimeout(() => router.push("/"), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset password");
