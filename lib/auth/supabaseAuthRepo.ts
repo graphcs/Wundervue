@@ -96,7 +96,9 @@ async function requireProfileAfterAuth(): Promise<Profile> {
   } catch {
     // best-effort rollback; we still want to surface the original failure
   }
-  throw new Error("Profile not found after sign-in");
+  throw new Error(
+    "We couldn't finish setting up your account. Please try again in a moment.",
+  );
 }
 
 export const supabaseAuthRepo: AuthRepo = {
