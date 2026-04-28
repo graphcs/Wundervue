@@ -23,9 +23,10 @@ export function getServiceClient(): SupabaseClient {
   return cachedClient;
 }
 
-interface VenueRow {
+export interface VenueRow {
   id: string;
   slug: string;
+  name: string;
   address: string;
   neighborhood: string;
   lat: number | null;
@@ -37,7 +38,7 @@ export async function resolveVenue(slug: string | undefined): Promise<VenueRow |
   const client = getServiceClient();
   const { data, error } = await client
     .from("venues")
-    .select("id, slug, address, neighborhood, lat, lng")
+    .select("id, slug, name, address, neighborhood, lat, lng")
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw new Error(`venue lookup failed for ${slug}: ${error.message}`);

@@ -7,7 +7,13 @@ interface SerpApiEvent {
   date?: { start_date?: string; when?: string };
   address?: string[];
   link?: string;
+  // SerpAPI returns both. `image` is bigger (s=10) than `thumbnail` (no size
+  // suffix); both go through Google's encrypted-tbn0 CDN which still
+  // downscales the original. The real full-resolution photo lives on the
+  // source page — the image pipeline picks it up via og:image when the
+  // probe rejects whichever Google URL we send first.
   thumbnail?: string;
+  image?: string;
   venue?: { name?: string; rating?: number; reviews?: number };
   ticket_info?: Array<{ source?: string; link_type?: string; link?: string }>;
 }
@@ -78,7 +84,7 @@ export async function fetchSerpEvents(source: SourceConfig): Promise<RawItem[]> 
       sourceId: stableSourceId(source, ev, idx),
       sourceUrl: ev.link,
       text: eventToText(ev),
-      imageUrl: ev.thumbnail,
+      imageUrl: ev.image ?? ev.thumbnail,
       fetchedAt,
     }));
 }

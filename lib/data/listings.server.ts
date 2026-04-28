@@ -35,43 +35,13 @@ interface DbVenueRow {
   name: string;
 }
 
-// Map each category label to a fixture SVG with a matching emoji + gradient.
-// Public/images/listings: 1=♫music 2=🍽food 3=🌿outdoor 4=⛰mountain 5=🍺drink
-// 6=🎨arts 7=🥐brunch 8=😂comedy 9=🐕dog 10=🧘wellness 11=👶family 12=🎵music
-const CATEGORY_TO_SVG: Record<string, number> = {
-  Music: 1,
-  "Food & Drink": 2,
-  Outdoor: 4,
-  "Arts & Culture": 6,
-  Markets: 7,
-  Sports: 4,
-  Comedy: 8,
-  Wellness: 10,
-  Family: 11,
-};
-const FALLBACK_SVG = 12;
-
-function placeholderForCategory(category: string | null, slug: string): string {
-  // Prefer category-themed SVG. If category is unknown, hash slug to one of the
-  // 12 fixture SVGs so a given listing always shows the same placeholder.
-  if (category && CATEGORY_TO_SVG[category]) {
-    return `/images/listings/${CATEGORY_TO_SVG[category]}.svg`;
-  }
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
-  const n = (hash % 12) + 1;
-  void FALLBACK_SVG;
-  return `/images/listings/${n}.svg`;
-}
-
 function rowToListing(row: DbListingRow, venueBy: Map<string, DbVenueRow>): Listing {
   const venue = row.venue_id ? venueBy.get(row.venue_id) : undefined;
-  // Scraped images are universally low quality — Instagram thumbnails get
-  // downscaled, SerpAPI sometimes returns Google Maps screenshots instead of
-  // event photos, and either way they clash with the design language. Always
-  // use a category-themed SVG until we have a proper Supabase Storage upload
-  // pipeline that gives us full-size images we control.
-  const imageUrl = placeholderForCategory(row.category, row.slug);
+  // Ingest pipeline (lib/ingest/imagePipeline.ts) writes a Supabase Storage URL
+  // here for every published row — either the scraped photo (when it passed
+  // the size/ratio probe) or a Flux 2 Pro generation. Empty string is a
+  // transition-only fallback for legacy rows that haven't been backfilled yet.
+  const imageUrl = row.image_url ?? "";
   return {
     id: row.id,
     slug: row.slug,

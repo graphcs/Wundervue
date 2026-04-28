@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL } from "@/lib/supabase/env";
+import { deleteListingImagesBySlug } from "@/lib/ingest/uploadImage";
 
 export interface ExpireOptions {
   apply: boolean;
@@ -11,11 +12,13 @@ export interface ExpireResult {
   cutoff: string;
   found: number;
   deleted: number;
+  imagesDeleted: number;
   rows: Array<{ id: string; title: string; type: string; date_start: string | null; date_end: string | null }>;
 }
 
 interface Row {
   id: string;
+  slug: string;
   title: string;
   type: string;
   date_start: string | null;
@@ -47,7 +50,7 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
   // Rows with both null are perpetual deals — skip them.
   let q = c
     .from("listings")
-    .select("id, title, type, date_start, date_end")
+    .select("id, slug, title, type, date_start, date_end")
     .or(
       `date_end.lt.${cutoff},and(date_end.is.null,date_start.lt.${cutoff})`,
     );
@@ -64,15 +67,25 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
   if (rows.length > 20) log(`  …and ${rows.length - 20} more`);
 
   let deleted = 0;
+  let imagesDeleted = 0;
   if (opts.apply && rows.length > 0) {
+    // Drop storage objects first — if it fails we still want to free the row.
+    // A leaked storage object is cheaper than a stuck table row, and the bucket
+    // can be swept periodically with a separate maintenance job if needed.
+    try {
+      imagesDeleted = await deleteListingImagesBySlug(rows.map((r) => r.slug));
+    } catch (err) {
+      log(`[expire-past-events] storage cleanup failed (continuing): ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     const { error: delErr } = await c
       .from("listings")
       .delete()
       .in("id", rows.map((r) => r.id));
     if (delErr) throw new Error(`delete failed: ${delErr.message}`);
     deleted = rows.length;
-    log(`[expire-past-events] deleted ${deleted} rows`);
+    log(`[expire-past-events] deleted ${deleted} rows, ${imagesDeleted} storage objects`);
   }
 
-  return { cutoff, found: rows.length, deleted, rows };
+  return { cutoff, found: rows.length, deleted, imagesDeleted, rows };
 }
