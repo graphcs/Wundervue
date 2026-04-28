@@ -1,3 +1,6 @@
+// Keep in sync with the SQL check constraint at
+// supabase/migrations/20260425004931_profiles.sql:
+//   check (plan in ('free', 'insider'))
 export type Plan = "free" | "insider";
 
 export interface Profile {
@@ -14,7 +17,6 @@ export interface Profile {
 export interface Session {
   userId: string;
   email: string;
-  createdAt: string;
 }
 
 export interface SignUpInput {
@@ -27,3 +29,7 @@ export interface SignInInput {
   email: string;
   password: string;
 }
+
+export type SignUpResult =
+  | { session: Session; profile: Profile }
+  | { pendingConfirmation: true; email: string };
