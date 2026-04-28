@@ -46,6 +46,10 @@ function mapProfile(row: ProfileRow, user: User | { id: string; email?: string |
 // Lock-free profile fetch — does NOT call supabase.auth.getUser(), so it is
 // safe to invoke from inside an onAuthStateChange callback (which itself runs
 // while supabase-js holds the auth lock during _initialize / _recoverAndRefresh).
+//
+// Returns null only when the row genuinely doesn't exist (replication lag on
+// fresh sign-up). Throws on query errors so callers can distinguish a missing
+// row from a transient failure and avoid clobbering a known-good profile.
 export async function fetchProfileForUser(
   userId: string,
   email: string | null,
@@ -55,8 +59,9 @@ export async function fetchProfileForUser(
     .from("profiles")
     .select("*")
     .eq("user_id", userId)
-    .single();
-  if (error || !data) return null;
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
   return mapProfile(data as ProfileRow, { id: userId, email });
 }
 
@@ -70,10 +75,16 @@ async function fetchProfile(): Promise<Profile | null> {
 async function requireProfileAfterAuth(): Promise<Profile> {
   // The on-signup trigger creates the row; this retry covers replication lag.
   // ~2.5s budget across 10 attempts (250ms each) covers a slow trigger
-  // without making the success path noticeably slower.
+  // without making the success path noticeably slower. fetchProfile now
+  // throws on query errors, so swallow inside the loop to keep retrying
+  // through transient failures within the same budget.
   for (let i = 0; i < 10; i++) {
-    const profile = await fetchProfile();
-    if (profile) return profile;
+    try {
+      const profile = await fetchProfile();
+      if (profile) return profile;
+    } catch (err) {
+      console.warn("[supabaseAuthRepo] profile fetch retry", err);
+    }
     await new Promise((r) => setTimeout(r, 250));
   }
   // Persistent profile-fetch failure leaves the supabase session set but no

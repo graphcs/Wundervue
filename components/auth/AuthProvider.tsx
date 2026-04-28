@@ -88,9 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
+        // getProfile() now throws on transient query failure; swallow here
+        // so a slow/erroring profile fetch doesn't also drop the session we
+        // already retrieved. The listener will refresh profile on the next
+        // token refresh.
         const [s, p] = await Promise.all([
           supabaseAuthRepo.getSession(),
-          supabaseAuthRepo.getProfile(),
+          supabaseAuthRepo.getProfile().catch((err) => {
+            console.error("[AuthProvider] profile hydration failed", err);
+            return null;
+          }),
         ]);
         if (cancelled) return;
         setSession(s);
@@ -127,7 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supaSession.user.email ?? null,
       )
         .then((p) => {
-          if (!cancelled) setProfile(p);
+          if (cancelled) return;
+          // Only overwrite when the fetch returned a profile. A null here
+          // means the row genuinely doesn't exist (e.g. fresh sign-up before
+          // the trigger fires); a query error would have thrown into catch.
+          // In both cases, preserve any existing profile rather than
+          // dropping the user into the "logged in but no name" state on a
+          // transient hiccup during a token refresh.
+          if (p) setProfile(p);
         })
         .catch((err) => {
           console.error("[AuthProvider] profile fetch failed", err);
