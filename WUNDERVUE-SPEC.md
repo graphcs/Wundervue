@@ -116,6 +116,37 @@ Free tier: enforce max 5 favorites via RLS policy or application logic. Show upg
 
 ---
 
+## Data Ingestion (where events come from)
+
+Events are not user-submitted in MVP — they're scraped from third-party sources, normalized via LLM, deduplicated, and persisted to `listings`. Each row's `source` / `source_url` columns attribute back to the origin so users can click through to book/RSVP.
+
+Source configs live in `lib/ingest/sources.ts`; the orchestrator (`lib/ingest/orchestrator.ts`) dispatches to one of four connectors based on the source's `connector` field.
+
+### Connectors
+
+| Connector | What it pulls from | Use case |
+|-----------|-------------------|----------|
+| `serpEvents` | **SerpAPI's Google Events engine** — i.e. the structured event cards Google surfaces for queries like "events in Denver this weekend". This is online search, not a direct site scrape. | Broad, multi-category, multi-venue coverage. Cheap (~$0.01/query), so daily/weekly cadence. The bulk of the catalog. |
+| `instagram` | **Apify's `apify/instagram-scraper` actor** — fetches recent posts from a specific IG handle. | Per-venue deep dives for places we follow closely (e.g. Mission Ballroom) where Google Events misses announcements. |
+| `apifyWeb` | **Apify's `apify/cheerio-scraper` actor** — runs a configurable `pageFunction` against a start URL on Apify's infrastructure. | JS-light niche sites Google Events doesn't index, when we want Apify to handle the crawl/proxy. |
+| `cheerioWeb` | **Direct in-process fetch + Cheerio parse** of a single URL using configured CSS selectors. Sets `User-Agent: WundervueBot/1.0 (+https://wundervue.com)`. | Simple static HTML pages where we don't need Apify's overhead. |
+
+**Not used:** no direct ticketing-platform APIs (Eventbrite/Ticketmaster/Meetup), no Facebook events, no headless browser. JS-heavy sites are deferred to Apify if needed.
+
+### The `source` field on listings
+
+The `source` column stores the human-readable label from `SourceConfig.sourceLabel` (currently `"Website"` for all SerpAPI-derived rows, `"Instagram"` for IG-derived rows). `source_url` stores the click-through link from the upstream item (e.g. the Google Events `link`, or the Instagram post permalink).
+
+### Pipeline stages
+
+1. **Fetch** — connector returns `RawItem[]`.
+2. **URL liveness check** — drop items whose `sourceUrl` is 404/410/DNS-dead before paying for an LLM call.
+3. **Normalize** — LLM extracts structured fields (title, dates, venue, category, etc.).
+4. **Dedup** — deterministic hash-based upsert, then an LLM fuzzy-cluster pass to catch paraphrased duplicates across sources.
+5. **Persist** — upsert into `listings`; record run stats. Three consecutive failures auto-disable a source.
+
+---
+
 ## URL Structure (SEO-critical)
 
 Filtered views MUST generate crawlable, indexable URLs. This is a core growth strategy — ranking for queries like "things to do in RiNo this weekend."
