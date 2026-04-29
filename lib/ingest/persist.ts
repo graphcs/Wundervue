@@ -75,6 +75,7 @@ export function buildListingInsert(args: {
     is_free: normalized.isFree,
     deal_value: normalized.dealValue,
     image_url: item.imageUrl ?? null,
+    image_source: null,
     source: source.sourceLabel,
     source_url: item.sourceUrl ?? null,
     source_id: item.sourceId,

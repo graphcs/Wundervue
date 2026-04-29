@@ -111,7 +111,7 @@ async function main() {
       if (!dry) {
         const { error: uErr } = await c
           .from("listings")
-          .update({ image_url: result.url })
+          .update({ image_url: result.url, image_source: result.source })
           .eq("id", row.id);
         if (uErr) throw new Error(`update failed: ${uErr.message}`);
       }

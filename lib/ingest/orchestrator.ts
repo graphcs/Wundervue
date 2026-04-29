@@ -170,7 +170,7 @@ async function resolveImagesForBatch(
               type: row.type,
             },
           });
-          results[idx] = { ...row, image_url: img.url };
+          results[idx] = { ...row, image_url: img.url, image_source: img.source };
           if (img.source !== "scraped") {
             console.log(
               `[ingest:${sourceId}] image ${img.source} for ${row.slug}` +

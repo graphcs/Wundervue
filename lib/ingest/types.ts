@@ -72,6 +72,7 @@ export interface DbListing {
   is_free: boolean;
   deal_value: string | null;
   image_url: string | null;
+  image_source: "existing" | "scraped" | "og-image" | "generated" | null;
   source: string;
   source_url: string | null;
   source_id: string;
