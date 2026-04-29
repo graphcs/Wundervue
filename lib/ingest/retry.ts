@@ -11,20 +11,28 @@ export class RetryableError extends Error {
   }
 }
 
+// 5xx is retryable; word-boundary anchors stop us from matching "status 5"
+// inside arbitrary error strings (e.g. "5 retries left" or "status 500abc").
+const RETRYABLE_5XX = /\bstatus 5\d{2}\b/;
+
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
   attempts: 3,
   baseDelayMs: 500,
   shouldRetry: (err) => {
     if (err instanceof RetryableError) return true;
     if (err instanceof Error) {
-      // Network timeouts and Apify 5xx come through as fetch errors with these codes.
+      // Transient network conditions: timeouts, reset connections, and the
+      // generic "fetch failed" undici wraps around several recoverable cases.
+      // ENOTFOUND is permanent (DNS has no record) so we don't retry it —
+      // hammering a dead hostname wastes attempts and may trigger rate limits
+      // when it eventually does resolve.
       const msg = err.message.toLowerCase();
       return (
         msg.includes("etimedout") ||
         msg.includes("econnreset") ||
-        msg.includes("enotfound") ||
+        msg.includes("eai_again") ||
         msg.includes("fetch failed") ||
-        msg.includes("status 5")
+        RETRYABLE_5XX.test(msg)
       );
     }
     return false;

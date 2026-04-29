@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { authorizeCronRequest } from "@/lib/api/auth";
 import { sweepDeadUrls } from "@/lib/maintenance/sweepDeadUrls";
 import { expirePastEvents } from "@/lib/maintenance/expirePastEvents";
 
@@ -8,18 +9,12 @@ export const maxDuration = 300;
 const VALID_TASKS = ["sweep-urls", "expire-past"] as const;
 type Task = (typeof VALID_TASKS)[number];
 
-function authorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
-
 function isTask(value: string | null): value is Task {
   return value !== null && (VALID_TASKS as readonly string[]).includes(value);
 }
 
 async function handle(request: NextRequest): Promise<Response> {
-  if (!authorized(request)) {
+  if (!authorizeCronRequest(request)) {
     return new Response("unauthorized", { status: 401 });
   }
   const task = request.nextUrl.searchParams.get("task");

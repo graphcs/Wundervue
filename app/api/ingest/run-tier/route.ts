@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { authorizeCronRequest } from "@/lib/api/auth";
 import { ingestSource } from "@/lib/ingest/orchestrator";
 import { getEnabledSources } from "@/lib/ingest/sources";
 import type { Cadence, IngestResult } from "@/lib/ingest/types";
@@ -8,13 +9,6 @@ export const maxDuration = 300;
 
 const VALID_TIERS: Cadence[] = ["hourly", "daily", "weekly"];
 const CONCURRENCY = 2;
-
-function authorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = request.headers.get("authorization");
-  return header === `Bearer ${secret}`;
-}
 
 function isCadence(value: string | null): value is Cadence {
   return value !== null && (VALID_TIERS as string[]).includes(value);
@@ -38,7 +32,7 @@ async function runWithConcurrency<T, R>(
 }
 
 async function handle(request: NextRequest): Promise<Response> {
-  if (!authorized(request)) {
+  if (!authorizeCronRequest(request)) {
     return new Response("unauthorized", { status: 401 });
   }
   const tier = request.nextUrl.searchParams.get("tier");
@@ -51,7 +45,12 @@ async function handle(request: NextRequest): Promise<Response> {
     (s) => ingestSource(s),
     CONCURRENCY,
   );
-  return Response.json({ tier, count: results.length, results });
+  // Vercel Cron only alerts on non-2xx. Total-failure batches must surface as
+  // 5xx or every source going down looks like a healthy run. Single-source
+  // failures stay 200 so a transient SerpAPI 503 doesn't page on-call.
+  const allFailed = results.length > 0 && results.every((r) => r.status === "failed");
+  const status = allFailed ? 500 : 200;
+  return Response.json({ tier, count: results.length, results }, { status });
 }
 
 export async function GET(request: NextRequest) {

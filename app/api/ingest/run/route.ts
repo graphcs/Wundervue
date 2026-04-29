@@ -1,19 +1,13 @@
 import type { NextRequest } from "next/server";
+import { authorizeCronRequest } from "@/lib/api/auth";
 import { ingestSource } from "@/lib/ingest/orchestrator";
 import { getSource } from "@/lib/ingest/sources";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function authorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = request.headers.get("authorization");
-  return header === `Bearer ${secret}`;
-}
-
 async function handle(request: NextRequest): Promise<Response> {
-  if (!authorized(request)) {
+  if (!authorizeCronRequest(request)) {
     return new Response("unauthorized", { status: 401 });
   }
   const sourceId = request.nextUrl.searchParams.get("source");
