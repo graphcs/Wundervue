@@ -14,6 +14,11 @@ const MIN_WIDTH = 600;
 const MIN_HEIGHT = 400;
 const MIN_ASPECT = 1.2; // landscape-ish: width / height
 const MAX_ASPECT = 2.4; // not ultra-wide banners
+// Tracking pixels and lazy-load placeholders sometimes report large pixel
+// dimensions but pack into a few KB of solid color or near-empty data.
+// A real photograph at 1200x800 is rarely under ~30KB even with aggressive
+// WebP — 15KB is a safe floor that still admits highly-compressed JPEGs.
+const MIN_BYTES = 15 * 1024;
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB safety cap
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -80,6 +85,7 @@ export async function probeImage(url: string): Promise<ImageProbeResult> {
   const buf = new Uint8Array(await res.arrayBuffer());
   if (buf.byteLength === 0) return { ok: false, reason: "empty body" };
   if (buf.byteLength > MAX_BYTES) return { ok: false, reason: `too large: ${buf.byteLength} bytes` };
+  if (buf.byteLength < MIN_BYTES) return { ok: false, reason: `too small payload: ${buf.byteLength} bytes` };
 
   const dims = readDimensions(buf);
   if (!dims) return { ok: false, reason: "unrecognized image format" };

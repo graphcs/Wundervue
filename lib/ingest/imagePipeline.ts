@@ -6,12 +6,13 @@ import { extractOgImageFromUrl } from "./sourceImage";
 // Decides what image to attach to a listing. Order:
 //
 //   1. If image_url already points at our Storage bucket, keep it (no work).
-//   2. Probe the connector-provided URL (e.g. SerpAPI's gstatic thumbnail,
-//      Instagram displayUrl, web scraper's <img src>). If it passes the size
-//      + ratio check, mirror it to Storage.
-//   3. If we have a source page URL, fetch it and read its og:image meta tag
-//      — that's where Eventbrite, library calendars, Meetup etc. publish the
-//      full-resolution event poster. Probe that, mirror if it passes.
+//   2. If we have a source page URL, fetch its og:image first — that's where
+//      Eventbrite, library calendars, Meetup etc. publish the full-resolution
+//      event poster, and it's almost always higher quality than a connector
+//      thumbnail (SerpAPI's gstatic CDN strips images down to ~300-500px).
+//      Probe and mirror to Storage if it passes.
+//   3. Fall back to the connector-provided URL (Instagram displayUrl,
+//      SerpAPI thumbnail, scraper <img src>). Probe and mirror if it passes.
 //   4. Generate a Flux 2 Pro image and upload that.
 //
 // Returns the final public URL. Throws when every option fails — callers
@@ -40,28 +41,32 @@ export async function resolveListingImage(input: PipelineInput): Promise<Pipelin
 
   let lastReason: string | undefined;
 
-  // Step 1: connector-provided image.
-  if (input.sourceImageUrl) {
-    const probe = await probeImage(input.sourceImageUrl);
-    if (probe.ok) {
-      return await uploadProbed(input.slug, probe, "scraped");
-    }
-    lastReason = probe.reason;
-  } else {
-    lastReason = "no source url";
-  }
-
-  // Step 2: og:image from the source page (only when the connector image was
-  // missing or failed the probe — we don't fetch the page on the happy path).
+  // Step 1: og:image from the source page when we have one — almost always
+  // the highest-resolution image available, since publishers tune the OG tag
+  // for social cards. One extra HTTP fetch on the happy path, but
+  // extractOgImageFromUrl caps at 65KB and stops at </head>.
   if (input.sourcePageUrl) {
     const ogUrl = await extractOgImageFromUrl(input.sourcePageUrl);
     if (ogUrl) {
       const probe = await probeImage(ogUrl);
       if (probe.ok) {
-        return await uploadProbed(input.slug, probe, "og-image", lastReason);
+        return await uploadProbed(input.slug, probe, "og-image");
       }
       lastReason = `og:image ${probe.reason}`;
+    } else {
+      lastReason = "no og:image on source page";
     }
+  }
+
+  // Step 2: connector-provided image as fallback.
+  if (input.sourceImageUrl) {
+    const probe = await probeImage(input.sourceImageUrl);
+    if (probe.ok) {
+      return await uploadProbed(input.slug, probe, "scraped", lastReason);
+    }
+    lastReason = probe.reason;
+  } else if (!lastReason) {
+    lastReason = "no source url";
   }
 
   // Step 3: AI generation as last resort.
