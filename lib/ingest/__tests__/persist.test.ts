@@ -285,6 +285,81 @@ describe("classifyForUpsert", () => {
     expect(result[0].kind).toBe("insert");
   });
 
+  it("preserves dedup_of and keeps the row unpublished when the existing row was a skip-duplicate", async () => {
+    // Regression: a row that was previously hidden by a skip-duplicate or
+    // LLM-cluster pass has dedup_of set and published_at null in the DB. On
+    // re-ingest, the (source, source_id) sameMap hit produces a kind=update,
+    // and without preservation logic the bulk upsert would overwrite both
+    // fields with the fresh values from buildListingInsert — silently
+    // un-hiding the duplicate every time the source's cron fires.
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-skipped",
+            source: "Website",
+            source_id: "abc",
+            event_key: "key-1",
+            dedup_of: "canonical-7",
+            published_at: null,
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const incoming = makeRow({
+      source: "Website",
+      source_id: "abc",
+      event_key: "key-1",
+      dedup_of: null,
+      published_at: "2027-04-15T10:00:00.000Z",
+    });
+    const result = await classifyForUpsert([incoming]);
+    expect(result[0]).toMatchObject({ kind: "update", existingId: "row-skipped" });
+    expect(result[0].row.dedup_of).toBe("canonical-7");
+    expect(result[0].row.published_at).toBeNull();
+  });
+
+  it("re-publishes on update when the existing row's dedup_of is null (canonical was deleted)", async () => {
+    // The dedup_of FK is `on delete set null`, so deleting a canonical row
+    // clears the pointer on every duplicate that referenced it. The next
+    // ingest of one of those duplicates should treat it as a normal update
+    // and re-publish — that row is no longer being deduped against anything.
+    const fresh = "2027-04-15T10:00:00.000Z";
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-orphan",
+            source: "Website",
+            source_id: "abc",
+            event_key: "key-1",
+            dedup_of: null,
+            published_at: null,
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const incoming = makeRow({
+      source: "Website",
+      source_id: "abc",
+      event_key: "key-1",
+      dedup_of: null,
+      published_at: fresh,
+    });
+    const result = await classifyForUpsert([incoming]);
+    expect(result[0]).toMatchObject({ kind: "update", existingId: "row-orphan" });
+    // Row passes through unchanged — buildListingInsert's fresh published_at
+    // wins, dedup_of stays null. The duplicate's hiding state has lapsed.
+    expect(result[0].row.dedup_of).toBeNull();
+    expect(result[0].row.published_at).toBe(fresh);
+  });
+
   it("groups by source: a multi-source batch issues one query per distinct source", async () => {
     handle.setResponses([
       // one query per distinct source for sameMap

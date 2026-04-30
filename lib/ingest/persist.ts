@@ -93,6 +93,8 @@ interface ExistingRow {
   source: string;
   source_id: string;
   event_key: string;
+  dedup_of: string | null;
+  published_at: string | null;
 }
 
 export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAction[]> {
@@ -116,7 +118,7 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
   for (const [sourceLabel, ids] of idsBySource) {
     const { data, error } = await client
       .from("listings")
-      .select("id, source, source_id, event_key")
+      .select("id, source, source_id, event_key, dedup_of, published_at")
       .eq("source", sourceLabel)
       .in("source_id", ids);
     if (error) throw new Error(`existing-same lookup failed: ${error.message}`);
@@ -132,12 +134,12 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
   const eventKeys = rows.map((r) => r.event_key);
   const { data: existingByKey, error: e2 } = await client
     .from("listings")
-    .select("id, source, source_id, event_key, published_at")
+    .select("id, source, source_id, event_key, dedup_of, published_at")
     .in("event_key", eventKeys);
   if (e2) throw new Error(`existing-by-key lookup failed: ${e2.message}`);
 
-  const byKeyMap = new Map<string, ExistingRow & { published_at: string | null }>();
-  for (const row of (existingByKey ?? []) as Array<ExistingRow & { published_at: string | null }>) {
+  const byKeyMap = new Map<string, ExistingRow>();
+  for (const row of (existingByKey ?? []) as ExistingRow[]) {
     if (row.published_at !== null) byKeyMap.set(row.event_key, row);
   }
 
@@ -145,7 +147,17 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
     const sameKey = `${row.source}|${row.source_id}`;
     const sameMatch = sameMap.get(sameKey);
     if (sameMatch) {
-      return { kind: "update", row, existingId: sameMatch.id };
+      // Preserve existing dedup state across re-ingest. A row that was hidden
+      // by a prior skip-duplicate or LLM-cluster pass carries dedup_of set
+      // and published_at null; the freshly-built row from buildListingInsert
+      // would otherwise overwrite both, silently un-hiding the duplicate on
+      // the next cron tick. The FK is `on delete set null`, so when the
+      // canonical is deleted dedup_of becomes null naturally and the row
+      // re-publishes on the next ingest — desired.
+      const preservedRow = sameMatch.dedup_of
+        ? { ...row, published_at: null, dedup_of: sameMatch.dedup_of }
+        : row;
+      return { kind: "update", row: preservedRow, existingId: sameMatch.id };
     }
     const crossMatch = byKeyMap.get(row.event_key);
     if (crossMatch) {
