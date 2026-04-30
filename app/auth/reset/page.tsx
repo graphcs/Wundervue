@@ -14,16 +14,12 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    // Supabase parses the recovery token from the URL hash and emits
-    // PASSWORD_RECOVERY. If the user landed here directly (not via the
-    // email link), getSession returns null and the form stays disabled.
+    // Only the PASSWORD_RECOVERY event unlocks the form. Checking
+    // getSession() here would also accept regular sessions, letting any
+    // signed-in user change their password without re-auth.
     const { data: sub } = supabase.auth.onAuthStateChange((event: string) => {
       if (event === "PASSWORD_RECOVERY") setReady(true);
     });
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) setReady(true);
-    })();
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -40,7 +36,14 @@ export default function ResetPasswordPage() {
       const { error: updateErr } = await supabase.auth.updateUser({ password });
       if (updateErr) throw new Error(updateErr.message);
       setDone(true);
-      setTimeout(() => router.push("/explore"), 1500);
+      // Best-effort: invalidate the recovery session so the email link can't
+      // be reused (e.g. by someone with brief physical access). Don't gate
+      // the success UI on this — the password change is already committed
+      // server-side, and showing an error here would mislead the user.
+      supabase.auth.signOut().catch((signOutErr: unknown) => {
+        console.warn("[reset] post-update signOut failed", signOutErr);
+      });
+      setTimeout(() => router.push("/"), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset password");
     } finally {
@@ -61,7 +64,7 @@ export default function ResetPasswordPage() {
 
       {done ? (
         <p className="text-dark text-sm">
-          Password updated. Redirecting you to Explore…
+          Password updated. Sign in with your new password to continue.
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">

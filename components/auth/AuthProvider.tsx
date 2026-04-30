@@ -31,6 +31,10 @@ export interface AuthContextValue {
   hydrated: boolean;
   session: Session | null;
   profile: Profile | null;
+  // True when the most recent profile fetch failed for a non-missing-row
+  // reason (network, RLS, server error). UI can render a non-blocking
+  // notice; the next successful auth-state change clears it.
+  profileError: boolean;
   isLoggedIn: boolean;
   signIn: (input: SignInInput) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<SignUpResult>;
@@ -65,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileError, setProfileError] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
   const [savedEventsOpen, setSavedEventsOpen] = useState(false);
@@ -92,16 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // so a slow/erroring profile fetch doesn't also drop the session we
         // already retrieved. The listener will refresh profile on the next
         // token refresh.
+        let profileFailed = false;
         const [s, p] = await Promise.all([
           supabaseAuthRepo.getSession(),
           supabaseAuthRepo.getProfile().catch((err) => {
             console.error("[AuthProvider] profile hydration failed", err);
+            profileFailed = true;
             return null;
           }),
         ]);
         if (cancelled) return;
         setSession(s);
         setProfile(p);
+        if (profileFailed) setProfileError(true);
       } catch (err) {
         console.error("[AuthProvider] hydration failed", err);
       } finally {
@@ -126,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_OUT" || !supaSession) {
         setSession(null);
         setProfile(null);
+        setProfileError(false);
         return;
       }
       setSession(mapSession(supaSession));
@@ -142,9 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // dropping the user into the "logged in but no name" state on a
           // transient hiccup during a token refresh.
           if (p) setProfile(p);
+          setProfileError(false);
         })
         .catch((err) => {
+          if (cancelled) return;
           console.error("[AuthProvider] profile fetch failed", err);
+          setProfileError(true);
         });
     });
 
@@ -173,7 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    // Don't bounce the user back to /auth/* after sign-in: the recovery
+    // page would re-disable itself and the callback would re-loop. Strip
+    // those paths and fall back to the home page.
+    const path = window.location.pathname;
+    const next = path.startsWith("/auth/")
+      ? "/"
+      : path + window.location.search;
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     await supabaseAuthRepo.signInWithGoogle(redirectTo);
   }, []);
 
@@ -218,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hydrated,
       session,
       profile,
+      profileError,
       isLoggedIn: Boolean(session),
       signIn,
       signUp,
@@ -249,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hydrated,
       session,
       profile,
+      profileError,
       signIn,
       signUp,
       signInWithGoogle,
