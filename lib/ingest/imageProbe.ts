@@ -16,9 +16,11 @@ const MIN_ASPECT = 1.2; // landscape-ish: width / height
 const MAX_ASPECT = 2.4; // not ultra-wide banners
 // Tracking pixels and lazy-load placeholders sometimes report large pixel
 // dimensions but pack into a few KB of solid color or near-empty data.
-// A real photograph at 1200x800 is rarely under ~30KB even with aggressive
-// WebP — 15KB is a safe floor that still admits highly-compressed JPEGs.
-const MIN_BYTES = 15 * 1024;
+// 8KB is low enough to admit aggressively-compressed CDN WebPs that strip
+// metadata — the dimension floor (MIN_WIDTH / MIN_HEIGHT) carries most of
+// the weight here, with the byte floor as a backstop against 1×1 / solid
+// placeholders that somehow report inflated dimensions.
+const MIN_BYTES = 8 * 1024;
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB safety cap
 const FETCH_TIMEOUT_MS = 8000;
 

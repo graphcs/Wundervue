@@ -142,8 +142,17 @@ The `source` column stores the human-readable label from `SourceConfig.sourceLab
 1. **Fetch** — connector returns `RawItem[]`.
 2. **URL liveness check** — drop items whose `sourceUrl` is 404/410/DNS-dead before paying for an LLM call.
 3. **Normalize** — LLM extracts structured fields (title, dates, venue, category, etc.).
-4. **Dedup** — deterministic hash-based upsert, then an LLM fuzzy-cluster pass to catch paraphrased duplicates across sources.
-5. **Persist** — upsert into `listings`; record run stats. Three consecutive failures auto-disable a source.
+4. **Image resolution** — `lib/ingest/imagePipeline.ts` picks an image per row in this order: existing Storage URL → og:image scraped from `sourceUrl` → connector-provided thumbnail → AI-generated (Flux 2 Pro). og:image is intentionally tried *before* the connector thumbnail because publishers tune Open Graph tags for full-resolution social cards, while connector thumbnails (especially SerpAPI's gstatic CDN) are downscaled to ~300–500px. Probe failures fall through to the next option; the row is only dropped if AI generation itself fails (auth error, API outage, malformed response).
+5. **Dedup** — deterministic hash-based upsert, then an LLM fuzzy-cluster pass to catch paraphrased duplicates across sources.
+6. **Persist** — upsert into `listings`; record run stats. Three consecutive failures auto-disable a source.
+
+### Operational queries
+
+- `listings_dedup_rate_daily` view — per-source per-UTC-day `seen` / `duplicates` / `dup_rate`. Watch for sudden jumps (>30% above baseline) per source — the most common cause is a connector regressing into emitting unstable `source_id`s, which the fuzzy clusterer would otherwise mask. Migration: `supabase/migrations/20260430000000_listings_dedup_rate_view.sql`.
+
+### Deployment requirements
+
+- **Vercel Pro plan required.** `app/api/ingest/run`, `run-tier`, and `app/api/maintenance` all set `export const maxDuration = 300`. Hobby plan caps Node functions at 60s — deploying there would clamp `maxDuration` and leave runs truncated mid-batch. If Hobby is the target, drop `maxDuration` to 60 and reduce `URL_CHECK_CONCURRENCY` / `IMAGE_PIPELINE_CONCURRENCY` in `orchestrator.ts` so a single source fits inside the new cap. The 1h `STALE_RUNNING_MS` floor in `lib/ingest/persist.ts` is conservative enough for any cap below 1h and doesn't need adjusting.
 
 ---
 

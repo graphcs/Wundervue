@@ -8,8 +8,9 @@ function makeFetchResponse(bytes: Uint8Array, contentType = "image/png", status 
   });
 }
 
-// Padded to 16KB so the probe's MIN_BYTES (15KB) guard doesn't reject these
-// fixtures. Real PNGs at any reasonable resolution are well above this.
+// Padded comfortably above the probe's MIN_BYTES (8KB) guard so these fixture
+// payloads aren't rejected for being too small. Real PNGs at any reasonable
+// resolution are well above this.
 const FIXTURE_BYTES = 16 * 1024;
 
 // Minimal valid PNG: signature + IHDR with width/height, then zero-padded so
@@ -134,9 +135,9 @@ describe("probeImage", () => {
   });
 
   it("rejects payloads below the minimum byte floor", async () => {
-    // Valid PNG header at proper dimensions, but only 4KB total — well under
-    // the 15KB MIN_BYTES guard. Catches tracking pixels and lazy-load
-    // placeholders that report large pixel dimensions in tiny payloads.
+    // Valid PNG header at proper dimensions, but only 4KB total — under the
+    // 8KB MIN_BYTES guard. Catches tracking pixels and lazy-load placeholders
+    // that report large pixel dimensions in tiny payloads.
     const buf = new Uint8Array(4 * 1024);
     buf.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
     buf.set([0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52], 8);

@@ -31,8 +31,11 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   try {
     // Server-side fetch — no Referer header by default, so Instagram's hotlink
-    // protection doesn't apply.
+    // protection doesn't apply. The timeout bounds upstream stalls so a few
+    // hung fbcdn connections can't exhaust route concurrency / function
+    // compute on Vercel.
     const upstream = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
       headers: { "User-Agent": "WundervueImgProxy/1.0" },
     });
     if (!upstream.ok || !upstream.body) {
@@ -51,7 +54,17 @@ export async function GET(request: NextRequest): Promise<Response> {
       },
     });
   } catch (err) {
-    console.error("[img-proxy] fetch failed", err);
-    return new Response("upstream error", { status: 502 });
+    // Distinguish AbortSignal timeout from other failures: a timeout is a
+    // transient upstream stall (504 Gateway Timeout, retry-worthy), other
+    // errors (DNS, TLS, connection reset) look more like a permanent gateway
+    // problem (502). The client-side retry policy can use this signal.
+    const isTimeout = err instanceof Error && err.name === "TimeoutError";
+    console.error(
+      `[img-proxy] fetch ${isTimeout ? "timed out" : "failed"} for ${url.href}`,
+      err,
+    );
+    return new Response(isTimeout ? "upstream timeout" : "upstream error", {
+      status: isTimeout ? 504 : 502,
+    });
   }
 }

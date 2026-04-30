@@ -15,6 +15,7 @@ import {
   recentFailureStreak,
   resolveVenue,
   startRun,
+  writeFailedRunSentinel,
   type VenueRow,
 } from "./persist";
 
@@ -130,9 +131,34 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
       itemsDuplicate: 0,
       error: message,
     };
-    await finishRun(runId, result).catch(() => {
-      /* swallow: original error is more important */
-    });
+    try {
+      await finishRun(runId, result);
+    } catch (finishErr) {
+      // finishRun is an UPDATE — if it fails the original row stays at
+      // status='running', which would silently hide this failure from
+      // recentFailureStreak (its loop breaks on any non-'failed' row).
+      // Log the swallowed error and insert a fresh sentinel row so the
+      // streak guard still trips after enough back-to-back failures.
+      console.error(
+        `[ingest:${source.id}] finishRun failed for run ${runId}; writing sentinel`,
+        finishErr,
+      );
+      try {
+        await writeFailedRunSentinel(
+          source.id,
+          streak + 1,
+          `finishRun failed: ${message}`,
+        );
+        console.error(
+          `[ingest:${source.id}] wrote failed-run sentinel for ${runId}`,
+        );
+      } catch (sentinelErr) {
+        console.error(
+          `[ingest:${source.id}] sentinel insert also failed for ${runId}`,
+          sentinelErr,
+        );
+      }
+    }
     return result;
   }
 }

@@ -31,12 +31,14 @@ function getKey(): string {
   return key;
 }
 
-function stableSourceId(source: SourceConfig, ev: SerpApiEvent, idx: number): string {
-  // SerpAPI doesn't return a stable event id. Build one from venue+date+title
-  // so re-runs upsert the same row instead of duplicating.
+export function stableSourceId(source: SourceConfig, ev: SerpApiEvent): string {
+  // SerpAPI doesn't return a stable event id, and its result ordering isn't
+  // guaranteed stable across calls — so the key must depend only on the
+  // source plus the event's intrinsic fields (venue + date + title), never
+  // on its position in the result array, or re-runs would duplicate rows.
   const venue = ev.venue?.name ?? ev.address?.[0] ?? "";
   const when = ev.date?.start_date ?? ev.date?.when ?? "";
-  const key = `${source.id}|${venue}|${when}|${(ev.title ?? "").slice(0, 60)}|${idx}`;
+  const key = `${source.id}|${venue}|${when}|${(ev.title ?? "").slice(0, 60)}`;
   return key.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120);
 }
 
@@ -80,8 +82,8 @@ export async function fetchSerpEvents(source: SourceConfig): Promise<RawItem[]> 
 
   return events
     .filter((ev) => ev.title)
-    .map((ev, idx): RawItem => ({
-      sourceId: stableSourceId(source, ev, idx),
+    .map((ev): RawItem => ({
+      sourceId: stableSourceId(source, ev),
       sourceUrl: ev.link,
       text: eventToText(ev),
       imageUrl: ev.image ?? ev.thumbnail,

@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { ApifyClient } from "apify-client";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { IMAGE_PICKER_SOURCE } from "./imagePicker";
 
 interface ApifyWebItem {
   url?: string;
@@ -36,6 +38,9 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
         startUrls: [{ url: source.url }],
         // Default page-function returns title/description/url/image per page.
         // For source-specific extraction, override via Apify console for that actor.
+        // Image-picking helpers (isUsableUrl / pickFromSrcset / pickImageAttr)
+        // are injected verbatim from ./imagePicker via Function.prototype.toString
+        // so this worker can't drift from the in-process cheerio scraper.
         pageFunction: `
           async function pageFunction(context) {
             const { request, $ } = context;
@@ -43,40 +48,9 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
             const itemSel = ${JSON.stringify(source.selectors?.item ?? "")};
             const titleSel = ${JSON.stringify(source.selectors?.title ?? "h1, h2, h3")};
             const descSel = ${JSON.stringify(source.selectors?.description ?? "p")};
-            // Lazy-loading sites stash the real URL in srcset/data-* and leave
-            // src holding a 1x1 placeholder. Mirror lib/ingest/connectors/cheerioWeb.ts
-            // pickImageAttr — kept in sync by hand since this runs in Apify's worker.
-            function isUsable(v) {
-              if (!v) return false;
-              const t = String(v).trim();
-              return t.length > 0 && !t.startsWith('data:') && t !== 'about:blank';
-            }
-            function pickFromSrcset(srcset) {
-              if (!srcset) return null;
-              const candidates = srcset.split(',').map(e => {
-                const parts = e.trim().split(/\\s+/);
-                return parts[0] && isUsable(parts[0]) ? { url: parts[0], desc: parts[1] || '' } : null;
-              }).filter(Boolean);
-              if (candidates.length === 0) return null;
-              let bestW = -1, bestWUrl = null, bestX = -1, bestXUrl = null;
-              for (const c of candidates) {
-                const wm = /^(\\d+(?:\\.\\d+)?)w$/.exec(c.desc);
-                if (wm) { const w = +wm[1]; if (w > bestW) { bestW = w; bestWUrl = c.url; } continue; }
-                const xm = /^(\\d+(?:\\.\\d+)?)x$/.exec(c.desc);
-                if (xm) { const x = +xm[1]; if (x > bestX) { bestX = x; bestXUrl = c.url; } }
-              }
-              return bestWUrl || bestXUrl || candidates[0].url;
-            }
-            function pickImage($img) {
-              const fromSrcset = pickFromSrcset($img.attr('srcset'));
-              if (fromSrcset) return fromSrcset;
-              for (const a of ['data-src', 'data-lazy-src', 'data-original']) {
-                const v = $img.attr(a);
-                if (isUsable(v)) return v;
-              }
-              const src = $img.attr('src');
-              return isUsable(src) ? src : null;
-            }
+
+            ${IMAGE_PICKER_SOURCE}
+
             if (itemSel) {
               $(itemSel).each((_, el) => {
                 items.push({
@@ -84,7 +58,7 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
                   title: $(el).find(titleSel).first().text().trim(),
                   description: $(el).find(descSel).first().text().trim(),
                   text: $(el).text().trim(),
-                  image: pickImage($(el).find('img').first()),
+                  image: pickImageAttr($(el).find('img').first()) || null,
                   loadedTime: new Date().toISOString(),
                 });
               });
@@ -120,11 +94,19 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
 
   return rows
     .filter((r) => (r.text ?? r.description ?? r.title)?.trim())
-    .map((r, idx): RawItem => ({
-      sourceId: `${source.id}:${r.url ?? idx}`,
-      sourceUrl: r.url,
-      text: [r.title, r.description, r.text].filter(Boolean).join("\n\n"),
-      imageUrl: r.image,
-      fetchedAt: r.loadedTime ?? new Date().toISOString(),
-    }));
+    .map((r): RawItem => {
+      const body = [r.title, r.description, r.text].filter(Boolean).join("\n\n");
+      // Content hash so re-runs against re-ordered Apify dataset output still
+      // upsert the same row. r.url is usually item-unique on its own, but the
+      // hash also covers the case where two items share a URL (e.g. multi-tab
+      // listing pages that resolve to the same canonical link).
+      const contentHash = createHash("sha1").update(body).digest("hex").slice(0, 12);
+      return {
+        sourceId: `${source.id}:${r.url ?? "no-url"}#${contentHash}`,
+        sourceUrl: r.url,
+        text: body,
+        imageUrl: r.image,
+        fetchedAt: r.loadedTime ?? new Date().toISOString(),
+      };
+    });
 }

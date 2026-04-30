@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Delete listings whose effective end date is in the past (strictly before
  * 00:00 UTC today). Defaults to dry-run; pass --apply to delete.

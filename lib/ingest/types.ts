@@ -89,6 +89,12 @@ export interface DbListing {
 export type DedupAction =
   | { kind: "insert"; row: ListingInsert }
   | { kind: "update"; row: ListingInsert; existingId: string }
+  // Same source produced a new source_id for an event that already exists
+  // under an old source_id (e.g. a connector's keying algorithm changed).
+  // Update the canonical row in place by id — this also overwrites its
+  // source_id with the new format so the next run matches via the cheap
+  // same-source lookup instead of re-doing the event_key crossMatch.
+  | { kind: "merge"; row: ListingInsert; existingId: string }
   | { kind: "skip-duplicate"; row: ListingInsert; canonicalId: string };
 
 export type ListingInsert = Omit<DbListing, "id" | "created_at" | "updated_at">;

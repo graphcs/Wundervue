@@ -6,16 +6,21 @@ const c = createClient(
   { auth: { persistSession: false } },
 );
 
-const { data: venues } = await c.from("venues").select("id, neighborhood");
+const { data: venues, error: venuesErr } = await c
+  .from("venues")
+  .select("id, neighborhood");
+if (venuesErr) throw new Error(`venues lookup failed: ${venuesErr.message}`);
 const venueMap = new Map<string, string>();
 for (const v of venues ?? []) venueMap.set(v.id as string, v.neighborhood as string);
 
-const { data: listings } = await c
+const { data: listings, error: listingsErr } = await c
   .from("listings")
   .select("id, venue_id, neighborhood")
   .not("venue_id", "is", null);
+if (listingsErr) throw new Error(`listings lookup failed: ${listingsErr.message}`);
 
 let fixed = 0;
+let failed = 0;
 for (const l of listings ?? []) {
   const venueHood = venueMap.get(l.venue_id as string);
   if (venueHood && venueHood !== l.neighborhood) {
@@ -23,7 +28,12 @@ for (const l of listings ?? []) {
       .from("listings")
       .update({ neighborhood: venueHood })
       .eq("id", l.id as string);
-    if (!error) fixed++;
+    if (error) {
+      failed++;
+      console.error(`update failed for listing ${l.id}: ${error.message}`);
+    } else {
+      fixed++;
+    }
   }
 }
-console.log(`fixed ${fixed} rows`);
+console.log(`fixed ${fixed} rows, ${failed} failed`);

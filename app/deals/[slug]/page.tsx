@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LISTINGS } from "@/lib/data/listings";
 import { getListingBySlugAsync } from "@/lib/data/listings.server";
 import { ListingDetailView } from "@/components/detail/ListingDetailView";
 import { MoreFromVenue } from "@/components/detail/MoreFromVenue";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateStaticParams() {
-  return LISTINGS.filter((l) => l.type !== "event").map((l) => ({ slug: l.slug }));
 }
 
 export async function generateMetadata({

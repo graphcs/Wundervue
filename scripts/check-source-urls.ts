@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Sweep all published listings, HEAD-check each source_url, and unpublish
  * rows whose source page is definitively gone (404 / 410 / DNS).

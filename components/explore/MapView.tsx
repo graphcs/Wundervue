@@ -6,24 +6,6 @@ import type { Listing, ListingType } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 
-// Placeholder positions for fixture listings (ids "1"–"12"). Real lat/lng-based
-// positioning lands when the Mapbox/Google Maps integration ships. Listings
-// without a key here (e.g. scraped UUID-keyed rows) are skipped on the map.
-const MAP_POSITIONS: Record<string, { top: string; left: string }> = {
-  "1": { top: "22%", left: "62%" },
-  "2": { top: "18%", left: "24%" },
-  "3": { top: "28%", left: "35%" },
-  "4": { top: "12%", left: "80%" },
-  "5": { top: "65%", left: "60%" },
-  "6": { top: "48%", left: "40%" },
-  "7": { top: "20%", left: "20%" },
-  "8": { top: "55%", left: "30%" },
-  "9": { top: "72%", left: "48%" },
-  "10": { top: "45%", left: "44%" },
-  "11": { top: "30%", left: "32%" },
-  "12": { top: "25%", left: "58%" },
-};
-
 const HOOD_LABELS = [
   { name: "LoHi", top: "16%", left: "18%" },
   { name: "RiNo", top: "20%", left: "56%" },
@@ -41,57 +23,6 @@ const PIN_COLORS: Record<ListingType, string> = {
   deal: "#ff535b",
   both: "#6b7280",
 };
-
-function PinMarker({ type }: { type: ListingType }) {
-  const bg = PIN_COLORS[type];
-  let iconPath: React.ReactNode;
-  if (type === "event") {
-    // Outlined calendar: rounded rect body + header divider + two pegs on top
-    iconPath = (
-      <g fill="none" stroke="#fff" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="11" y="11.5" width="10" height="8.5" rx="1.3" />
-        <line x1="11" y1="14" x2="21" y2="14" />
-        <line x1="13.8" y1="10" x2="13.8" y2="11.8" />
-        <line x1="18.2" y1="10" x2="18.2" y2="11.8" />
-      </g>
-    );
-  } else if (type === "deal") {
-    // Solid percent symbol via text
-    iconPath = (
-      <text
-        x="16"
-        y="19"
-        textAnchor="middle"
-        fontSize="12.5"
-        fontWeight="900"
-        fill="#fff"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-      >
-        %
-      </text>
-    );
-  } else {
-    // Solid star
-    iconPath = (
-      <g transform="translate(16 14.5) scale(0.82) translate(-16 -14.5)">
-        <polygon
-          points="16 8 17.9 12.6 23 13 19 16.2 20.2 21 16 18.4 11.8 21 13 16.2 9 13 14.1 12.6"
-          fill="#fff"
-        />
-      </g>
-    );
-  }
-
-  return (
-    <svg width="32" height="40" viewBox="0 0 32 40" className="drop-shadow-md">
-      <path
-        d="M16 1 C7.716 1 1 7.716 1 16 C1 22.75 5.5 28.3 11.05 33.1 C13 34.8 14.7 36.7 16 39 C17.3 36.7 19 34.8 20.95 33.1 C26.5 28.3 31 22.75 31 16 C31 7.716 24.284 1 16 1 Z"
-        fill={bg}
-      />
-      {iconPath}
-    </svg>
-  );
-}
 
 interface Props {
   listings: Listing[];
@@ -195,35 +126,6 @@ export function MapView({ listings }: Props) {
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: PIN_COLORS.both }} /> Both
           </span>
         </div>
-
-        {listings.map((l) => {
-          const pos = MAP_POSITIONS[l.id];
-          if (!pos) return null;
-          const isActive = activeId === l.id;
-          const href =
-            l.type === "deal" ? `/deals/${l.slug}` : `/events/${l.slug}`;
-          return (
-            <Link
-              key={l.id}
-              href={href}
-              aria-label={l.title}
-              onMouseEnter={() => setActiveId(l.id)}
-              onMouseLeave={() => setActiveId(null)}
-              className={`absolute -translate-x-1/2 transition-transform ${
-                isActive ? "z-10 scale-110" : "hover:scale-105"
-              }`}
-              style={{
-                top: pos.top,
-                left: pos.left,
-                transformOrigin: "50% 100%",
-                // Anchor the pin's point (the bottom tip) to the lat/lng position
-                marginTop: -40,
-              }}
-            >
-              <PinMarker type={l.type} />
-            </Link>
-          );
-        })}
 
         <div className="absolute right-4 top-4 flex flex-col overflow-hidden rounded-lg border-border border bg-white/95 shadow-sm">
           <button
