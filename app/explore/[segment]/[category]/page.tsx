@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { LISTINGS } from "@/lib/data/listings";
+import { getMergedListings } from "@/lib/data/listings.server";
 import {
   NEIGHBORHOODS,
   neighborhoodLabel,
@@ -50,7 +50,8 @@ export default async function ExploreCombinedPage({
     neighborhoodFromPath: segment,
     categoryFromPath: category,
   });
-  const listings = applyFilters(LISTINGS, filters);
+  const all = await getMergedListings();
+  const listings = applyFilters(all, filters);
 
   return <ExploreResults listings={listings} view={filters.view} />;
 }

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 
 interface Props {
-  listingId: number;
+  listingId: string;
   className?: string;
 }
 
