@@ -88,5 +88,12 @@ export async function fetchSerpEvents(source: SourceConfig): Promise<RawItem[]> 
       text: eventToText(ev),
       imageUrl: ev.image ?? ev.thumbnail,
       fetchedAt,
+      // SerpAPI returns these as structured fields. Pass them through as
+      // fallbacks in case the LLM fails to extract them from the prose blob —
+      // observed in practice for vague titles like "BEAUZ" where the venue
+      // only appears in the description, or events whose title IS the venue
+      // name ("Boulder Farmers Market") and the LLM returns null.
+      venueName: ev.venue?.name,
+      address: ev.address?.length ? ev.address.join(", ") : undefined,
     }));
 }

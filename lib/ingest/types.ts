@@ -36,6 +36,11 @@ export interface RawItem {
   text: string;
   imageUrl?: string;
   fetchedAt: string;
+  // Connector-supplied venue/address hints. Populated when the upstream
+  // (e.g. SerpAPI) returns these as structured fields. Used as a fallback in
+  // normalize.ts when the LLM fails to extract them from the prose blob.
+  venueName?: string;
+  address?: string;
 }
 
 export interface NormalizedListing {
@@ -53,6 +58,11 @@ export interface NormalizedListing {
   isFree: boolean;
   dealValue: string | null;
   tags: LifestyleTag[];
+  // Free-text venue / address extracted from the source. Used to look up an
+  // existing venue row or create a new one (with geocoded lat/lng) so the map
+  // can pin the listing.
+  venueName: string | null;
+  address: string | null;
 }
 
 export interface DbListing {
