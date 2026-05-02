@@ -477,3 +477,29 @@ describe("recentFailureStreak", () => {
     await expect(recentFailureStreak("test-source")).rejects.toThrow(/recent-runs lookup failed/);
   });
 });
+
+describe("venueSlug", () => {
+  it("lowercases and replaces non-alphanumeric runs with single dashes", async () => {
+    const { venueSlug } = await import("../persist");
+    expect(venueSlug("Mission Ballroom")).toBe("mission-ballroom");
+    expect(venueSlug("Red Rocks Amphitheatre")).toBe("red-rocks-amphitheatre");
+    expect(venueSlug("Bar & Grill, LLC.")).toBe("bar-grill-llc");
+  });
+
+  it("trims leading and trailing dashes", async () => {
+    const { venueSlug } = await import("../persist");
+    expect(venueSlug("!! The Spot !!")).toBe("the-spot");
+  });
+
+  it("falls back to 'venue' when input has no alphanumerics", async () => {
+    const { venueSlug } = await import("../persist");
+    expect(venueSlug("---")).toBe("venue");
+    expect(venueSlug("")).toBe("venue");
+  });
+
+  it("caps slug at 60 characters", async () => {
+    const { venueSlug } = await import("../persist");
+    const long = "a".repeat(120);
+    expect(venueSlug(long).length).toBe(60);
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
@@ -59,6 +59,21 @@ function CompactCard({
 export function MapView({ listings }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Debounce hover so a fast scroll through the sidebar doesn't fire
+  // setActiveId once per card.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+  const onHover = useCallback((id: string | null) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    if (id === null) {
+      setActiveId(null);
+      return;
+    }
+    hoverTimer.current = setTimeout(() => setActiveId(id), 80);
+  }, []);
+
   return (
     <div
       className="border-border grid overflow-hidden rounded-2xl border bg-white"
@@ -74,7 +89,7 @@ export function MapView({ listings }: Props) {
                 key={l.id}
                 listing={l}
                 active={activeId === l.id}
-                onHover={setActiveId}
+                onHover={onHover}
               />
             ))}
           </div>

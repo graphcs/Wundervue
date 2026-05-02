@@ -1,38 +1,11 @@
 import Link from "next/link";
+import { buildPageHrefBuilder, pageWindow } from "@/lib/filters/paginate";
 
 interface Props {
   currentPage: number;
   totalPages: number;
   searchParams: Record<string, string | string[] | undefined>;
   basePath: string;
-}
-
-function buildHref(
-  basePath: string,
-  searchParams: Record<string, string | string[] | undefined>,
-  page: number,
-): string {
-  const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(searchParams)) {
-    if (k === "page") continue;
-    if (Array.isArray(v)) v.forEach((vv) => params.append(k, vv));
-    else if (v) params.set(k, v);
-  }
-  if (page > 1) params.set("page", String(page));
-  const qs = params.toString();
-  return qs ? `${basePath}?${qs}` : basePath;
-}
-
-function pageWindow(current: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const out: (number | "…")[] = [1];
-  const start = Math.max(2, current - 1);
-  const end = Math.min(total - 1, current + 1);
-  if (start > 2) out.push("…");
-  for (let i = start; i <= end; i++) out.push(i);
-  if (end < total - 1) out.push("…");
-  out.push(total);
-  return out;
 }
 
 export function Pagination({
@@ -43,12 +16,9 @@ export function Pagination({
 }: Props) {
   if (totalPages <= 1) return null;
   const items = pageWindow(currentPage, totalPages);
-  const prevHref = buildHref(basePath, searchParams, Math.max(1, currentPage - 1));
-  const nextHref = buildHref(
-    basePath,
-    searchParams,
-    Math.min(totalPages, currentPage + 1),
-  );
+  const hrefFor = buildPageHrefBuilder(basePath, searchParams);
+  const prevHref = hrefFor(Math.max(1, currentPage - 1));
+  const nextHref = hrefFor(Math.min(totalPages, currentPage + 1));
   const baseBtn =
     "border-border text-graphite inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-3 text-sm font-medium transition-colors";
 
@@ -89,7 +59,7 @@ export function Pagination({
         ) : (
           <Link
             key={it}
-            href={buildHref(basePath, searchParams, it)}
+            href={hrefFor(it)}
             className={`${baseBtn} hover:border-coral hover:text-coral bg-white`}
           >
             {it}

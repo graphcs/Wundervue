@@ -72,7 +72,12 @@ export async function resolveOrCreateVenue(args: {
 }): Promise<VenueRow | null> {
   if (args.defaultVenueSlug) {
     const venue = await resolveVenue(args.defaultVenueSlug);
-    if (venue) return venue;
+    if (!venue) {
+      throw new Error(
+        `defaultVenueSlug "${args.defaultVenueSlug}" not found in venues table — check source config or seed data`,
+      );
+    }
+    return venue;
   }
   if (!args.venueName) return null;
   const slug = venueSlug(args.venueName);

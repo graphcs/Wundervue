@@ -10,10 +10,21 @@ import type { Listing, ListingType } from "@/lib/types";
 const DENVER_CENTER = { longitude: -104.9903, latitude: 39.7392, zoom: 12 };
 const TILE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-const PIN_COLORS: Record<ListingType, string> = {
-  event: "#121821",
-  deal: "#ff535b",
-  both: "#6b7280",
+type PinKind = ListingType | "mixed";
+
+interface PinStyle {
+  fill: string;
+  ring: string;
+}
+
+// "mixed" = a stack of listings with more than one type at the same coord.
+// It shares the "both" gray fill but adds a coral ring to distinguish it from
+// a single listing that is itself type=both.
+const PIN_STYLES: Record<PinKind, PinStyle> = {
+  event: { fill: "#121821", ring: "#ffffff" },
+  deal: { fill: "#ff535b", ring: "#ffffff" },
+  both: { fill: "#6b7280", ring: "#ffffff" },
+  mixed: { fill: "#6b7280", ring: "#ff535b" },
 };
 
 interface Props {
@@ -37,12 +48,13 @@ function detailHref(l: Listing): string {
   return l.type === "deal" ? `/deals/${l.slug}` : `/events/${l.slug}`;
 }
 
-// Pick a "representative" type for a group of listings sharing one coord — for
-// pin colour. Mixed groups fall through to "both" (gray).
-function groupType(group: Listing[]): ListingType {
+// Pick a pin kind for a group of listings sharing one coord. A single type
+// across the group → that type. Multiple types in the same stack → "mixed",
+// which is rendered differently from a single listing of type=both.
+function groupType(group: Listing[]): PinKind {
   const types = new Set(group.map((l) => l.type));
   if (types.size === 1) return [...types][0];
-  return "both";
+  return "mixed";
 }
 
 export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
@@ -69,6 +81,9 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
 
   const initialViewState = useMemo(() => {
     if (groups.length === 0) return DENVER_CENTER;
+    if (groups.length === 1) {
+      return { longitude: groups[0].lng, latitude: groups[0].lat, zoom: 14 };
+    }
     let minLng = groups[0].lng;
     let maxLng = groups[0].lng;
     let minLat = groups[0].lat;
@@ -100,7 +115,7 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
         <NavigationControl position="top-right" showCompass={false} />
 
         {groups.map((g) => {
-          const colour = PIN_COLORS[groupType(g.listings)];
+          const style = PIN_STYLES[groupType(g.listings)];
           const count = g.listings.length;
           return (
             <Marker
@@ -120,9 +135,10 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
                     ? g.listings[0].title
                     : `${count} listings at this location`
                 }
-                className="flex cursor-pointer items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white shadow"
+                className="flex cursor-pointer items-center justify-center rounded-full border-2 text-[10px] font-bold text-white shadow"
                 style={{
-                  background: colour,
+                  background: style.fill,
+                  borderColor: style.ring,
                   width: count > 1 ? 22 : 16,
                   height: count > 1 ? 22 : 16,
                 }}
@@ -147,8 +163,8 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
             {activeGroup.listings.length === 1 ? (
               <PopupCard listing={activeGroup.listings[0]} />
             ) : (
-              <div className="flex max-h-[360px] w-[280px] flex-col gap-1.5 overflow-y-auto p-1">
-                <div className="text-graphite px-1 pb-1 text-[11px] font-medium">
+              <div className="flex max-h-[40vh] w-[240px] flex-col gap-1.5 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-sm">
+                <div className="text-graphite px-1 text-[11px] font-medium">
                   {activeGroup.listings.length} at this location
                 </div>
                 {activeGroup.listings.map((l) => (
@@ -161,29 +177,25 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
       </MapGL>
 
       <div className="border-border absolute left-4 top-4 z-20 flex items-center gap-3 rounded-full border bg-white/95 px-3 py-1.5 text-[10px] font-medium shadow-sm backdrop-blur">
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: PIN_COLORS.event }}
-          />{" "}
-          Event
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: PIN_COLORS.deal }}
-          />{" "}
-          Deal
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: PIN_COLORS.both }}
-          />{" "}
-          Both
-        </span>
+        <LegendDot kind="event" label="Event" />
+        <LegendDot kind="deal" label="Deal" />
+        <LegendDot kind="both" label="Both" />
+        <LegendDot kind="mixed" label="Mixed" />
       </div>
     </div>
+  );
+}
+
+function LegendDot({ kind, label }: { kind: PinKind; label: string }) {
+  const style = PIN_STYLES[kind];
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        className="inline-block h-2.5 w-2.5 rounded-full border"
+        style={{ background: style.fill, borderColor: style.ring }}
+      />
+      {label}
+    </span>
   );
 }
 
@@ -197,9 +209,11 @@ function PopupCard({
   return (
     <Link
       href={detailHref(listing)}
-      className={`border-border flex gap-2.5 rounded-xl border bg-white p-2 hover:border-dark ${
-        compact ? "w-full" : "w-[260px]"
-      }`}
+      className={
+        compact
+          ? "flex w-full gap-2.5 rounded-lg p-1.5 hover:bg-tag-bg"
+          : "border-border flex w-[260px] gap-2.5 rounded-xl border bg-white p-2 hover:border-dark"
+      }
     >
       <div
         className={`bg-tag-bg relative shrink-0 overflow-hidden rounded-md ${

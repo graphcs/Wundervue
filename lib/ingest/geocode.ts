@@ -5,7 +5,11 @@
 // repeated venues within a single ingest run.
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+// OSM policy requires a real contact in the User-Agent. We default to the
+// production identity but allow staging/dev to override via env so changes
+// don't require a code edit.
 const USER_AGENT =
+  process.env.NOMINATIM_USER_AGENT ??
   "wundervue/0.1 (https://wundervue.com; admin@wundervue.com)";
 const RATE_LIMIT_MS = 1100;
 
@@ -33,7 +37,7 @@ async function paceForRateLimit(): Promise<void> {
 // "Unit 190", "Ste 200", "Apt 4B", "#3" — drop those and the trailing
 // ", USA" so a real-world address like "900 W 1st Ave Unit 190, Denver, CO,
 // USA" resolves the same as "900 W 1st Ave, Denver, CO".
-function sanitizeForGeocoder(input: string): string {
+export function sanitizeForGeocoder(input: string): string {
   return input
     .replace(/\b(unit|ste|suite|apt|apartment|#)\s*[\w-]+/gi, "")
     .replace(/,\s*usa\s*$/i, "")
@@ -58,10 +62,12 @@ export async function geocode(address: string): Promise<GeocodeResult | null> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, "Accept-Language": "en" },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
+      // Transient (5xx, 429, etc.): don't poison the cache — a later call in
+      // this run might succeed. Only cache definitive "address not found".
       console.error(`[geocode] non-2xx for ${address}: ${res.status}`);
-      cache.set(key, null);
       return null;
     }
     const data = (await res.json()) as Array<{ lat?: string; lon?: string }>;
@@ -79,8 +85,8 @@ export async function geocode(address: string): Promise<GeocodeResult | null> {
     cache.set(key, result);
     return result;
   } catch (err) {
+    // Network failure / timeout / abort — transient, don't poison the cache.
     console.error(`[geocode] fetch failed for ${address}`, err);
-    cache.set(key, null);
     return null;
   }
 }
