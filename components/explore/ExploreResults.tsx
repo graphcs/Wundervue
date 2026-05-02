@@ -2,6 +2,7 @@ import type { Filters, Listing } from "@/lib/types";
 import { ListingGrid } from "./ListingGrid";
 import { MapView } from "./MapView";
 import { Pagination } from "./Pagination";
+import { PerPagePicker } from "./PerPagePicker";
 
 interface Props {
   listings: Listing[];
@@ -24,12 +25,22 @@ export function ExploreResults({
   return (
     <>
       <ListingGrid listings={listings} />
-      <Pagination
-        currentPage={page}
-        totalPages={totalPages}
-        searchParams={searchParams}
-        basePath={basePath}
-      />
+      <div className="mt-8 grid grid-cols-3 items-center">
+        <div />
+        <div className="flex justify-center">
+          {totalPages > 1 ? (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              searchParams={searchParams}
+              basePath={basePath}
+            />
+          ) : null}
+        </div>
+        <div className="flex justify-end">
+          <PerPagePicker />
+        </div>
+      </div>
     </>
   );
 }

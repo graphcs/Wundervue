@@ -48,6 +48,20 @@ describe("paginate", () => {
     expect(r.totalPages).toBe(1);
     expect(r.items).toEqual([]);
   });
+
+  it("honors a custom pageSize", () => {
+    const r = paginate(items, { page: "1" }, 18);
+    expect(r.page).toBe(1);
+    expect(r.totalPages).toBe(2);
+    expect(r.items).toHaveLength(18);
+  });
+
+  it("clamps a high page number when pageSize shrinks totalPages", () => {
+    // 23 items at 18/page = 2 pages; page=5 should clamp to 2.
+    const r = paginate(items, { page: "5" }, 18);
+    expect(r.page).toBe(2);
+    expect(r.items).toEqual([19, 20, 21, 22, 23]);
+  });
 });
 
 describe("buildPageHref", () => {

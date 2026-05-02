@@ -69,7 +69,7 @@ export default async function ExploreSegmentPage({
   const isMap = filters.view === "map";
   const { items, page, totalPages } = isMap
     ? { items: filtered, page: 1, totalPages: 1 }
-    : paginate(filtered, sp);
+    : paginate(filtered, sp, filters.pageSize);
 
   return (
     <ExploreResults

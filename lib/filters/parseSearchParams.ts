@@ -1,4 +1,10 @@
-import type { Filters, DatePreset, TypeFilter, LifestyleTag } from "@/lib/types";
+import type {
+  Filters,
+  DatePreset,
+  TypeFilter,
+  LifestyleTag,
+  PageSize,
+} from "@/lib/types";
 
 const VALID_DATES: DatePreset[] = [
   "any",
@@ -10,6 +16,7 @@ const VALID_DATES: DatePreset[] = [
   "custom",
 ];
 const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
+const VALID_PAGE_SIZES: PageSize[] = [9, 12, 15, 18];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
   "dog-friendly",
@@ -52,6 +59,11 @@ export function parseSearchParams(
   const hoodsRaw = csv(first(params, "hoods"));
   const catsRaw = csv(first(params, "cats"));
   const view = first(params, "view");
+  const perRaw = first(params, "per");
+  const perNum = Number(perRaw);
+  const pageSize: PageSize = (VALID_PAGE_SIZES as number[]).includes(perNum)
+    ? (perNum as PageSize)
+    : 9;
 
   const neighborhoods = options.neighborhoodFromPath
     ? [options.neighborhoodFromPath, ...hoodsRaw].filter(
@@ -82,6 +94,7 @@ export function parseSearchParams(
     freeOnly: first(params, "free") === "1",
     q: first(params, "q"),
     view: view === "map" ? "map" : "grid",
+    pageSize,
     venue: first(params, "venue"),
   };
 }

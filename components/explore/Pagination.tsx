@@ -25,7 +25,7 @@ export function Pagination({
   return (
     <nav
       aria-label="Pagination"
-      className="mt-8 flex items-center justify-center gap-2"
+      className="flex items-center justify-center gap-2"
     >
       {currentPage > 1 ? (
         <Link

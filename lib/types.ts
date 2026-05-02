@@ -66,6 +66,8 @@ export type DatePreset =
 
 export type TypeFilter = "all" | "events" | "deals" | "both";
 
+export type PageSize = 9 | 12 | 15 | 18;
+
 export interface Filters {
   type: TypeFilter;
   neighborhoods: string[];
@@ -77,5 +79,6 @@ export interface Filters {
   freeOnly: boolean;
   q?: string;
   view: "grid" | "map";
+  pageSize: PageSize;
   venue?: string;
 }
