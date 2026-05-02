@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   fetchProfileForUser,
+  fetchSubscriptionForUser,
   mapSession,
   supabaseAuthRepo,
 } from "@/lib/auth/supabaseAuthRepo";
@@ -25,17 +26,20 @@ import type {
   SignInInput,
   SignUpInput,
   SignUpResult,
+  Subscription,
 } from "@/lib/auth/types";
 
 export interface AuthContextValue {
   hydrated: boolean;
   session: Session | null;
   profile: Profile | null;
+  subscription: Subscription | null;
   // True when the most recent profile fetch failed for a non-missing-row
   // reason (network, RLS, server error). UI can render a non-blocking
   // notice; the next successful auth-state change clears it.
   profileError: boolean;
   isLoggedIn: boolean;
+  refreshSubscription: () => Promise<void>;
   signIn: (input: SignInInput) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<SignUpResult>;
   signInWithGoogle: () => Promise<void>;
@@ -69,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [profileError, setProfileError] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
@@ -110,6 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(s);
         setProfile(p);
         if (profileFailed) setProfileError(true);
+
+        if (s) {
+          try {
+            const sub = await fetchSubscriptionForUser(s.userId);
+            if (!cancelled) setSubscription(sub);
+          } catch (err) {
+            console.error("[AuthProvider] subscription hydration failed", err);
+          }
+        }
       } catch (err) {
         console.error("[AuthProvider] hydration failed", err);
       } finally {
@@ -134,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_OUT" || !supaSession) {
         setSession(null);
         setProfile(null);
+        setSubscription(null);
         setProfileError(false);
         return;
       }
@@ -157,6 +172,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           console.error("[AuthProvider] profile fetch failed", err);
           setProfileError(true);
+        });
+      void fetchSubscriptionForUser(supaSession.user.id)
+        .then((sub) => {
+          if (cancelled) return;
+          setSubscription(sub);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error("[AuthProvider] subscription fetch failed", err);
         });
     });
 
@@ -200,7 +224,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabaseAuthRepo.signOut();
     setSession(null);
     setProfile(null);
+    setSubscription(null);
   }, []);
+
+  const refreshSubscription = useCallback(async () => {
+    if (!session) {
+      setSubscription(null);
+      return;
+    }
+    try {
+      const sub = await fetchSubscriptionForUser(session.userId);
+      setSubscription(sub);
+    } catch (err) {
+      console.error("[AuthProvider] refreshSubscription failed", err);
+    }
+  }, [session]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     const next = await supabaseAuthRepo.updateProfile(patch);
@@ -237,8 +275,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hydrated,
       session,
       profile,
+      subscription,
       profileError,
       isLoggedIn: Boolean(session),
+      refreshSubscription,
       signIn,
       signUp,
       signInWithGoogle,
@@ -269,7 +309,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hydrated,
       session,
       profile,
+      subscription,
       profileError,
+      refreshSubscription,
       signIn,
       signUp,
       signInWithGoogle,

@@ -10,6 +10,8 @@ import type {
   SignInInput,
   SignUpInput,
   SignUpResult,
+  Subscription,
+  SubscriptionStatus,
 } from "./types";
 
 interface ProfileRow {
@@ -63,6 +65,51 @@ export async function fetchProfileForUser(
   if (error) throw new Error(error.message);
   if (!data) return null;
   return mapProfile(data as ProfileRow, { id: userId, email });
+}
+
+interface SubscriptionRow {
+  id: string;
+  user_id: string;
+  stripe_subscription_id: string;
+  stripe_price_id: string;
+  status: SubscriptionStatus;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapSubscription(row: SubscriptionRow): Subscription {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    stripeSubscriptionId: row.stripe_subscription_id,
+    stripePriceId: row.stripe_price_id,
+    status: row.status,
+    currentPeriodEnd: row.current_period_end,
+    cancelAtPeriodEnd: row.cancel_at_period_end,
+    canceledAt: row.canceled_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// RLS filters to the calling user's own rows; we still order/limit so a
+// resubscriber sees their newest record.
+export async function fetchSubscriptionForUser(
+  userId: string,
+): Promise<Subscription | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? mapSubscription(data as SubscriptionRow) : null;
 }
 
 async function fetchProfile(): Promise<Profile | null> {

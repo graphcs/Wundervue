@@ -33,3 +33,7 @@ export interface SignInInput {
 export type SignUpResult =
   | { session: Session; profile: Profile }
   | { pendingConfirmation: true; email: string };
+
+// Re-exported for convenience so consumers can import a single auth-shaped
+// surface; the canonical type lives in lib/stripe/types.ts.
+export type { Subscription, SubscriptionStatus } from "@/lib/stripe/types";
