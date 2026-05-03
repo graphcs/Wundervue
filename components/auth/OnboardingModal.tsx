@@ -257,18 +257,45 @@ export function OnboardingModal() {
 
   const continueFromPlan = async () => {
     if (!plan) return;
-    await updateProfile({ plan });
-    if (plan === "free") setStep(6);
-    else setStep(2);
+    if (plan === "free") {
+      await updateProfile({ plan });
+      setStep(6);
+      return;
+    }
+    // Insider: don't set plan locally — the Stripe webhook flips it to
+    // 'insider' once payment succeeds. Skip the (deleted) mock payment step
+    // and continue collecting profile prefs; checkout fires at the end.
+    setStep(3);
   };
 
   const advanceInsider = async () => {
-    await updateProfile({
-      interests: Array.from(interests),
-      neighborhoods: Array.from(hoods),
-      lifestyle: Array.from(lifestyle),
-    });
-    setStep(6);
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await updateProfile({
+        interests: Array.from(interests),
+        neighborhoods: Array.from(hoods),
+        lifestyle: Array.from(lifestyle),
+      });
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? `checkout failed (${res.status})`);
+      }
+      const { url } = (await res.json()) as { url: string };
+      window.location.assign(url);
+    } catch (err) {
+      console.error("[OnboardingModal] checkout failed", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn't start checkout. Please try again.",
+      );
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -472,43 +499,11 @@ export function OnboardingModal() {
             </>
           )}
 
-          {step === 2 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="text-gray mb-3 inline-flex items-center gap-1 text-[13px] font-medium hover:text-dark"
-              >
-                ← Back
-              </button>
-              <h2 className="text-dark mb-2 text-[22px] font-medium">Payment</h2>
-              <div className="border-border mb-4 flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <div className="text-dark text-sm font-medium">Wundervue Insider</div>
-                  <div className="text-gray text-[12px]">Billed monthly</div>
-                </div>
-                <div className="text-dark text-sm font-medium">$4.99/mo</div>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Field label="Card Number" value="" onChange={() => {}} placeholder="1234 5678 9012 3456" />
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Expiry" value="" onChange={() => {}} placeholder="MM/YY" />
-                  <Field label="CVC" value="" onChange={() => {}} placeholder="123" />
-                </div>
-                <Field label="Name on Card" value="" onChange={() => {}} placeholder="Full name" />
-                <PrimaryButton onClick={() => setStep(3)}>
-                  Subscribe — $4.99/month
-                </PrimaryButton>
-                <p className="text-gray text-center text-[11px]">Mock payment — no card is charged.</p>
-              </div>
-            </>
-          )}
-
           {step === 3 && (
             <>
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 className="text-gray mb-3 inline-flex items-center gap-1 text-[13px] font-medium hover:text-dark"
               >
                 ← Back
@@ -683,17 +678,28 @@ export function OnboardingModal() {
               <button
                 type="button"
                 onClick={advanceInsider}
-                className="bg-dark rounded-pill w-full py-3 text-[13px] font-medium text-white hover:opacity-90"
+                disabled={submitting}
+                className="bg-dark rounded-pill w-full py-3 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60"
               >
-                Continue
+                {submitting
+                  ? "Redirecting to checkout…"
+                  : plan === "insider"
+                    ? "Continue to checkout"
+                    : "Continue"}
               </button>
               <button
                 type="button"
                 onClick={advanceInsider}
-                className="text-gray mt-3 block w-full text-center text-[12px] hover:underline"
+                disabled={submitting}
+                className="text-gray mt-3 block w-full text-center text-[12px] hover:underline disabled:opacity-60"
               >
                 Skip for now
               </button>
+              {error && (
+                <p className="text-coral mt-2 text-center text-[12px]">
+                  {error}
+                </p>
+              )}
             </>
           )}
 
