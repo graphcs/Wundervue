@@ -502,4 +502,26 @@ describe("venueSlug", () => {
     const long = "a".repeat(120);
     expect(venueSlug(long).length).toBe(60);
   });
+
+  it("appends a city hint as a suffix to disambiguate same-name venues", async () => {
+    const { venueSlug } = await import("../persist");
+    expect(venueSlug("Mission Ballroom", "Denver, CO")).toBe(
+      "mission-ballroom-denver-co",
+    );
+    expect(venueSlug("Mission Ballroom", "Boulder, CO")).toBe(
+      "mission-ballroom-boulder-co",
+    );
+  });
+
+  it("ignores an empty / unslugifiable city hint", async () => {
+    const { venueSlug } = await import("../persist");
+    expect(venueSlug("Mission Ballroom", "")).toBe("mission-ballroom");
+    expect(venueSlug("Mission Ballroom", "!!!")).toBe("mission-ballroom");
+  });
+
+  it("caps the salted slug at 60 characters too", async () => {
+    const { venueSlug } = await import("../persist");
+    const long = "a".repeat(80);
+    expect(venueSlug(long, "Denver, CO").length).toBe(60);
+  });
 });

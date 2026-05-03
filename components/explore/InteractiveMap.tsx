@@ -40,8 +40,10 @@ interface PinGroup {
   listings: Listing[];
 }
 
-function hasCoords(l: Listing): boolean {
-  return !(l.lat === 0 && l.lng === 0);
+type Geolocated = Listing & { lat: number; lng: number };
+
+function hasCoords(l: Listing): l is Geolocated {
+  return l.lat !== null && l.lng !== null;
 }
 
 function detailHref(l: Listing): string {

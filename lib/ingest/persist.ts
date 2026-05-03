@@ -48,13 +48,25 @@ export async function resolveVenue(slug: string | undefined): Promise<VenueRow |
 
 // Human-readable slug for an extracted venue name. Stays stable across re-ingest
 // runs (no random tail) so two listings citing the same venue resolve to one row.
-export function venueSlug(name: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return base || "venue";
+//
+// `cityHint` is appended as a suffix when provided so two same-named venues in
+// different cities ("Mission Ballroom" in Denver vs the hypothetical one in
+// Boulder) don't collide on the venues row. Today every caller is Denver-only
+// and passes undefined → existing rows keep their unsalted slugs. Pass a hint
+// from day one when a non-Denver source comes online.
+export function venueSlug(name: string, cityHint?: string): string {
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  const base = slugify(name).slice(0, 60) || "venue";
+  if (!cityHint) return base;
+  const citySlug = slugify(cityHint);
+  if (!citySlug) return base;
+  // Cap the combined length the same as the unsalted form so DB constraints
+  // can stay narrow.
+  return `${base}-${citySlug}`.slice(0, 60);
 }
 
 // Resolve a venue for an incoming listing, in order of preference:
@@ -64,11 +76,18 @@ export function venueSlug(name: string): string {
 // Returns null only when there's nothing to anchor on (no default, no
 // extracted name+address). Geocoding failures still create the venue row —
 // callers can backfill coords later.
+//
+// `city` is the venue's city/region (e.g. "Denver, CO" or "Boulder, CO"). It's
+// used both as a slug salt (so same-name venues in different cities don't
+// collide) and as the geocode fallback hint when the address is missing or
+// unparseable. When omitted, falls back to "Denver, CO" — match the historical
+// single-city assumption for legacy callers, but new sources should pass it.
 export async function resolveOrCreateVenue(args: {
   defaultVenueSlug?: string;
   venueName: string | null;
   address: string | null;
   neighborhood: string | null;
+  city?: string;
 }): Promise<VenueRow | null> {
   if (args.defaultVenueSlug) {
     const venue = await resolveVenue(args.defaultVenueSlug);
@@ -80,18 +99,19 @@ export async function resolveOrCreateVenue(args: {
     return venue;
   }
   if (!args.venueName) return null;
-  const slug = venueSlug(args.venueName);
+  const slug = venueSlug(args.venueName, args.city);
   const existing = await resolveVenue(slug);
   if (existing) return existing;
 
   // Try to geocode in this order: full address first (most precise), then a
-  // "<venue name>, Denver, CO" fallback for cases where the address is missing
-  // or too vague to resolve (e.g. "13th Street, Boulder, CO"). Nominatim has
-  // good coverage of named places, so a venue without a street address can
-  // still pin to a real point.
+  // "<venue name>, <city>" fallback for cases where the address is missing or
+  // too vague to resolve (e.g. "13th Street, Boulder, CO"). Nominatim has good
+  // coverage of named places, so a venue without a street address can still
+  // pin to a real point.
+  const cityHint = args.city ?? "Denver, CO";
   let coords: Awaited<ReturnType<typeof geocode>> = null;
   if (args.address) coords = await geocode(args.address);
-  if (!coords) coords = await geocode(`${args.venueName}, Denver, CO`);
+  if (!coords) coords = await geocode(`${args.venueName}, ${cityHint}`);
 
   const client = getServiceClient();
   const { data, error } = await client

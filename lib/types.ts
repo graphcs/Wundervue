@@ -29,8 +29,10 @@ export interface Listing {
   source: ListingSource;
   sourceUrl?: string;
   tags: LifestyleTag[];
-  lat: number;
-  lng: number;
+  // null when the venue hasn't been geocoded yet. Map renderers must filter
+  // before reading; (0,0) is a real point on the globe and not a sentinel.
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface Venue {
