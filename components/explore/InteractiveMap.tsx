@@ -157,7 +157,6 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
             offset={20}
             closeButton={false}
             closeOnClick={false}
-            onClose={() => onActiveChange(null)}
             className="wv-map-popup"
           >
             {activeGroup.listings.length === 1 ? (

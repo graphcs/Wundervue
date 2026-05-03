@@ -10,7 +10,7 @@
  * better venue data got hidden as duplicates. Promoting the better data is
  * cleaner than swapping which row is canonical.
  */
-import { createClient } from "@supabase/supabase-js";
+import { getServiceClient } from "@/lib/ingest/persist";
 
 interface Row {
   id: string;
@@ -25,11 +25,7 @@ interface Row {
 }
 
 async function main() {
-  const c = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
+  const c = getServiceClient();
 
   // Pull canonicals (visible rows) that lack a venue.
   const { data: canonicals, error: e1 } = await c
