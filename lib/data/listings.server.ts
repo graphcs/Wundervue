@@ -63,8 +63,8 @@ function rowToListing(row: DbListingRow, venueBy: Map<string, DbVenueRow>): List
     source: row.source as ListingSource,
     sourceUrl: row.source_url ?? undefined,
     tags: (row.tags ?? []) as LifestyleTag[],
-    lat: row.lat ?? 0,
-    lng: row.lng ?? 0,
+    lat: row.lat,
+    lng: row.lng,
   };
 }
 

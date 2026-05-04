@@ -47,3 +47,15 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* The PopupCard is already a styled card (border + bg + radius). Strip the
+   default MapLibre wrapper so it doesn't render a second box around it. */
+.wv-map-popup .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.wv-map-popup .maplibregl-popup-tip {
+  display: none !important;
+}

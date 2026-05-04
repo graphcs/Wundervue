@@ -13,7 +13,7 @@ import {
   classifyForUpsert,
   finishRun,
   recentFailureStreak,
-  resolveVenue,
+  resolveOrCreateVenue,
   startRun,
   writeFailedRunSentinel,
   type VenueRow,
@@ -63,7 +63,6 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
   const runId = await startRun(source.id, streak + 1);
 
   try {
-    const venue = await resolveVenue(source.defaultVenueSlug);
     const rawItems = await fetchRaw(source);
 
     // Skip items whose sourceUrl is definitively dead (404/410/DNS).
@@ -82,17 +81,32 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
       }),
     );
 
-    const inserts = normalized
-      .filter((n): n is { item: RawItem; result: NonNullable<typeof n>["result"] } => n !== null)
-      .map(({ item, result }) =>
-        buildListingInsert({ source, item, normalized: result, venue }),
-      );
+    // Resolve a venue per item. Sequential because the geocoder rate-limits
+    // (1 req/sec public Nominatim quota) — parallelising would just queue
+    // anyway, and within-run caching collapses repeat venues to one call.
+    const pairs: Array<{
+      row: ListingInsert;
+      venue: VenueRow | null;
+    }> = [];
+    for (const n of normalized) {
+      if (!n) continue;
+      const venue = await resolveOrCreateVenue({
+        defaultVenueSlug: source.defaultVenueSlug,
+        venueName: n.result.venueName,
+        address: n.result.address,
+        neighborhood: n.result.neighborhood,
+      });
+      pairs.push({
+        row: buildListingInsert({ source, item: n.item, normalized: n.result, venue }),
+        venue,
+      });
+    }
 
     // Resolve a permanent image for each row before persistence: probe the
     // scraped URL, fall back to AI generation, mirror to Supabase Storage.
     // Drop the row entirely if we can't produce an image — better than
     // showing a broken card or a low-quality thumbnail.
-    const withImages = await resolveImagesForBatch(inserts, venue, source.id);
+    const withImages = await resolveImagesForBatch(pairs, source.id);
 
     const actions = await classifyForUpsert(withImages);
     const counts = await applyBatch(actions);
@@ -170,19 +184,18 @@ const URL_CHECK_CONCURRENCY = 8;
 const IMAGE_PIPELINE_CONCURRENCY = 3;
 
 async function resolveImagesForBatch(
-  rows: ListingInsert[],
-  venue: VenueRow | null,
+  pairs: Array<{ row: ListingInsert; venue: VenueRow | null }>,
   sourceId: string,
 ): Promise<ListingInsert[]> {
-  if (rows.length === 0) return [];
-  const results = new Array<ListingInsert | null>(rows.length);
+  if (pairs.length === 0) return [];
+  const results = new Array<ListingInsert | null>(pairs.length);
   let cursor = 0;
   const workers = Array.from(
-    { length: Math.min(IMAGE_PIPELINE_CONCURRENCY, rows.length) },
+    { length: Math.min(IMAGE_PIPELINE_CONCURRENCY, pairs.length) },
     async () => {
-      while (cursor < rows.length) {
+      while (cursor < pairs.length) {
         const idx = cursor++;
-        const row = rows[idx];
+        const { row, venue } = pairs[idx];
         try {
           const img = await resolveListingImage({
             slug: row.slug,
