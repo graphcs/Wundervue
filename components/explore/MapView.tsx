@@ -1,28 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import type { Listing, ListingType } from "@/lib/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
-
-const HOOD_LABELS = [
-  { name: "LoHi", top: "16%", left: "18%" },
-  { name: "RiNo", top: "20%", left: "56%" },
-  { name: "Highlands", top: "30%", left: "28%" },
-  { name: "Downtown", top: "46%", left: "36%" },
-  { name: "Capitol Hill", top: "52%", left: "26%" },
-  { name: "Cherry Creek", top: "63%", left: "55%" },
-  { name: "Wash Park", top: "70%", left: "42%" },
-  { name: "Baker", top: "60%", left: "20%" },
-  { name: "Golden", top: "10%", left: "78%" },
-];
-
-const PIN_COLORS: Record<ListingType, string> = {
-  event: "#121821",
-  deal: "#ff535b",
-  both: "#6b7280",
-};
+import { InteractiveMap } from "./InteractiveMap";
 
 interface Props {
   listings: Listing[];
@@ -76,8 +59,26 @@ function CompactCard({
 export function MapView({ listings }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Debounce hover so a fast scroll through the sidebar doesn't fire
+  // setActiveId once per card.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+  const onHover = useCallback((id: string | null) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    if (id === null) {
+      setActiveId(null);
+      return;
+    }
+    hoverTimer.current = setTimeout(() => setActiveId(id), 80);
+  }, []);
+
   return (
-    <div className="border-border grid overflow-hidden rounded-2xl border bg-white" style={{ gridTemplateColumns: "380px 1fr", height: "calc(100vh - 220px)", minHeight: 600 }}>
+    <div
+      className="border-border grid overflow-hidden rounded-2xl border bg-white"
+      style={{ gridTemplateColumns: "380px 1fr", height: "calc(100vh - 220px)", minHeight: 600 }}
+    >
       <aside className="border-border overflow-y-auto border-r px-4 py-3">
         {listings.length === 0 ? (
           <p className="text-gray px-3 py-6 text-sm">No results.</p>
@@ -88,62 +89,19 @@ export function MapView({ listings }: Props) {
                 key={l.id}
                 listing={l}
                 active={activeId === l.id}
-                onHover={setActiveId}
+                onHover={onHover}
               />
             ))}
           </div>
         )}
       </aside>
 
-      <div className="relative overflow-hidden" style={{ background: "#e8edf1" }}>
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-50" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="mapgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#c9d2d9" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#mapgrid)" />
-        </svg>
-
-        {HOOD_LABELS.map((h) => (
-          <span
-            key={h.name}
-            className="pointer-events-none absolute text-[10px] font-medium uppercase tracking-[0.12em] text-[#a0a8b0]"
-            style={{ top: h.top, left: h.left }}
-          >
-            {h.name}
-          </span>
-        ))}
-
-        <div className="border-border absolute left-4 top-4 z-20 flex items-center gap-3 rounded-full border bg-white/95 px-3 py-1.5 text-[10px] font-medium shadow-sm backdrop-blur">
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-dark" /> Event
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ background: PIN_COLORS.deal }} /> Deal
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ background: PIN_COLORS.both }} /> Both
-          </span>
-        </div>
-
-        <div className="absolute right-4 top-4 flex flex-col overflow-hidden rounded-lg border-border border bg-white/95 shadow-sm">
-          <button
-            type="button"
-            aria-label="Zoom in"
-            className="hover:bg-tag-bg flex h-8 w-8 items-center justify-center text-lg leading-none"
-          >
-            +
-          </button>
-          <div className="h-px bg-border" />
-          <button
-            type="button"
-            aria-label="Zoom out"
-            className="hover:bg-tag-bg flex h-8 w-8 items-center justify-center text-lg leading-none"
-          >
-            −
-          </button>
-        </div>
+      <div className="relative">
+        <InteractiveMap
+          listings={listings}
+          activeId={activeId}
+          onActiveChange={setActiveId}
+        />
       </div>
     </div>
   );

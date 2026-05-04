@@ -1,4 +1,20 @@
-export type { Filters, DatePreset, TypeFilter, LifestyleTag } from "@/lib/types";
+export type {
+  Filters,
+  DatePreset,
+  TypeFilter,
+  LifestyleTag,
+  PageSize,
+} from "@/lib/types";
+
+// Default is 9 (matches the 3x3 grid). Increments of 3 from there.
+export const PAGE_SIZE_OPTIONS = [
+  { id: "9", label: "9" },
+  { id: "12", label: "12" },
+  { id: "15", label: "15" },
+  { id: "18", label: "18" },
+] as const;
+
+export const PAGE_SIZES = [9, 12, 15, 18] as const;
 
 export const LIFESTYLE_TAGS = [
   { id: "dog-friendly", label: "Dog-Friendly", emoji: "🐕" },

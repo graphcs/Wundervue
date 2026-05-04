@@ -10,6 +10,7 @@ import type {
   SourceConfig,
 } from "./types";
 import { eventKey, makeSlug } from "./dedup";
+import { geocode } from "./geocode";
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -43,6 +44,97 @@ export async function resolveVenue(slug: string | undefined): Promise<VenueRow |
     .maybeSingle();
   if (error) throw new Error(`venue lookup failed for ${slug}: ${error.message}`);
   return (data as VenueRow | null) ?? null;
+}
+
+// Human-readable slug for an extracted venue name. Stays stable across re-ingest
+// runs (no random tail) so two listings citing the same venue resolve to one row.
+//
+// `cityHint` is appended as a suffix when provided so two same-named venues in
+// different cities ("Mission Ballroom" in Denver vs the hypothetical one in
+// Boulder) don't collide on the venues row. Today every caller is Denver-only
+// and passes undefined → existing rows keep their unsalted slugs. Pass a hint
+// from day one when a non-Denver source comes online.
+export function venueSlug(name: string, cityHint?: string): string {
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  const base = slugify(name).slice(0, 60) || "venue";
+  if (!cityHint) return base;
+  const citySlug = slugify(cityHint);
+  if (!citySlug) return base;
+  // Cap the combined length the same as the unsalted form so DB constraints
+  // can stay narrow.
+  return `${base}-${citySlug}`.slice(0, 60);
+}
+
+// Resolve a venue for an incoming listing, in order of preference:
+//   1) The source's pre-configured defaultVenueSlug (existing behavior).
+//   2) A venue row matching the LLM-extracted venueName's slug.
+//   3) A new venue row inserted with geocoded lat/lng from the extracted address.
+// Returns null only when there's nothing to anchor on (no default, no
+// extracted name+address). Geocoding failures still create the venue row —
+// callers can backfill coords later.
+//
+// `city` is the venue's city/region (e.g. "Denver, CO" or "Boulder, CO"). It's
+// used both as a slug salt (so same-name venues in different cities don't
+// collide) and as the geocode fallback hint when the address is missing or
+// unparseable. When omitted, falls back to "Denver, CO" — match the historical
+// single-city assumption for legacy callers, but new sources should pass it.
+export async function resolveOrCreateVenue(args: {
+  defaultVenueSlug?: string;
+  venueName: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  city?: string;
+}): Promise<VenueRow | null> {
+  if (args.defaultVenueSlug) {
+    const venue = await resolveVenue(args.defaultVenueSlug);
+    if (!venue) {
+      throw new Error(
+        `defaultVenueSlug "${args.defaultVenueSlug}" not found in venues table — check source config or seed data`,
+      );
+    }
+    return venue;
+  }
+  if (!args.venueName) return null;
+  const slug = venueSlug(args.venueName, args.city);
+  const existing = await resolveVenue(slug);
+  if (existing) return existing;
+
+  // Try to geocode in this order: full address first (most precise), then a
+  // "<venue name>, <city>" fallback for cases where the address is missing or
+  // too vague to resolve (e.g. "13th Street, Boulder, CO"). Nominatim has good
+  // coverage of named places, so a venue without a street address can still
+  // pin to a real point.
+  const cityHint = args.city ?? "Denver, CO";
+  let coords: Awaited<ReturnType<typeof geocode>> = null;
+  if (args.address) coords = await geocode(args.address);
+  if (!coords) coords = await geocode(`${args.venueName}, ${cityHint}`);
+
+  const client = getServiceClient();
+  const { data, error } = await client
+    .from("venues")
+    .insert({
+      slug,
+      name: args.venueName,
+      address: args.address ?? "",
+      neighborhood: args.neighborhood ?? "",
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+    })
+    .select("id, slug, name, address, neighborhood, lat, lng")
+    .single();
+  if (error) {
+    // Most likely cause: a concurrent insert from a parallel ingest already
+    // wrote this slug. Re-fetch — that's the row we want to use.
+    const racedRow = await resolveVenue(slug);
+    if (racedRow) return racedRow;
+    console.error(`[venues] insert failed for slug=${slug}`, error);
+    return null;
+  }
+  return data as VenueRow;
 }
 
 export function buildListingInsert(args: {

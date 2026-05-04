@@ -49,6 +49,8 @@ const TOOL_SCHEMA: Anthropic.Tool = {
       "is_free",
       "deal_value",
       "tags",
+      "venue_name",
+      "address",
     ],
     properties: {
       is_event_or_deal: {
@@ -93,6 +95,16 @@ const TOOL_SCHEMA: Anthropic.Tool = {
           type: "string",
           enum: ["date-night", "dog-friendly", "family", "outdoor"],
         },
+      },
+      venue_name: {
+        type: ["string", "null"],
+        description:
+          "Name of the venue / business hosting the event. Be aggressive: extract from any phrasing — 'Title' field, 'Venue: X' lines, descriptions like 'BEAUZ performs at Ogden Theatre', 'live at the Mission Ballroom', 'hosted at Hardy & Fuller'. If the title itself is the venue name (e.g. 'Boulder Farmers Market'), use it. Null only if no place name appears anywhere.",
+      },
+      address: {
+        type: ["string", "null"],
+        description:
+          "Full street address as written in the source, e.g. '900 W 1st Ave Unit 190, Denver, CO 80223' or '13th Street, Boulder, CO'. Strip trailing 'USA'/'United States'. Null only if no street or location text is given.",
       },
     },
   },
@@ -175,5 +187,11 @@ export async function normalize({
     isFree: Boolean(raw.is_free),
     dealValue: (raw.deal_value as string | null) ?? null,
     tags: (raw.tags as NormalizedListing["tags"]) ?? [],
+    // Prefer the LLM extraction (it can read free-text descriptions like
+    // "BEAUZ performs at Ogden Theatre"), but fall back to whatever the
+    // upstream connector already provided as structured data — never
+    // discard a known-good venue/address because the LLM forgot to copy it.
+    venueName: (raw.venue_name as string | null) ?? item.venueName ?? null,
+    address: (raw.address as string | null) ?? item.address ?? null,
   };
 }

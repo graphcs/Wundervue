@@ -39,6 +39,9 @@ export function buildHref({
   if (filters.freeOnly) sp.set("free", "1");
   if (filters.q) sp.set("q", filters.q);
   if (filters.view === "map") sp.set("view", "map");
+  if (filters.pageSize && filters.pageSize !== 9) {
+    sp.set("per", String(filters.pageSize));
+  }
   if (filters.venue) sp.set("venue", filters.venue);
 
   const qs = sp.toString();

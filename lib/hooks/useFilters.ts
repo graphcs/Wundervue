@@ -122,11 +122,12 @@ export function useFilters() {
           lifestyle: [],
           freeOnly: false,
           view: filters.view,
+          pageSize: filters.pageSize,
         },
       }),
       { scroll: false },
     );
-  }, [pathCtx, router, filters.view]);
+  }, [pathCtx, router, filters.view, filters.pageSize]);
 
   return {
     filters,
