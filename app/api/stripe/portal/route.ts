@@ -1,10 +1,10 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe/server";
-import { APP_URL } from "@/lib/stripe/env";
+import { resolveAppUrl } from "@/lib/stripe/env";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes.user) {
@@ -30,7 +30,7 @@ export async function POST() {
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: profile.stripe_customer_id,
-    return_url: `${APP_URL()}/`,
+    return_url: `${resolveAppUrl(request)}/`,
   });
 
   return Response.json({ url: session.url });

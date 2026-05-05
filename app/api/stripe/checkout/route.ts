@@ -1,11 +1,11 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe/server";
 import { getOrCreateCustomer } from "@/lib/stripe/repo";
-import { APP_URL, STRIPE_PRICE_INSIDER_MONTHLY } from "@/lib/stripe/env";
+import { resolveAppUrl, STRIPE_PRICE_INSIDER_MONTHLY } from "@/lib/stripe/env";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes.user) {
@@ -20,7 +20,7 @@ export async function POST() {
   const customerId = await getOrCreateCustomer({ userId: user.id, email });
 
   const stripe = getStripe();
-  const appUrl = APP_URL();
+  const appUrl = resolveAppUrl(request);
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
