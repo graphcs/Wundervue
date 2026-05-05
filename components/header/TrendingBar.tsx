@@ -1,15 +1,30 @@
+import navData from "@/lib/data/wundervue-nav.json";
+
 export function TrendingBar() {
   return (
     <div
       className="flex items-center justify-between px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-dark"
       style={{
-        background: "linear-gradient(90deg, #82ffc5, #94f6ff)",
+        background: "linear-gradient(130deg, #82ffc5 0%, #94f6ff 80%)",
       }}
     >
       <span>TRENDING</span>
       <div className="flex items-center gap-3">
         <a
-          href="#"
+          href={navData.social.facebook}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Facebook"
+          className="opacity-80 transition-opacity hover:opacity-100"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.49-3.9 3.78-3.9 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.45 2.89h-2.33v6.99A10 10 0 0 0 22 12z" />
+          </svg>
+        </a>
+        <a
+          href={navData.social.instagram}
+          target="_blank"
+          rel="noopener noreferrer"
           aria-label="Instagram"
           className="opacity-80 transition-opacity hover:opacity-100"
         >
@@ -18,12 +33,14 @@ export function TrendingBar() {
           </svg>
         </a>
         <a
-          href="#"
-          aria-label="TikTok"
+          href={navData.social.linkedin}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="LinkedIn"
           className="opacity-80 transition-opacity hover:opacity-100"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.5 6.5c-1.4-.3-2.6-1-3.4-2.1-.5-.6-.8-1.4-.9-2.2H12v14.2c0 1.3-1.1 2.4-2.4 2.4-1.3 0-2.4-1.1-2.4-2.4s1.1-2.4 2.4-2.4c.3 0 .5 0 .8.1v-3.3c-.3 0-.5-.1-.8-.1-3.1 0-5.6 2.5-5.6 5.7 0 3.1 2.5 5.6 5.6 5.6s5.6-2.5 5.6-5.6V8.8c1.2.8 2.6 1.3 4.1 1.3V6.5c0-.1 0 0 0 0z" />
+            <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.95v5.66H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.59 0 4.27 2.36 4.27 5.43zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.99 0 1.78-.77 1.78-1.72V1.72C24 .77 23.21 0 22.22 0z" />
           </svg>
         </a>
       </div>

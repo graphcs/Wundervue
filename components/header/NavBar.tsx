@@ -1,26 +1,20 @@
-import Link from "next/link";
 import { ProfileIcon } from "./ProfileIcon";
-
-const NAV_LINKS = [
-  { href: "#best-of", label: "Best Of" },
-  { href: "#lifestyle", label: "Lifestyle" },
-  { href: "#monthly-guides", label: "Monthly Guides" },
-  { href: "#spotlights", label: "Spotlights" },
-  { href: "#about", label: "About" },
-];
+import navData from "@/lib/data/wundervue-nav.json";
 
 export function NavBar() {
   return (
     <nav className="border-border relative flex items-center justify-center border-b px-4 py-3">
       <ul className="flex items-center gap-8">
-        {NAV_LINKS.map((link) => (
-          <li key={link.href}>
-            <Link
+        {navData.nav.map((link) => (
+          <li key={link.label}>
+            <a
               href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-dark text-[11px] font-bold uppercase tracking-[0.08em] hover:opacity-70"
             >
               {link.label}
-            </Link>
+            </a>
           </li>
         ))}
       </ul>

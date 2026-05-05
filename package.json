@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
-    "ingest:once": "tsx scripts/ingest-once.ts"
+    "ingest:once": "tsx scripts/ingest-once.ts",
+    "scrape:nav": "tsx scripts/scrape-wundervue-nav.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "playwright": "^1.59.1",
     "supabase": "^2.95.2",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",

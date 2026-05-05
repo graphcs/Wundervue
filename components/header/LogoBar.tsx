@@ -8,10 +8,10 @@ export function LogoBar() {
         <Image
           src="/images/wundervue-logo.webp"
           alt="Wundervue"
-          width={186}
-          height={60}
+          width={194}
+          height={62}
           priority
-          className="h-[48px] w-auto"
+          className="h-[62px] w-auto"
         />
       </Link>
     </div>
