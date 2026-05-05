@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 
+const REDIRECT_SECONDS = 5;
+
 export default function BillingSuccessPage() {
   const { refreshSubscription, subscription } = useAuthContext();
+  const router = useRouter();
   const [waiting, setWaiting] = useState(true);
+  const [secondsLeft, setSecondsLeft] = useState(REDIRECT_SECONDS);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +36,23 @@ export default function BillingSuccessPage() {
     };
   }, [refreshSubscription, subscription]);
 
+  // Auto-return to home after the subscription state resolves. Counts down
+  // visibly so the user knows they can click through faster.
+  useEffect(() => {
+    if (waiting) return;
+    const interval = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(interval);
+          router.push("/");
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [waiting, router]);
+
   return (
     <main className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center">
       <h1 className="text-dark text-[24px] font-medium">You&apos;re an Insider</h1>
@@ -45,6 +67,11 @@ export default function BillingSuccessPage() {
       >
         Back to Wundervue
       </Link>
+      {!waiting && secondsLeft > 0 && (
+        <p className="text-gray text-[12px]">
+          Redirecting in {secondsLeft}s…
+        </p>
+      )}
     </main>
   );
 }
