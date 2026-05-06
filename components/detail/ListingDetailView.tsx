@@ -99,7 +99,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
         {venue && (
           <div className="flex flex-col gap-1">
             <Link
-              href={`/explore?venue=${venue.id}`}
+              href={`/venues/${venue.slug}`}
               className="text-coral inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
             >
               <HouseIcon size={13} />

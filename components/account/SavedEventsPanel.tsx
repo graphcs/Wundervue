@@ -1,13 +1,67 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { useFavorites } from "@/lib/hooks/useFavorites";
-import { LISTINGS } from "@/lib/data/listings";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { DealTag } from "@/components/ui/DealTag";
 import { SlideOver } from "./SlideOver";
+
+interface DbListingRow {
+  id: string;
+  slug: string;
+  type: string;
+  title: string;
+  description: string;
+  venue_id: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  category: string | null;
+  date_start: string | null;
+  date_end: string | null;
+  date_display: string | null;
+  time_display: string | null;
+  is_free: boolean;
+  deal_value: string | null;
+  image_url: string | null;
+  source: string;
+  source_url: string | null;
+  tags: string[];
+}
+
+const LISTING_COLUMNS =
+  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags";
+
+function rowToListing(row: DbListingRow): Listing {
+  return {
+    id: row.id,
+    slug: row.slug,
+    type: row.type as ListingType,
+    title: row.title,
+    description: row.description,
+    venueId: row.venue_id ?? "",
+    venueName: "",
+    address: row.address ?? "",
+    neighborhood: row.neighborhood ?? "",
+    category: row.category ?? "",
+    startAt: row.date_start ?? "",
+    endAt: row.date_end,
+    dateDisplay: row.date_display ?? "",
+    timeDisplay: row.time_display ?? "",
+    isFree: row.is_free,
+    dealValue: row.deal_value ?? undefined,
+    imageUrl: row.image_url ?? "",
+    source: row.source as ListingSource,
+    sourceUrl: row.source_url ?? undefined,
+    tags: (row.tags ?? []) as LifestyleTag[],
+    lat: null,
+    lng: null,
+  };
+}
 
 function HeartIcon() {
   return (
@@ -29,7 +83,40 @@ function HeartIcon() {
 export function SavedEventsPanel() {
   const { savedEventsOpen, closeSavedEvents, profile } = useAuthContext();
   const { favorites, toggle } = useFavorites();
-  const saved = LISTINGS.filter((l) => favorites.has(l.id));
+  const [saved, setSaved] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(false);
+  const favIds = Array.from(favorites);
+  const favKey = favIds.sort().join(",");
+
+  useEffect(() => {
+    if (!savedEventsOpen || favIds.length === 0) {
+      setSaved([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase
+        .from("listings")
+        .select(LISTING_COLUMNS)
+        .in("id", favIds);
+      if (cancelled) return;
+      if (error) {
+        console.error("[SavedEventsPanel] fetch failed", error);
+        setSaved([]);
+      } else {
+        setSaved((data as DbListingRow[]).map(rowToListing));
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // favKey collapses the favorites Set into a stable dep so we don't
+    // re-fetch on every render — only when the actual id list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedEventsOpen, favKey]);
 
   return (
     <SlideOver
@@ -38,7 +125,11 @@ export function SavedEventsPanel() {
       title="Saved Events"
       subtitle={`${saved.length} ${saved.length === 1 ? "item" : "items"}`}
     >
-      {saved.length === 0 ? (
+      {loading ? (
+        <div className="text-gray flex items-center justify-center px-6 py-20 text-[13px]">
+          Loading saved events…
+        </div>
+      ) : saved.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
           <div className="bg-tag-bg flex h-14 w-14 items-center justify-center rounded-full">
             <svg

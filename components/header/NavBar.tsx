@@ -4,6 +4,7 @@ import { ProfileIcon } from "./ProfileIcon";
 const NAV_LINKS = [
   { href: "#best-of", label: "Best Of" },
   { href: "#lifestyle", label: "Lifestyle" },
+  { href: "/venues", label: "Venues" },
   { href: "#monthly-guides", label: "Monthly Guides" },
   { href: "#spotlights", label: "Spotlights" },
   { href: "#about", label: "About" },
