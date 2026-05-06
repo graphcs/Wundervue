@@ -3,12 +3,28 @@ import navData from "@/lib/data/wundervue-nav.json";
 export function TrendingBar() {
   return (
     <div
-      className="flex items-center justify-between px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-dark"
+      className="py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-dark"
       style={{
         background: "linear-gradient(130deg, #82ffc5 0%, #94f6ff 80%)",
       }}
     >
-      <span>TRENDING</span>
+      <div className="mx-auto flex max-w-[1100px] items-center justify-between px-7">
+      <span className="flex items-center gap-1.5">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M12.96 2.29a.75.75 0 0 0-1.07-.14 9.74 9.74 0 0 0-3.54 6.18 7.55 7.55 0 0 1-1.7-1.72.75.75 0 0 0-1.16-.08A9 9 0 1 0 15.68 4.53a7.46 7.46 0 0 1-2.72-2.24Zm2.79 11.96a3.75 3.75 0 1 1-7.31-1.17c.62.46 1.34.81 2.13 1a5.99 5.99 0 0 1 1.92-3.55 3.75 3.75 0 0 1 3.26 3.72Z"
+          />
+        </svg>
+        TRENDING
+      </span>
       <div className="flex items-center gap-3">
         <a
           href={navData.social.facebook}
@@ -43,6 +59,7 @@ export function TrendingBar() {
             <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.95v5.66H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.59 0 4.27 2.36 4.27 5.43zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.99 0 1.78-.77 1.78-1.72V1.72C24 .77 23.21 0 22.22 0z" />
           </svg>
         </a>
+      </div>
       </div>
     </div>
   );
