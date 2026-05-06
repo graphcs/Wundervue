@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { CenteredModal } from "./CenteredModal";
 
@@ -66,13 +67,37 @@ function SparkleIcon() {
 export function UpgradeModal() {
   const { upgradeOpen, closeUpgrade, openOnboarding, isLoggedIn } =
     useAuthContext();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const startInsider = () => {
-    closeUpgrade();
-    if (isLoggedIn) {
-      openOnboarding(2);
-    } else {
+  const startInsider = async () => {
+    if (!isLoggedIn) {
+      // Stripe Checkout requires an authenticated user (we attach metadata to
+      // the customer at creation), so route guests through onboarding first.
+      closeUpgrade();
       openOnboarding(0);
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? `checkout failed (${res.status})`);
+      }
+      const { url } = (await res.json()) as { url: string };
+      window.location.assign(url);
+    } catch (err) {
+      console.error("[UpgradeModal] checkout failed", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn't start checkout. Please try again.",
+      );
+      setSubmitting(false);
     }
   };
 
@@ -123,12 +148,16 @@ export function UpgradeModal() {
         <button
           type="button"
           onClick={startInsider}
-          className="bg-dark rounded-pill w-full py-3 text-[14px] font-medium text-white hover:opacity-90"
+          disabled={submitting}
+          className="bg-dark rounded-pill w-full py-3 text-[14px] font-medium text-white hover:opacity-90 disabled:opacity-60"
         >
-          Start Insider — $4.99/month
+          {submitting ? "Redirecting…" : "Start Insider — $4.99/month"}
         </button>
+        {error && (
+          <p className="text-coral mt-2 text-center text-[11px]">{error}</p>
+        )}
         <p className="text-gray mt-2 text-center text-[11px]">
-          Cancel anytime. Mock flow — no card is charged.
+          Cancel anytime. You&apos;ll be redirected to Stripe to complete payment.
         </p>
       </div>
     </CenteredModal>
