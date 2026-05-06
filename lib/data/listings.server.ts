@@ -98,6 +98,60 @@ export async function getPublishedListings(): Promise<Listing[]> {
   }
 }
 
+// Returns an image URL for each venue, keyed by venue slug. Source of truth
+// resolution order:
+//   1. `venues.image_url` — populated by scripts/backfill-venue-images.ts
+//      from each venue's Instagram. Curated, always venue-identity content.
+//   2. The most recent listing's `image_url` at that venue — fallback when
+//      we haven't backfilled the venue yet.
+// Falls back to an empty map on DB error so the page still renders with
+// gradient placeholders.
+export async function getVenueImageMapBySlug(): Promise<Map<string, string>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const [venuesRes, listingsRes] = await Promise.all([
+      client
+        .from("venues")
+        .select("slug, image_url")
+        .not("image_url", "is", null),
+      client
+        .from("listings")
+        .select("image_url, venues!inner(slug)")
+        .not("image_url", "is", null)
+        .not("published_at", "is", null)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const map = new Map<string, string>();
+
+    // Listings first (lower priority) — overwritten by venues.image_url below.
+    for (const row of (listingsRes.data ?? []) as Array<{
+      image_url: string | null;
+      venues: { slug: string } | { slug: string }[] | null;
+    }>) {
+      if (!row.image_url || !row.venues) continue;
+      const slug = Array.isArray(row.venues)
+        ? row.venues[0]?.slug
+        : row.venues.slug;
+      if (!slug || map.has(slug)) continue;
+      map.set(slug, row.image_url);
+    }
+
+    // Venue-curated images take priority.
+    for (const row of (venuesRes.data ?? []) as Array<{
+      slug: string;
+      image_url: string | null;
+    }>) {
+      if (row.image_url) map.set(row.slug, row.image_url);
+    }
+
+    return map;
+  } catch (err) {
+    console.error("[listings] getVenueImageMapBySlug failed", err);
+    return new Map();
+  }
+}
+
 export async function getMergedListings(): Promise<Listing[]> {
   const fromDb = await getPublishedListings();
   // Dedupe by slug — fixtures and DB shouldn't collide, but if they do the
