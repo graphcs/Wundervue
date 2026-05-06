@@ -13,7 +13,7 @@
   --color-trending-mint: #82ffc5;
   --color-trending-sky: #94f6ff;
 
-  --background-image-trending: linear-gradient(90deg, #82ffc5, #94f6ff);
+  --background-image-trending: linear-gradient(130deg, #82ffc5 0%, #94f6ff 80%);
   --background-image-coral-hero: linear-gradient(135deg, #ff535b, #ff8a6b);
 
   --font-sans: var(--font-omnes), -apple-system, BlinkMacSystemFont, "Segoe UI",
