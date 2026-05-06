@@ -5,37 +5,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
+import { InsiderBadge } from "@/components/ui/InsiderBadge";
+import { useAuthContext } from "@/components/auth/AuthProvider";
+import { canAccessListing, isListingInsiderOnly } from "@/lib/auth/insiderGate";
 import { InteractiveMap } from "./InteractiveMap";
 
 interface Props {
   listings: Listing[];
 }
 
-function CompactCard({
-  listing,
-  active,
-  onHover,
-}: {
-  listing: Listing;
-  active: boolean;
-  onHover: (id: string | null) => void;
-}) {
-  const href =
-    listing.type === "deal"
-      ? `/deals/${listing.slug}`
-      : `/events/${listing.slug}`;
+function CompactCardBody({ listing }: { listing: Listing }) {
   return (
-    <Link
-      href={href}
-      onMouseEnter={() => onHover(listing.id)}
-      onMouseLeave={() => onHover(null)}
-      className={`group border-border flex gap-3 rounded-xl border p-2.5 pr-4 transition-all ${
-        active ? "border-dark shadow-md" : "bg-white hover:border-dark"
-      }`}
-    >
+    <>
       <div className="bg-tag-bg relative h-20 w-[110px] shrink-0 overflow-hidden rounded-md">
         <Badge type={listing.type} size="sm" />
         {listing.isFree && <FreeBadge size="sm" />}
+        {isListingInsiderOnly(listing) && (
+          <span className="absolute bottom-1 left-1 z-10">
+            <InsiderBadge size="sm" />
+          </span>
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={listing.imageUrl} alt={listing.title} className="h-full w-full object-cover" />
       </div>
@@ -52,6 +41,52 @@ function CompactCard({
           {listing.dateDisplay} · {listing.timeDisplay}
         </p>
       </div>
+    </>
+  );
+}
+
+function CompactCard({
+  listing,
+  active,
+  onHover,
+}: {
+  listing: Listing;
+  active: boolean;
+  onHover: (id: string | null) => void;
+}) {
+  const { profile, openUpgrade } = useAuthContext();
+  const locked = !canAccessListing(listing, profile?.plan);
+  const href =
+    listing.type === "deal"
+      ? `/deals/${listing.slug}`
+      : `/events/${listing.slug}`;
+  const className = `group border-border flex gap-3 rounded-xl border p-2.5 pr-4 transition-all text-left ${
+    active ? "border-dark shadow-md" : "bg-white hover:border-dark"
+  }`;
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        onClick={openUpgrade}
+        onMouseEnter={() => onHover(listing.id)}
+        onMouseLeave={() => onHover(null)}
+        aria-label={`Upgrade to view ${listing.title}`}
+        className={className}
+      >
+        <CompactCardBody listing={listing} />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => onHover(listing.id)}
+      onMouseLeave={() => onHover(null)}
+      className={className}
+    >
+      <CompactCardBody listing={listing} />
     </Link>
   );
 }
