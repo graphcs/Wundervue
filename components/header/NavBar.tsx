@@ -13,6 +13,9 @@ const NAV_LINKS = [
   { href: "#about", label: "About" },
 ];
 
+const CLOSE_DELAY_MS = 150;
+const PANEL_BG = "#fff8e6";
+
 export function NavBar() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
