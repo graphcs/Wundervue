@@ -39,8 +39,10 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     }
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
-      const subRef = (invoice as unknown as { subscription?: string | Stripe.Subscription })
-        .subscription;
+      // In API 2026-04-22+, the subscription reference moved from the top
+      // level into invoice.parent.subscription_details. Falsy for one-off
+      // invoices unrelated to a subscription, which we ignore.
+      const subRef = invoice.parent?.subscription_details?.subscription;
       if (!subRef) return;
       const stripe = getStripe();
       const subId = typeof subRef === "string" ? subRef : subRef.id;

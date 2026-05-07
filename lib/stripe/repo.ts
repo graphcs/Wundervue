@@ -116,8 +116,10 @@ export async function upsertSubscriptionFromStripe(
   if (!item) throw new Error(`subscription ${sub.id} has no items`);
 
   const status = sub.status as SubscriptionStatus;
-  const periodEndUnix = (sub as unknown as { current_period_end?: number })
-    .current_period_end;
+  // current_period_end lives on the subscription item in API 2026-04-22+.
+  const periodEndUnix = item.current_period_end;
+  const customerId =
+    typeof sub.customer === "string" ? sub.customer : sub.customer.id;
 
   const admin = getSupabaseAdmin();
   const { error } = await admin
@@ -148,6 +150,20 @@ export async function upsertSubscriptionFromStripe(
     .eq("user_id", userId);
   if (profileErr) {
     throw new Error(`sync profile.plan failed: ${profileErr.message}`);
+  }
+
+  // Backfill stripe_customer_id when missing (covers customers created
+  // out-of-band via the Dashboard / support tools). The is-null filter avoids
+  // stomping a value getOrCreateCustomer already wrote.
+  const { error: customerErr } = await admin
+    .from("profiles")
+    .update({ stripe_customer_id: customerId })
+    .eq("user_id", userId)
+    .is("stripe_customer_id", null);
+  if (customerErr) {
+    throw new Error(
+      `backfill stripe_customer_id failed: ${customerErr.message}`,
+    );
   }
 }
 

@@ -1,0 +1,95 @@
+{
+  "nav": [
+    {
+      "label": "Best Of",
+      "href": "https://wundervue.com/category/best-of/food-drink/",
+      "children": [
+        {
+          "label": "Food & Drink",
+          "href": "https://wundervue.com/category/best-of/food-drink/"
+        },
+        {
+          "label": "Entertainment",
+          "href": "https://wundervue.com/category/best-of/entertainment/"
+        },
+        {
+          "label": "Health & Wellness",
+          "href": "https://wundervue.com/category/best-of/health-wellness/"
+        },
+        {
+          "label": "Outdoor",
+          "href": "https://wundervue.com/category/best-of/outdoor/"
+        },
+        {
+          "label": "Shopping & Services",
+          "href": "https://wundervue.com/category/best-of/shopping-services/"
+        },
+        {
+          "label": "Travel",
+          "href": "https://wundervue.com/category/best-of/travel/"
+        },
+        {
+          "label": "Arts & Culture",
+          "href": "https://wundervue.com/category/best-of/arts-culture/"
+        }
+      ]
+    },
+    {
+      "label": "Lifestyle",
+      "href": "https://wundervue.com/tag/kid-friendly/",
+      "children": [
+        {
+          "label": "Kid-Friendly",
+          "href": "https://wundervue.com/tag/kid-friendly/"
+        },
+        {
+          "label": "Dog-Friendly",
+          "href": "https://wundervue.com/tag/dog-friendly/"
+        }
+      ]
+    },
+    {
+      "label": "Monthly Guides",
+      "href": "https://wundervue.com/category/guides/",
+      "children": [
+        {
+          "label": "Dog-Friendly Things To Do",
+          "href": "https://wundervue.com/denver-dog-friendly-things-to-do/"
+        },
+        {
+          "label": "Family-Friendly Things To Do",
+          "href": "https://wundervue.com/denver-family-friendly-things-to-do/"
+        },
+        {
+          "label": "Free Things to Do",
+          "href": "https://wundervue.com/denver-best-free-things-to-do/"
+        },
+        {
+          "label": "Outdoor Things To Do",
+          "href": "https://wundervue.com/denver-outdoor-things-to-do/"
+        }
+      ]
+    },
+    {
+      "label": "Spotlights",
+      "href": "https://wundervue.com/category/spotlights/",
+      "children": []
+    },
+    {
+      "label": "About",
+      "href": "https://wundervue.com/work-with-us/",
+      "children": [
+        {
+          "label": "Work With Us",
+          "href": "https://wundervue.com/work-with-us/"
+        }
+      ]
+    }
+  ],
+  "social": {
+    "facebook": "https://facebook.com/wundervue",
+    "instagram": "https://instagram.com/wundervue",
+    "linkedin": "https://linkedin.com/company/wundervuepub"
+  },
+  "scrapedAt": "2026-05-04T19:18:08.768Z"
+}
