@@ -27,3 +27,16 @@ export function canAccessListing(
   if (!isListingInsiderOnly(listing)) return true;
   return plan === "insider";
 }
+
+export function reorderForPlan<T extends Pick<Listing, "tags">>(
+  listings: readonly T[],
+  plan: Plan | null | undefined,
+): T[] {
+  if (plan === "insider") return [...listings];
+  const accessible: T[] = [];
+  const locked: T[] = [];
+  for (const l of listings) {
+    (isListingInsiderOnly(l) ? locked : accessible).push(l);
+  }
+  return [...accessible, ...locked];
+}
