@@ -3,21 +3,29 @@
 import { useFavorites, FavoriteLimitReached } from "@/lib/hooks/useFavorites";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthContext } from "@/components/auth/AuthProvider";
+import { canAccessListing } from "@/lib/auth/insiderGate";
+import type { LifestyleTag } from "@/lib/types";
 
 interface Props {
   listingId: string;
+  tags?: LifestyleTag[];
   className?: string;
 }
 
-export function FavButton({ listingId, className = "" }: Props) {
+export function FavButton({ listingId, tags, className = "" }: Props) {
   const { isFavorited, toggle, hydrated } = useFavorites();
   const { user } = useAuth();
-  const { openUpgrade } = useAuthContext();
+  const { openUpgrade, profile } = useAuthContext();
   const active = hydrated && isFavorited(listingId);
+  const locked = tags ? !canAccessListing({ tags }, profile?.plan) : false;
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (locked) {
+      openUpgrade();
+      return;
+    }
     try {
       toggle(listingId, { plan: user?.plan });
     } catch (err) {

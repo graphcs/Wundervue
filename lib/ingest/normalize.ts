@@ -91,6 +91,14 @@ const TOOL_SCHEMA: Anthropic.Tool = {
       },
       tags: {
         type: "array",
+        description:
+          "Lifestyle tags. Apply ONLY when the title or description text explicitly indicates the lifestyle. " +
+          "Do NOT infer from venue type, source hashtag, or photo content — only the words in the listing matter. " +
+          "'family' = title/description explicitly says kids/family/all-ages/parent-and-tot or names a child-specific activity (story time, kids club). " +
+          "'dog-friendly' = title/description explicitly mentions dogs, pups, pets, dog adoption, dog training, yappy hour, or 'dogs welcome'. A generic market or festival is NOT dog-friendly even if scraped from a dog hashtag. " +
+          "'date-night' = title/description explicitly markets to couples (date night, cocktail evening, romantic dinner, jazz date, wine tasting for two). A generic concert or restaurant is NOT date-night. " +
+          "'outdoor' = the event clearly takes place outdoors (named park, trail, garden, outdoor festival). Indoor venues with patios are NOT outdoor unless the event is on the patio. " +
+          "When uncertain, omit the tag. False positives degrade the user experience more than false negatives.",
         items: {
           type: "string",
           enum: ["date-night", "dog-friendly", "family", "outdoor"],
@@ -172,6 +180,14 @@ export async function normalize({
   const raw = toolBlock.input as Record<string, unknown>;
   if (!raw.is_event_or_deal) return null;
 
+  function coerceTimestamp(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? null : trimmed;
+  }
+
   return {
     isEventOrDeal: true,
     type: raw.type as NormalizedListing["type"],
@@ -180,8 +196,12 @@ export async function normalize({
     description: String(raw.description),
     category: String(raw.category),
     neighborhood: String(raw.neighborhood),
-    dateStart: raw.date_start as string | null,
-    dateEnd: raw.date_end as string | null,
+    // The AI sometimes emits "<UNKNOWN>" or other unparseable strings when
+    // it can't infer a date; the DB column is timestamptz and rejects those,
+    // killing the entire batch upsert. Coerce non-ISO values to null so we
+    // accept the listing without a date rather than dropping the whole run.
+    dateStart: coerceTimestamp(raw.date_start),
+    dateEnd: coerceTimestamp(raw.date_end),
     dateDisplay: String(raw.date_display ?? ""),
     timeDisplay: String(raw.time_display ?? ""),
     isFree: Boolean(raw.is_free),

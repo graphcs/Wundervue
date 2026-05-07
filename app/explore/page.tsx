@@ -3,6 +3,8 @@ import { getMergedListings } from "@/lib/data/listings.server";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
 import { paginate } from "@/lib/filters/paginate";
+import { reorderForPlan } from "@/lib/auth/insiderGate";
+import { getServerPlan } from "@/lib/auth/serverPlan";
 import { ExploreResults } from "@/components/explore/ExploreResults";
 
 export const metadata: Metadata = {
@@ -18,13 +20,17 @@ interface PageProps {
 export default async function ExplorePage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const filters = parseSearchParams(sp);
-  const all = await getMergedListings();
+  const [all, plan] = await Promise.all([
+    getMergedListings(),
+    getServerPlan(),
+  ]);
   const filtered = applyFilters(all, filters);
+  const ordered = reorderForPlan(filtered, plan);
 
   const isMap = filters.view === "map";
   const { items, page, totalPages } = isMap
-    ? { items: filtered, page: 1, totalPages: 1 }
-    : paginate(filtered, sp, filters.pageSize);
+    ? { items: ordered, page: 1, totalPages: 1 }
+    : paginate(ordered, sp, filters.pageSize);
 
   return (
     <ExploreResults

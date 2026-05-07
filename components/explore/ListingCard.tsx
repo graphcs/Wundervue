@@ -1,9 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
+import { InsiderBadge } from "@/components/ui/InsiderBadge";
 import { FavButton } from "@/components/ui/FavButton";
 import { DealTag } from "@/components/ui/DealTag";
+import { useAuthContext } from "@/components/auth/AuthProvider";
+import { canAccessListing, isListingInsiderOnly } from "@/lib/auth/insiderGate";
 
 interface Props {
   listing: Listing;
@@ -29,21 +34,18 @@ function CalendarIcon() {
   );
 }
 
-export function ListingCard({ listing }: Props) {
-  const href =
-    listing.type === "deal"
-      ? `/deals/${listing.slug}`
-      : `/events/${listing.slug}`;
-
+function CardBody({ listing, locked }: { listing: Listing; locked: boolean }) {
   return (
-    <Link
-      href={href}
-      className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
-    >
+    <>
       <div className="bg-tag-bg relative h-[150px] w-full overflow-hidden">
         <Badge type={listing.type} />
         {listing.isFree && <FreeBadge />}
-        <FavButton listingId={listing.id} />
+        {isListingInsiderOnly(listing) && (
+          <span className="absolute bottom-1.5 left-1.5 z-10">
+            <InsiderBadge />
+          </span>
+        )}
+        {!locked && <FavButton listingId={listing.id} tags={listing.tags} />}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={listing.imageUrl}
@@ -83,6 +85,37 @@ export function ListingCard({ listing }: Props) {
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+export function ListingCard({ listing }: Props) {
+  const { profile, openUpgrade } = useAuthContext();
+  const locked = !canAccessListing(listing, profile?.plan);
+  const href =
+    listing.type === "deal"
+      ? `/deals/${listing.slug}`
+      : `/events/${listing.slug}`;
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        onClick={openUpgrade}
+        aria-label={`Upgrade to view ${listing.title}`}
+        className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+      >
+        <CardBody listing={listing} locked />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <CardBody listing={listing} locked={false} />
     </Link>
   );
 }

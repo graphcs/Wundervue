@@ -115,6 +115,30 @@ export const SOURCES: SourceConfig[] = [
     sourceLabel: "Website",
     query: "family-friendly events Denver",
   },
+  {
+    // Denver has a strong dog-park / brewery-patio scene; explicit query gets
+    // us non-overlapping coverage that "events in Denver this week" misses.
+    // Google Events is finicky with the phrase "dog-friendly" — concrete
+    // event types ("yappy hour", "dog meetup") return more results than
+    // adjective queries.
+    id: "denver-dog-friendly-events",
+    enabled: true,
+    connector: "serpEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    query: "dog events Denver",
+  },
+  {
+    // Date-night results were under-tagged because no source explicitly
+    // queries for them. Bars, jazz, and cocktail spots get surfaced here so
+    // the AI has more candidates to apply the date-night tag.
+    id: "denver-date-night-events",
+    enabled: true,
+    connector: "serpEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    query: "date night spots and live jazz Denver",
+  },
 
   // ── Apify Instagram: per-account deep dives for venues we follow closely.
   {
@@ -126,6 +150,83 @@ export const SOURCES: SourceConfig[] = [
     handle: "missionballroom",
     defaultVenueSlug: "mission-ballroom",
     defaultCategory: "Music",
+  },
+  {
+    // Denver music venues — single source fans out across multiple handles
+    // in one Apify run. Add more handles here as we discover venues that
+    // post events on Instagram.
+    id: "denver-music-venues-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: [
+      "ogdentheatre",
+      "fillmoredenver",
+      "redrocksco",
+      "blubirdtheater",
+      "hidiveofficial",
+      "thelionslairlounge",
+    ],
+    defaultCategory: "Music",
+  },
+
+  // ── Apify Instagram: hashtag scrapes for lifestyle coverage. Hashtags
+  // surface community-organized events (yappy hours, dog meetups, brewery
+  // patios) that Google Events doesn't index. Multi-hashtag fans out in a
+  // single Apify run; per-URL cap is MAX_POSTS in the connector.
+  {
+    id: "denver-dogs-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    hashtag: [
+      "denverdogs",
+      "denverdogfriendly",
+      "yappyhourdenver",
+      "milehighdogs",
+      "denverdogevents",
+    ],
+  },
+  {
+    id: "denver-family-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    hashtag: [
+      "denverfamily",
+      "denverkids",
+      "denvermom",
+      "milehighmama",
+    ],
+  },
+  {
+    id: "denver-outdoor-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    hashtag: [
+      "denveroutdoors",
+      "denverhiking",
+      "denverparks",
+      "milehighoutdoors",
+    ],
+  },
+  {
+    id: "denver-datenight-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    hashtag: [
+      "denverdatenight",
+      "denvercocktails",
+      "denverwine",
+      "denverjazz",
+    ],
   },
 ];
 

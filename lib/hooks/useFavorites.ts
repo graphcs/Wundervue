@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "wv.favorites";
 const FREE_LIMIT = 5;
+// Same-tab writes don't fire the native `storage` event, so we dispatch
+// our own and have every hook instance listen — keeps fav button,
+// dropdown count, and saved-events panel in sync without a refresh.
+const SYNC_EVENT = "wv.favorites:change";
 
 export class FavoriteLimitReached extends Error {
   constructor() {
@@ -28,6 +32,10 @@ function persist(set: Set<string>) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
+    // Defer the dispatch so subscribers don't setState synchronously during
+    // the firing component's render commit (React errors with
+    // "Cannot update a component while rendering a different component").
+    queueMicrotask(() => window.dispatchEvent(new Event(SYNC_EVENT)));
   } catch {
     // ignore
   }
@@ -38,8 +46,19 @@ export function useFavorites() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setFavorites(readInitial());
+    const sync = () => setFavorites(readInitial());
+    sync();
     setHydrated(true);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) sync();
+    };
+    window.addEventListener(SYNC_EVENT, sync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(SYNC_EVENT, sync);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const isFavorited = useCallback(

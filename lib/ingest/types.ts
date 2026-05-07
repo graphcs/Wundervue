@@ -12,7 +12,14 @@ export interface SourceConfig {
   sourceLabel: ListingSource;
 
   // connector-specific
-  handle?: string;             // instagram
+  // Instagram handles to scrape. Pass a single account ("missionballroom")
+  // or an array for fanning out across multiple organizers. Apify charges
+  // per URL, so prefer hashtags for broad community coverage and handles
+  // for known event-posting accounts.
+  handle?: string | string[];
+  // Instagram hashtags (no leading #). Single string or array for
+  // multi-tag coverage, e.g. ["denverdogs", "yappyhourdenver"].
+  hashtag?: string | string[];
   query?: string;              // serpEvents — Google Events search query
   serpHtichips?: string;       // serpEvents — optional Google date/type filter (e.g. "date:week")
   url?: string;                // apifyWeb / cheerioWeb

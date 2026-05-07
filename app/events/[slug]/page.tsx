@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { getListingBySlugAsync } from "@/lib/data/listings.server";
 import { ListingDetailView } from "@/components/detail/ListingDetailView";
 import { MoreFromVenue } from "@/components/detail/MoreFromVenue";
+import { InsiderLockedPreview } from "@/components/detail/InsiderLockedPreview";
+import { canAccessListing } from "@/lib/auth/insiderGate";
+import { getServerPlan } from "@/lib/auth/serverPlan";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -31,6 +34,9 @@ export default async function EventPage({ params }: PageProps) {
   const { slug } = await params;
   const listing = await getListingBySlugAsync(slug);
   if (!listing || listing.type === "deal") notFound();
+
+  const plan = await getServerPlan();
+  const allowed = canAccessListing(listing, plan);
 
   return (
     <>
@@ -62,8 +68,14 @@ export default async function EventPage({ params }: PageProps) {
         </Link>
       </div>
       <div className="mx-auto max-w-[720px] px-5 pb-16">
-        <ListingDetailView listing={listing} variant="page" />
-        <MoreFromVenue listing={listing} />
+        {allowed ? (
+          <>
+            <ListingDetailView listing={listing} variant="page" />
+            <MoreFromVenue listing={listing} />
+          </>
+        ) : (
+          <InsiderLockedPreview listing={listing} />
+        )}
       </div>
     </>
   );

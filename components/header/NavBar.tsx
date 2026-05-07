@@ -4,8 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { ProfileIcon } from "./ProfileIcon";
 import navData from "@/lib/data/wundervue-nav.json";
 
+<<<<<<< feat/insider-experience
+const NAV_LINKS = [
+  { href: "#best-of", label: "Best Of" },
+  { href: "#lifestyle", label: "Lifestyle" },
+  { href: "/venues", label: "Venues" },
+  { href: "#monthly-guides", label: "Monthly Guides" },
+  { href: "#spotlights", label: "Spotlights" },
+  { href: "#about", label: "About" },
+];
+=======
 const CLOSE_DELAY_MS = 150;
 const PANEL_BG = "#fff8e6";
+>>>>>>> main
 
 export function NavBar() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
