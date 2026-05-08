@@ -1,6 +1,11 @@
 "use client";
 
-import { useFollowedVenues } from "@/lib/hooks/useFollowedVenues";
+import {
+  useFollowedVenues,
+  FollowLimitReached,
+} from "@/lib/hooks/useFollowedVenues";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useAuthContext } from "@/components/auth/AuthProvider";
 
 interface Props {
   venueId: string;
@@ -8,12 +13,24 @@ interface Props {
 
 export function FollowVenueButton({ venueId }: Props) {
   const { isFollowed, toggle, hydrated } = useFollowedVenues();
+  const { user } = useAuth();
+  const { openUpgrade } = useAuthContext();
   const active = hydrated && isFollowed(venueId);
+
+  const handleClick = () => {
+    try {
+      toggle(venueId, { plan: user?.plan });
+    } catch (err) {
+      if (err instanceof FollowLimitReached) {
+        openUpgrade();
+      }
+    }
+  };
 
   return (
     <button
       type="button"
-      onClick={() => toggle(venueId)}
+      onClick={handleClick}
       aria-pressed={active}
       className={`rounded-pill inline-flex items-center gap-1.5 border-[1.5px] px-4 py-2 text-[13px] font-medium transition-colors ${
         active

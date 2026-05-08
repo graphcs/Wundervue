@@ -42,13 +42,13 @@ export default async function VenuePage({ params }: PageProps) {
     <>
       <div className="mx-auto flex max-w-[1100px] items-center justify-between px-5 pb-2 pt-4">
         <Link
-          href="/explore"
+          href="/venues"
           className="text-graphite text-[13px] font-medium hover:underline"
         >
-          ← Back to explore
+          ← Back to venues
         </Link>
         <Link
-          href="/explore"
+          href="/venues"
           aria-label="Close"
           className="hover:bg-tag-bg text-gray flex h-8 w-8 items-center justify-center rounded-full transition-colors"
         >
