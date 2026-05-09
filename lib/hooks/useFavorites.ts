@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "wv.favorites";
 const FREE_LIMIT = 5;
@@ -44,9 +44,22 @@ function persist(set: Set<string>) {
 export function useFavorites() {
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
   const [hydrated, setHydrated] = useState(false);
+  // Mirror state in a ref so the limit check can run synchronously outside
+  // setFavorites — throwing inside the setState updater would surface to
+  // React's error boundary instead of the caller's try/catch under
+  // concurrent React.
+  const favoritesRef = useRef<Set<string>>(favorites);
 
   useEffect(() => {
-    const sync = () => setFavorites(readInitial());
+    favoritesRef.current = favorites;
+  }, [favorites]);
+
+  useEffect(() => {
+    const sync = () => {
+      const initial = readInitial();
+      favoritesRef.current = initial;
+      setFavorites(initial);
+    };
     sync();
     setHydrated(true);
 
@@ -68,16 +81,20 @@ export function useFavorites() {
 
   const toggle = useCallback(
     (id: string, opts: { plan?: "free" | "insider" } = {}) => {
+      const current = favoritesRef.current;
+      const isAdding = !current.has(id);
+      if (
+        isAdding &&
+        opts.plan !== "insider" &&
+        current.size >= FREE_LIMIT
+      ) {
+        throw new FavoriteLimitReached();
+      }
       setFavorites((prev) => {
         const next = new Set(prev);
-        if (next.has(id)) {
-          next.delete(id);
-        } else {
-          if (opts.plan !== "insider" && next.size >= FREE_LIMIT) {
-            throw new FavoriteLimitReached();
-          }
-          next.add(id);
-        }
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        favoritesRef.current = next;
         persist(next);
         return next;
       });
