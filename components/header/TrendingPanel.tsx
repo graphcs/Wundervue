@@ -5,13 +5,14 @@ import trendingData from "@/lib/data/wundervue-trending.json";
 
 type Tab = "now" | "week" | "month";
 const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "now", label: "Now" },
-  { key: "week", label: "Week" },
-  { key: "month", label: "Month" },
+  { key: "now", label: "NOW" },
+  { key: "week", label: "WEEK" },
+  { key: "month", label: "MONTH" },
 ];
 
 const PANEL_BG = "#fff8e6";
-const RANK_BG = "#82ffc5";
+const RANK_BG = "#0e7a9a";
+const RANK_BORDER = "#82ffc5";
 
 type Props = {
   onClose: () => void;
@@ -74,8 +75,8 @@ export function TrendingPanel({ onClose, onMouseEnter, onMouseLeave }: Props) {
                     loading="lazy"
                   />
                   <div
-                    className="absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold"
-                    style={{ background: RANK_BG, color: "#0e7a9a" }}
+                    className="absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold text-white"
+                    style={{ background: RANK_BG, border: `2px solid ${RANK_BORDER}` }}
                     aria-hidden="true"
                   >
                     {item.rank}
