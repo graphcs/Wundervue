@@ -11,7 +11,8 @@
     "test:run": "vitest run",
     "ingest:once": "tsx scripts/ingest-once.ts",
     "scrape:nav": "tsx scripts/scrape-wundervue-nav.ts",
-    "scrape:trending": "tsx scripts/scrape-wundervue-trending.ts"
+    "scrape:trending": "tsx scripts/scrape-wundervue-trending.ts",
+    "scrape:spotlights": "tsx scripts/scrape-wundervue-spotlights.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

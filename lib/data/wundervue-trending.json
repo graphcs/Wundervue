@@ -22,9 +22,9 @@
   "week": [
     {
       "rank": 1,
-      "title": "The Best Outdoor Things to Do in Metro Denver (Updated Monthly)",
-      "href": "https://wundervue.com/denver-outdoor-things-to-do/",
-      "image": "https://wundervue.com/wp-content/uploads/2024/07/shutterstock_2671442817-391x261.jpg"
+      "title": "Free Things to do in Denver",
+      "href": "https://wundervue.com/denver-best-free-things-to-do/",
+      "image": "https://wundervue.com/wp-content/uploads/2025/05/shutterstock_1412781809-391x261.jpg"
     },
     {
       "rank": 2,
@@ -34,30 +34,30 @@
     },
     {
       "rank": 3,
-      "title": "Denver Family Activities",
-      "href": "https://wundervue.com/denver-family-friendly-things-to-do/",
-      "image": "https://wundervue.com/wp-content/uploads/2024/07/shutterstock_2699902457-391x261.jpg"
+      "title": "The 10 Best Indoor Water Parks in Denver (and Beyond!)",
+      "href": "https://wundervue.com/the-10-best-indoor-water-parks-in-denver-and-beyond/",
+      "image": "https://wundervue.com/wp-content/uploads/2025/02/shutterstock_1704916540-370x247.jpg"
     }
   ],
   "month": [
     {
       "rank": 1,
-      "title": "The Best Outdoor Things to Do in Metro Denver (Updated Monthly)",
-      "href": "https://wundervue.com/denver-outdoor-things-to-do/",
-      "image": "https://wundervue.com/wp-content/uploads/2024/07/shutterstock_2671442817-391x261.jpg"
-    },
-    {
-      "rank": 2,
       "title": "Dog Friendly Things To Do In Denver",
       "href": "https://wundervue.com/denver-dog-friendly-things-to-do/",
       "image": "https://wundervue.com/wp-content/uploads/2024/07/shutterstock_2495482613-391x261.jpg"
     },
     {
+      "rank": 2,
+      "title": "Free Things to do in Denver",
+      "href": "https://wundervue.com/denver-best-free-things-to-do/",
+      "image": "https://wundervue.com/wp-content/uploads/2025/05/shutterstock_1412781809-391x261.jpg"
+    },
+    {
       "rank": 3,
-      "title": "Denver Family Activities",
-      "href": "https://wundervue.com/denver-family-friendly-things-to-do/",
-      "image": "https://wundervue.com/wp-content/uploads/2024/07/shutterstock_2699902457-391x261.jpg"
+      "title": "The 10 Best Indoor Water Parks in Denver (and Beyond!)",
+      "href": "https://wundervue.com/the-10-best-indoor-water-parks-in-denver-and-beyond/",
+      "image": "https://wundervue.com/wp-content/uploads/2025/02/shutterstock_1704916540-370x247.jpg"
     }
   ],
-  "scrapedAt": "2026-05-08T18:58:49.544Z"
+  "scrapedAt": "2026-05-08T22:31:18.889Z"
 }

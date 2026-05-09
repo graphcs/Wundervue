@@ -53,13 +53,8 @@ async function main() {
       { key: "month", r: "3" },
     ];
 
-    const out: Partial<TrendingData> = {};
-    for (const { key, r } of tabs) {
-      const tab = await page.$(`.trending-ops [data-r="${r}"]`);
-      if (!tab) throw new Error(`trending tab data-r="${r}" (${key}) not found`);
-      await tab.click().catch(() => {});
-      await page.waitForTimeout(500);
-      const items = await page.evaluate(() => {
+    async function captureItems() {
+      return page.evaluate(() => {
         const wrap = document.querySelector(".trending-inline-wrap");
         if (!wrap) return [];
         const articles = Array.from(wrap.querySelectorAll("article"));
@@ -75,10 +70,69 @@ async function main() {
           };
         });
       });
+    }
+
+    function fingerprint(items: { href: string }[]) {
+      return items.map((i) => i.href).join("|");
+    }
+
+    const out: Partial<TrendingData> = {};
+    let prevFingerprint = "";
+    for (const [idx, { key, r }] of tabs.entries()) {
+      const sel = `.trending-ops [data-r="${r}"]`;
+      const tab = await page.$(sel);
+      if (!tab) throw new Error(`trending tab data-r="${r}" (${key}) not found`);
+
+      // Click via Playwright's regular click first; if the AJAX swap doesn't
+      // happen, fall back to a real DOM click event dispatched from JS.
+      await tab.click({ force: true }).catch(() => {});
+
+      if (idx === 0) {
+        await page.waitForTimeout(1000);
+      } else {
+        // Wait for the article list to differ from the previous tab.
+        const start = Date.now();
+        let changed = false;
+        while (Date.now() - start < 8000) {
+          await page.waitForTimeout(300);
+          const sample = await captureItems();
+          if (sample.length > 0 && fingerprint(sample) !== prevFingerprint) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) {
+          // Fallback: simulate a JS-level click event in case the tipi/WP
+          // theme's handler isn't wired to Playwright's synthetic click.
+          await page.evaluate((selector) => {
+            const el = document.querySelector(selector) as HTMLElement | null;
+            if (!el) return;
+            el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          }, sel);
+          const start2 = Date.now();
+          while (Date.now() - start2 < 8000) {
+            await page.waitForTimeout(300);
+            const sample = await captureItems();
+            if (sample.length > 0 && fingerprint(sample) !== prevFingerprint) {
+              changed = true;
+              break;
+            }
+          }
+        }
+        if (!changed) {
+          console.warn(
+            `[scrape:trending] ${key} tab content did not change after ` +
+              `clicking (kept items from previous tab); writing what was captured anyway.`,
+          );
+        }
+      }
+
+      const items = await captureItems();
       if (items.length === 0) {
         throw new Error(`no articles captured for ${key} tab`);
       }
       out[key] = items;
+      prevFingerprint = fingerprint(items);
     }
 
     const data: TrendingData = {
