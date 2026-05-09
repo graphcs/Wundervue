@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "wv.followedVenues";
+const FREE_LIMIT = 3;
 // Same-tab writes don't trigger the native `storage` event, so we dispatch
 // our own and have every hook instance listen — keeps the dropdown,
 // follow button, and panel in sync without a forced page refresh.
 const SYNC_EVENT = "wv.followedVenues:change";
+
+export class FollowLimitReached extends Error {
+  constructor() {
+    super("Free plan limited to 3 saved venues");
+    this.name = "FollowLimitReached";
+  }
+}
 
 function readInitial(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -36,9 +44,22 @@ function persist(set: Set<string>) {
 export function useFollowedVenues() {
   const [followed, setFollowed] = useState<Set<string>>(() => new Set());
   const [hydrated, setHydrated] = useState(false);
+  // Mirror state in a ref so toggle() can read the latest set synchronously
+  // without listing `followed` in its useCallback deps. Throwing inside a
+  // setState updater would surface to React's error boundary instead of the
+  // caller's try/catch under concurrent React, so we check the limit here.
+  const followedRef = useRef<Set<string>>(followed);
 
   useEffect(() => {
-    const sync = () => setFollowed(readInitial());
+    followedRef.current = followed;
+  }, [followed]);
+
+  useEffect(() => {
+    const sync = () => {
+      const initial = readInitial();
+      followedRef.current = initial;
+      setFollowed(initial);
+    };
     sync();
     setHydrated(true);
 
@@ -58,15 +79,28 @@ export function useFollowedVenues() {
     [followed],
   );
 
-  const toggle = useCallback((venueId: string) => {
-    setFollowed((prev) => {
-      const next = new Set(prev);
-      if (next.has(venueId)) next.delete(venueId);
-      else next.add(venueId);
-      persist(next);
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(
+    (venueId: string, opts: { plan?: "free" | "insider" } = {}) => {
+      const current = followedRef.current;
+      const isAdding = !current.has(venueId);
+      if (
+        isAdding &&
+        opts.plan !== "insider" &&
+        current.size >= FREE_LIMIT
+      ) {
+        throw new FollowLimitReached();
+      }
+      setFollowed((prev) => {
+        const next = new Set(prev);
+        if (next.has(venueId)) next.delete(venueId);
+        else next.add(venueId);
+        followedRef.current = next;
+        persist(next);
+        return next;
+      });
+    },
+    [],
+  );
 
-  return { followed, isFollowed, toggle, hydrated };
+  return { followed, isFollowed, toggle, hydrated, limit: FREE_LIMIT };
 }
