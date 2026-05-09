@@ -102,10 +102,8 @@ export function NavBar() {
                     )}
                   </button>
                 ) : isSpotlights ? (
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     aria-haspopup="menu"
                     aria-expanded={isOpen}
                     onMouseEnter={() => {
@@ -113,18 +111,31 @@ export function NavBar() {
                       setOpenIndex(i);
                     }}
                     onMouseLeave={scheduleClose}
-                    className={`text-dark relative inline-flex items-center py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-opacity ${
+                    onClick={() => setOpenIndex(isOpen ? null : i)}
+                    className={`text-dark relative flex items-center gap-1 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-opacity ${
                       isOpen ? "opacity-100" : "hover:opacity-70"
                     }`}
                   >
                     {link.label}
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                      className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    >
+                      <path d="M3 5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                     {isOpen && (
                       <span
                         aria-hidden="true"
                         className="bg-chrome absolute -bottom-[13px] left-1/2 h-[2px] w-[80%] -translate-x-1/2"
                       />
                     )}
-                  </a>
+                  </button>
                 ) : (
                   <a
                     href={link.href}
