@@ -44,15 +44,16 @@ export function SavedVenuesPanel() {
             Follow venues you love to keep track of their events and deals.
           </p>
           <Link
-            href="/explore"
+            href="/venues"
             onClick={closeSavedVenues}
             className="bg-dark rounded-pill mt-2 px-5 py-2.5 text-[13px] font-medium text-white hover:opacity-90"
           >
-            Browse Events
+            Explore Venues
           </Link>
         </div>
       ) : (
-        <ul className="divide-border divide-y">
+        <>
+          <ul className="divide-border divide-y">
           {venues.map((v) => {
             const count = getListingsByVenueId(v.id).length;
             return (
@@ -99,7 +100,17 @@ export function SavedVenuesPanel() {
               </li>
             );
           })}
-        </ul>
+          </ul>
+          <div className="border-border flex justify-center border-t px-5 py-4">
+            <Link
+              href="/venues"
+              onClick={closeSavedVenues}
+              className="text-dark text-[13px] font-medium underline-offset-2 hover:underline"
+            >
+              Explore all venues
+            </Link>
+          </div>
+        </>
       )}
     </SlideOver>
   );
