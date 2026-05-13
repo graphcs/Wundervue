@@ -140,6 +140,54 @@ export const SOURCES: SourceConfig[] = [
     query: "date night spots and live jazz Denver",
   },
 
+  // ── Direct-scrape: visitdenver.com landing page. Server-rendered featured
+  // events curated by the city's tourism board — high signal but limited
+  // volume (~70 tiles), so weekly cadence is plenty.
+  {
+    id: "visitdenver-events",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.visitdenver.com/events/",
+    selectors: {
+      item: ".slide:has(.slide-title)",
+      title: ".slide-title a",
+      // VisitDenver renders the venue (and sometimes a date) inside .info-item
+      // list rows. Bundling them into "description" gets them into the prose
+      // blob so the normalizer LLM can extract venue/date/category.
+      description: ".info-item",
+      link: ".slide-title a",
+      image: "img",
+    },
+  },
+
+  // ── Direct-scrape: Ticketmaster Discovery (Denver concerts). The page
+  // embeds a JSON-LD MusicEvent array with full structured event data
+  // (name, dates, venue, address, geo, image) — more reliable than
+  // scraping their class-mangled SPA markup.
+  {
+    id: "ticketmaster-denver",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "daily",
+    sourceLabel: "Website",
+    url: "https://www.ticketmaster.com/discover/concerts/denver",
+    defaultCategory: "Music",
+  },
+
+  // ── Direct-scrape: Eventbrite Denver "all events" page. Embeds a
+  // schema.org ItemList with each event as a nested Event object —
+  // includes title, dates, image, venue, and url.
+  {
+    id: "eventbrite-denver",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "daily",
+    sourceLabel: "Website",
+    url: "https://www.eventbrite.com/d/co--denver/all-events/",
+  },
+
   // ── Apify Instagram: per-account deep dives for venues we follow closely.
   {
     id: "mission-ballroom-ig",

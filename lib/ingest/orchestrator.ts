@@ -3,6 +3,7 @@ import { fetchInstagram } from "./connectors/instagram";
 import { fetchSerpEvents } from "./connectors/serpEvents";
 import { fetchApifyWeb } from "./connectors/apifyWeb";
 import { fetchCheerioWeb } from "./connectors/cheerioWeb";
+import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates } from "./dedupCluster";
@@ -31,6 +32,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchApifyWeb(source);
     case "cheerioWeb":
       return fetchCheerioWeb(source);
+    case "jsonLdEvents":
+      return fetchJsonLdEvents(source);
   }
 }
 

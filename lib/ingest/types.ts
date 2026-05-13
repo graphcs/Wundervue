@@ -2,7 +2,12 @@ import type { ListingType, LifestyleTag, ListingSource } from "@/lib/types";
 
 export type Cadence = "hourly" | "daily" | "weekly";
 
-export type ConnectorKind = "instagram" | "serpEvents" | "apifyWeb" | "cheerioWeb";
+export type ConnectorKind =
+  | "instagram"
+  | "serpEvents"
+  | "apifyWeb"
+  | "cheerioWeb"
+  | "jsonLdEvents";
 
 export interface SourceConfig {
   id: string;
