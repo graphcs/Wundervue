@@ -70,7 +70,9 @@ export function pickFromSrcset(srcset: string | undefined): string | undefined {
 //
 //   1. srcset — pick the candidate with the largest `w` descriptor, falling
 //      back to the largest `x` (density) descriptor, then first entry.
-//   2. data-src / data-lazy-src / data-original — common lazy-load attrs.
+//   2. data-src / data-lazy-src / data-original / data-image — common
+//      lazy-load attrs (data-image is used by Red Rocks' theme and other WP
+//      lazy-loaders).
 //   3. src — last because it often holds a 1×1 placeholder on lazy sites.
 //
 // Skips obvious placeholder values: empty strings, `data:` URIs (inline
@@ -79,7 +81,7 @@ export function pickImageAttr($el: Cheerio<Element>): string | undefined {
   const fromSrcset = pickFromSrcset($el.attr("srcset"));
   if (fromSrcset) return fromSrcset;
 
-  for (const attr of ["data-src", "data-lazy-src", "data-original"] as const) {
+  for (const attr of ["data-src", "data-lazy-src", "data-original", "data-image"] as const) {
     const value = $el.attr(attr);
     if (isUsableUrl(value)) return value;
   }

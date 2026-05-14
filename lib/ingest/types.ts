@@ -7,7 +7,10 @@ export type ConnectorKind =
   | "serpEvents"
   | "apifyWeb"
   | "cheerioWeb"
-  | "jsonLdEvents";
+  | "jsonLdEvents"
+  | "venuePilot"
+  | "eventive"
+  | "wixEvents";
 
 export interface SourceConfig {
   id: string;
@@ -27,7 +30,11 @@ export interface SourceConfig {
   hashtag?: string | string[];
   query?: string;              // serpEvents — Google Events search query
   serpHtichips?: string;       // serpEvents — optional Google date/type filter (e.g. "date:week")
-  url?: string;                // apifyWeb / cheerioWeb
+  url?: string;                // apifyWeb / cheerioWeb / jsonLdEvents
+  // cheerioWeb only: fetch each URL with the same selectors and concat
+  // results. Used for sites where each "event" is its own page (e.g.
+  // an "Events" dropdown menu where each item links to a dedicated page).
+  urls?: string[];
   selectors?: {
     item: string;
     title?: string;
@@ -37,9 +44,33 @@ export interface SourceConfig {
     link?: string;
   };
 
+  // eventive: tenant slug + tenant API key + event_bucket ID for
+  // Eventive-backed cinema sites (Denver Film, many indie festivals).
+  // The api_key is a public anon key embedded in each tenant's JS
+  // bundle — not secret, but customer-specific, so it lives per-source.
+  // The tenant slug ("denverfilm") seeds the public schedule URL
+  // ({tenant}.eventive.org/schedule/{eventId}).
+  eventiveTenant?: string;
+  eventiveApiKey?: string;
+  eventiveEventBucketId?: string;
+
+  // venuePilot: account IDs to query. Most VenuePilot-backed venues
+  // (Levitt Denver, etc.) expose their event list via VenuePilot's public
+  // GraphQL `publicEvents` query keyed by accountIds.
+  venuePilotAccountIds?: number[];
+
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
   defaultCategory?: string;
+
+  // Hard cap on raw items returned by the connector. Necessary for sources
+  // that can over-deliver and push the downstream LLM + image pipeline
+  // past Vercel's 5min function ceiling.
+  //   - cheerioWeb: capped in DOM order (most events pages list
+  //     date-ascending; far-future tail gets picked up by later runs).
+  //   - instagram: capped after Apify returns (Apify's resultsLimit isn't
+  //     always respected — observed 539 results back from a 180 cap).
+  maxItems?: number;
 }
 
 export interface RawItem {

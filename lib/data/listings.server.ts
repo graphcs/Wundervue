@@ -85,6 +85,10 @@ export async function getPublishedListings(): Promise<Listing[]> {
           "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
         )
         .not("published_at", "is", null)
+        // Hide rows the dedup system has linked to a canonical event.
+        // Without this filter, a near-duplicate (same event ingested from
+        // two sources, or two source_id schemes) shows up twice on /explore.
+        .is("dedup_of", null)
         .gte("date_start", cutoff)
         .order("date_start", { ascending: true, nullsFirst: false }),
       client.from("venues").select("id, slug, name"),

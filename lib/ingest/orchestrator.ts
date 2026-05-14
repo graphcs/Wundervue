@@ -4,6 +4,9 @@ import { fetchSerpEvents } from "./connectors/serpEvents";
 import { fetchApifyWeb } from "./connectors/apifyWeb";
 import { fetchCheerioWeb } from "./connectors/cheerioWeb";
 import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
+import { fetchVenuePilot } from "./connectors/venuePilot";
+import { fetchEventive } from "./connectors/eventive";
+import { fetchWixEvents } from "./connectors/wixEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates } from "./dedupCluster";
@@ -34,6 +37,12 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchCheerioWeb(source);
     case "jsonLdEvents":
       return fetchJsonLdEvents(source);
+    case "venuePilot":
+      return fetchVenuePilot(source);
+    case "eventive":
+      return fetchEventive(source);
+    case "wixEvents":
+      return fetchWixEvents(source);
   }
 }
 

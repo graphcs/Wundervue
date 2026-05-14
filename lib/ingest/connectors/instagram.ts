@@ -43,16 +43,20 @@ export async function fetchInstagram(source: SourceConfig): Promise<RawItem[]> {
   ];
 
   // Cap total posts so a 4-hashtag source doesn't overshoot quota. MAX_POSTS
-  // is the per-URL cap that Apify applies; the actor's resultsLimit is the
-  // total cap across all directUrls.
-  const totalLimit = MAX_POSTS * directUrls.length;
+  // is the per-URL hint that Apify applies; the actor's resultsLimit is the
+  // total cap across all directUrls. Honor source.maxItems when set —
+  // observed in practice that Apify's resultsLimit isn't always respected
+  // (a previous 180-cap run returned 539), so we also slice the output
+  // below as a hard ceiling on what the downstream LLM/image pipeline has
+  // to chew through.
+  const requestedLimit = source.maxItems ?? MAX_POSTS * directUrls.length;
 
   const run = await withRetry(() =>
     client.actor(ACTOR_ID).call(
       {
         directUrls,
         resultsType: "posts",
-        resultsLimit: totalLimit,
+        resultsLimit: requestedLimit,
         addParentData: false,
       },
       { timeout: 300 }, // seconds; aligns with Vercel Pro function timeout
@@ -68,7 +72,9 @@ export async function fetchInstagram(source: SourceConfig): Promise<RawItem[]> {
   // time" on (source, source_id).
   const seen = new Set<string>();
   const out: RawItem[] = [];
+  const hardCap = source.maxItems;
   for (const p of posts) {
+    if (hardCap !== undefined && out.length >= hardCap) break;
     if (!p.caption || (!p.shortCode && !p.id)) continue;
     const sourceId = p.shortCode ?? p.id!;
     if (seen.has(sourceId)) continue;
