@@ -10,7 +10,10 @@ export type ConnectorKind =
   | "jsonLdEvents"
   | "venuePilot"
   | "eventive"
-  | "wixEvents";
+  | "wixEvents"
+  | "nbaSchedule"
+  | "nhlSchedule"
+  | "kseTicketmaster";
 
 export interface SourceConfig {
   id: string;
@@ -53,6 +56,21 @@ export interface SourceConfig {
   eventiveTenant?: string;
   eventiveApiKey?: string;
   eventiveEventBucketId?: string;
+
+  // nbaSchedule: NBA team tricode (e.g. "DEN" for Denver Nuggets) to
+  // filter the team-schedule page down to home games only — away games
+  // happen in other cities and shouldn't surface on Denver's /explore.
+  nbaHomeTeamTricode?: string;
+
+  // nhlSchedule: NHL team tricode (e.g. "COL" for Colorado Avalanche)
+  // used both in the API URL and to filter for home games.
+  nhlTeamTricode?: string;
+
+  // kseTicketmaster: Ticketmaster venue ID for the KSE alttix proxy
+  // (e.g. "KovZpZAFa1nA" for Paramount Theatre Denver). Endpoint is
+  // alttix.ksehq.com/api/tm/venue/{id} which returns the standard
+  // Ticketmaster Discovery API event array.
+  kseTmVenueId?: string;
 
   // venuePilot: account IDs to query. Most VenuePilot-backed venues
   // (Levitt Denver, etc.) expose their event list via VenuePilot's public

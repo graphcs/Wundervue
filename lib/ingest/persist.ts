@@ -291,7 +291,17 @@ export async function applyBatch(actions: DedupAction[]): Promise<{
   const upsertable = actions.filter((a) => a.kind !== "merge");
 
   if (upsertable.length > 0) {
-    const toUpsert = upsertable.map((a) => a.row);
+    // Dedupe by the upsert conflict key (source + source_id) before the
+    // batch — Postgres rejects an INSERT...ON CONFLICT that contains two
+    // rows targeting the same key ("cannot affect row a second time").
+    // Observed when a single scrape returns the same program twice on
+    // the same day (Botanic Gardens calendar) or when fuzzy normalization
+    // collapses two RawItems to the same source_id post-hoc.
+    const byKey = new Map<string, ListingInsert>();
+    for (const a of upsertable) {
+      byKey.set(`${a.row.source}:${a.row.source_id}`, a.row);
+    }
+    const toUpsert = [...byKey.values()];
     const { error } = await client
       .from("listings")
       .upsert(toUpsert, { onConflict: "source,source_id" });

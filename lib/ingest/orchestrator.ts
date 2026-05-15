@@ -7,6 +7,9 @@ import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchVenuePilot } from "./connectors/venuePilot";
 import { fetchEventive } from "./connectors/eventive";
 import { fetchWixEvents } from "./connectors/wixEvents";
+import { fetchNbaSchedule } from "./connectors/nbaSchedule";
+import { fetchNhlSchedule } from "./connectors/nhlSchedule";
+import { fetchKseTicketmaster } from "./connectors/kseTicketmaster";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates } from "./dedupCluster";
@@ -43,6 +46,12 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchEventive(source);
     case "wixEvents":
       return fetchWixEvents(source);
+    case "nbaSchedule":
+      return fetchNbaSchedule(source);
+    case "nhlSchedule":
+      return fetchNhlSchedule(source);
+    case "kseTicketmaster":
+      return fetchKseTicketmaster(source);
   }
 }
 

@@ -20,6 +20,23 @@ export function stripWpResize(url: string): string {
   return url.replace(/-\d+x\d+(\.(?:jpg|jpeg|png|webp|avif|gif))(\?|#|$)/i, "$1$2");
 }
 
+// CityKit's image CDN (used by tourism-board sites — RiNo Art District,
+// LoDo Love, etc.) serves square 900x900 transforms by default
+// (`/tr:w-900,h-900,fo-auto/...`). Those fail our probe's landscape
+// aspect floor (1.2-2.4) and trip AI gen on every event. The CDN
+// supports custom transforms, so rewrite the `tr:` segment to a 3:2
+// landscape that comfortably passes both the size and aspect checks.
+export function forceCtykitLandscape(url: string): string {
+  if (!url.includes("img.ctykit.com")) return url;
+  return url.replace(/\/tr:[^/]+\//, "/tr:w-1200,h-800,fo-auto/");
+}
+
+// Compose all known per-CDN URL rewrites. Keep additions narrow — each
+// only triggers when the URL pattern matches.
+function normalizeImageUrl(url: string): string {
+  return forceCtykitLandscape(stripWpResize(url));
+}
+
 async function fetchOne(source: SourceConfig, url: string): Promise<RawItem[]> {
   if (!source.selectors) {
     throw new Error(`source ${source.id} missing selectors`);
@@ -78,7 +95,7 @@ async function fetchOne(source: SourceConfig, url: string): Promise<RawItem[]> {
       sourceId: `${source.id}:${sourceUrl}#${contentHash}`,
       sourceUrl,
       text,
-      imageUrl: image ? stripWpResize(new URL(image, url).toString()) : undefined,
+      imageUrl: image ? normalizeImageUrl(new URL(image, url).toString()) : undefined,
       fetchedAt,
     });
   });
