@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as cheerio from "cheerio";
-import { pickImageAttr } from "../connectors/cheerioWeb";
+import {
+  forceCtykitLandscape,
+  pickImageAttr,
+  stripWpResize,
+} from "../connectors/cheerioWeb";
 
 function load(html: string) {
   const $ = cheerio.load(html);
@@ -71,5 +75,59 @@ describe("pickImageAttr", () => {
       `<img srcset="data:image/gif;base64,abc 1x, real.jpg 2x">`,
     );
     expect(pickImageAttr($img)).toBe("real.jpg");
+  });
+});
+
+describe("stripWpResize", () => {
+  it("strips the -WxH suffix from a resized WordPress upload", () => {
+    expect(stripWpResize("https://x.com/wp-content/uploads/2026/04/photo-500x500.jpg")).toBe(
+      "https://x.com/wp-content/uploads/2026/04/photo.jpg",
+    );
+  });
+
+  it("preserves query strings after stripping the suffix", () => {
+    expect(stripWpResize("https://x.com/photo-1024x768.jpg?ver=2")).toBe(
+      "https://x.com/photo.jpg?ver=2",
+    );
+  });
+
+  it("leaves URLs without the resize pattern untouched", () => {
+    const url = "https://x.com/wp-content/uploads/2026/04/photo.jpg";
+    expect(stripWpResize(url)).toBe(url);
+  });
+
+  it("does not strip a -WxH that lacks a recognised image extension", () => {
+    // "-1x1.png" looks like a resize suffix but "-1x1.html" does not.
+    const url = "https://x.com/asset-100x100.html";
+    expect(stripWpResize(url)).toBe(url);
+  });
+});
+
+describe("forceCtykitLandscape", () => {
+  it("rewrites the tr: transform segment on a CityKit URL", () => {
+    expect(
+      forceCtykitLandscape(
+        "https://img.ctykit.com/tr:w-900,h-900,fo-auto/sites/rino/photo.jpg",
+      ),
+    ).toBe(
+      "https://img.ctykit.com/tr:w-1200,h-800,fo-auto/sites/rino/photo.jpg",
+    );
+  });
+
+  it("leaves non-CityKit hosts untouched", () => {
+    const url = "https://example.com/tr:w-900,h-900/photo.jpg";
+    expect(forceCtykitLandscape(url)).toBe(url);
+  });
+
+  it("does not match URLs that merely contain 'img.ctykit.com' as a substring", () => {
+    // Regression guard: substring match would rewrite a query-param payload
+    // that an attacker could control. The check should be hostname-anchored.
+    const url = "https://attacker.example/?u=img.ctykit.com/tr:w-900,h-900/x.jpg";
+    expect(forceCtykitLandscape(url)).toBe(url);
+  });
+
+  it("returns the input unchanged when URL parsing fails", () => {
+    const garbage = "not a url at all";
+    expect(forceCtykitLandscape(garbage)).toBe(garbage);
   });
 });

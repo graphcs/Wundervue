@@ -27,7 +27,16 @@ export function stripWpResize(url: string): string {
 // supports custom transforms, so rewrite the `tr:` segment to a 3:2
 // landscape that comfortably passes both the size and aspect checks.
 export function forceCtykitLandscape(url: string): string {
-  if (!url.includes("img.ctykit.com")) return url;
+  // Match by parsed hostname, not substring: a URL like
+  // https://attacker.example/?u=img.ctykit.com/... would otherwise be
+  // misidentified as a CityKit asset.
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return url;
+  }
+  if (host !== "img.ctykit.com") return url;
   return url.replace(/\/tr:[^/]+\//, "/tr:w-1200,h-800,fo-auto/");
 }
 
