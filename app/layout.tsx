@@ -5,7 +5,6 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import { OnboardingModal } from "@/components/auth/OnboardingModal";
 import { SavedEventsPanel } from "@/components/account/SavedEventsPanel";
 import { SavedVenuesPanel } from "@/components/account/SavedVenuesPanel";
-import { AccountSettingsPanel } from "@/components/account/AccountSettingsPanel";
 import { UpgradeModal } from "@/components/account/UpgradeModal";
 import { ManageSubscriptionModal } from "@/components/account/ManageSubscriptionModal";
 import "./globals.css";
@@ -54,7 +53,6 @@ export default function RootLayout({
           <OnboardingModal />
           <SavedEventsPanel />
           <SavedVenuesPanel />
-          <AccountSettingsPanel />
           <UpgradeModal />
           <ManageSubscriptionModal />
         </AuthProvider>

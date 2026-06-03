@@ -56,9 +56,6 @@ export interface AuthContextValue {
   savedVenuesOpen: boolean;
   openSavedVenues: () => void;
   closeSavedVenues: () => void;
-  settingsOpen: boolean;
-  openSettings: () => void;
-  closeSettings: () => void;
   upgradeOpen: boolean;
   openUpgrade: () => void;
   closeUpgrade: () => void;
@@ -79,7 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [initialOnboardingStep, setInitialOnboardingStep] = useState(0);
   const [savedEventsOpen, setSavedEventsOpen] = useState(false);
   const [savedVenuesOpen, setSavedVenuesOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [manageSubOpen, setManageSubOpen] = useState(false);
 
@@ -263,8 +259,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const closeSavedEvents = useCallback(() => setSavedEventsOpen(false), []);
   const openSavedVenues = useCallback(() => setSavedVenuesOpen(true), []);
   const closeSavedVenues = useCallback(() => setSavedVenuesOpen(false), []);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const openUpgrade = useCallback(() => setUpgradeOpen(true), []);
   const closeUpgrade = useCallback(() => setUpgradeOpen(false), []);
   const openManageSub = useCallback(() => setManageSubOpen(true), []);
@@ -295,9 +289,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       savedVenuesOpen,
       openSavedVenues,
       closeSavedVenues,
-      settingsOpen,
-      openSettings,
-      closeSettings,
       upgradeOpen,
       openUpgrade,
       closeUpgrade,
@@ -328,9 +319,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       savedVenuesOpen,
       openSavedVenues,
       closeSavedVenues,
-      settingsOpen,
-      openSettings,
-      closeSettings,
       upgradeOpen,
       openUpgrade,
       closeUpgrade,
