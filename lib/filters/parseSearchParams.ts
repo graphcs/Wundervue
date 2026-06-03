@@ -4,6 +4,7 @@ import type {
   TypeFilter,
   LifestyleTag,
   PageSize,
+  SortOption,
 } from "@/lib/types";
 
 const VALID_DATES: DatePreset[] = [
@@ -16,6 +17,7 @@ const VALID_DATES: DatePreset[] = [
   "custom",
 ];
 const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
+const VALID_SORTS: SortOption[] = ["soonest", "latest"];
 const VALID_PAGE_SIZES: PageSize[] = [9, 12, 15, 18];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
@@ -54,6 +56,7 @@ export function parseSearchParams(
   options: ParseOptions = {},
 ): Filters {
   const type = first(params, "type");
+  const sort = first(params, "sort");
   const date = first(params, "date");
   const lifestyleRaw = csv(first(params, "lifestyle"));
   const hoodsRaw = csv(first(params, "hoods"));
@@ -93,7 +96,10 @@ export function parseSearchParams(
     ),
     freeOnly: first(params, "free") === "1",
     q: first(params, "q"),
-    view: view === "map" ? "map" : "grid",
+    sort: (VALID_SORTS as string[]).includes(sort ?? "")
+      ? (sort as SortOption)
+      : "soonest",
+    view: view === "map" ? "map" : view === "calendar" ? "calendar" : "grid",
     pageSize,
     venue: first(params, "venue"),
   };

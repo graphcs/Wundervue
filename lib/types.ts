@@ -45,6 +45,8 @@ export interface Venue {
   imageUrl?: string;
   lat: number;
   lng: number;
+  // Category slugs the venue is tagged with (derived from its listings).
+  categories?: string[];
 }
 
 export interface NeighborhoodOption {
@@ -70,6 +72,13 @@ export type TypeFilter = "all" | "events" | "deals" | "both";
 
 export type PageSize = 9 | 12 | 15 | 18;
 
+// Listing ordering. "soonest" is the default (events happening first). Price-
+// and popularity-based sorts are planned but need a numeric price column /
+// save-count aggregation before they can be offered.
+export type SortOption = "soonest" | "latest";
+
+export type ViewMode = "grid" | "map" | "calendar";
+
 export interface Filters {
   type: TypeFilter;
   neighborhoods: string[];
@@ -80,7 +89,8 @@ export interface Filters {
   lifestyle: LifestyleTag[];
   freeOnly: boolean;
   q?: string;
-  view: "grid" | "map";
+  sort: SortOption;
+  view: ViewMode;
   pageSize: PageSize;
   venue?: string;
 }

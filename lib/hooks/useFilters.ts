@@ -4,7 +4,11 @@ import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { buildHref } from "@/lib/filters/buildHref";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
+import { locationBySlug } from "@/lib/data/locations";
+import { CATEGORIES } from "@/lib/data/categories";
 import type { Filters, LifestyleTag } from "@/lib/types";
+
+const VALID_CATS = new Set(CATEGORIES.map((c) => c.slug));
 
 function extractPathContext(pathname: string): {
   pathNeighborhood?: string;
@@ -13,35 +17,15 @@ function extractPathContext(pathname: string): {
   const segments = pathname.split("/").filter(Boolean);
   if (segments[0] !== "explore") return {};
 
-  const validHoods = new Set([
-    "rino",
-    "lohi",
-    "highlands",
-    "cherry-creek",
-    "downtown",
-    "capitol-hill",
-    "baker",
-    "wash-park",
-    "golden",
-  ]);
-  const validCats = new Set([
-    "music",
-    "food-drink",
-    "outdoor",
-    "arts-culture",
-    "markets",
-    "sports",
-    "comedy",
-    "wellness",
-  ]);
-
   let pathNeighborhood: string | undefined;
   let pathCategory: string | undefined;
 
+  // A path segment is a location if it resolves to any taxonomy node
+  // (region/city/neighborhood); otherwise check the category list.
   for (let i = 1; i < segments.length; i++) {
     const s = segments[i];
-    if (validHoods.has(s)) pathNeighborhood = s;
-    else if (validCats.has(s)) pathCategory = s;
+    if (locationBySlug(s)) pathNeighborhood = s;
+    else if (VALID_CATS.has(s)) pathCategory = s;
   }
 
   return { pathNeighborhood, pathCategory };
@@ -121,13 +105,14 @@ export function useFilters() {
           date: "any",
           lifestyle: [],
           freeOnly: false,
+          sort: filters.sort,
           view: filters.view,
           pageSize: filters.pageSize,
         },
       }),
       { scroll: false },
     );
-  }, [pathCtx, router, filters.view, filters.pageSize]);
+  }, [pathCtx, router, filters.sort, filters.view, filters.pageSize]);
 
   return {
     filters,

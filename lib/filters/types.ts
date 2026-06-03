@@ -4,7 +4,14 @@ export type {
   TypeFilter,
   LifestyleTag,
   PageSize,
+  SortOption,
+  ViewMode,
 } from "@/lib/types";
+
+export const SORT_OPTIONS = [
+  { id: "soonest", label: "Soonest" },
+  { id: "latest", label: "Latest" },
+] as const;
 
 // Default is 9 (matches the 3x3 grid). Increments of 3 from there.
 export const PAGE_SIZE_OPTIONS = [

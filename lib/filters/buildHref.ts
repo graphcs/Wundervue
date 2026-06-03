@@ -38,7 +38,10 @@ export function buildHref({
   }
   if (filters.freeOnly) sp.set("free", "1");
   if (filters.q) sp.set("q", filters.q);
-  if (filters.view === "map") sp.set("view", "map");
+  if (filters.sort && filters.sort !== "soonest") sp.set("sort", filters.sort);
+  if (filters.view === "map" || filters.view === "calendar") {
+    sp.set("view", filters.view);
+  }
   if (filters.pageSize && filters.pageSize !== 9) {
     sp.set("per", String(filters.pageSize));
   }
