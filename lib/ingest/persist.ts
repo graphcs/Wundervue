@@ -10,7 +10,8 @@ import type {
   SourceConfig,
 } from "./types";
 import { eventKey, makeSlug } from "./dedup";
-import { geocode } from "./geocode";
+import { geocode, reverseGeocode } from "./geocode";
+import { ancestrySlugs, resolveLocationLabel } from "@/lib/data/locations";
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -30,20 +31,64 @@ export interface VenueRow {
   name: string;
   address: string;
   neighborhood: string;
+  region_slug: string | null;
+  city_slug: string | null;
+  neighborhood_slug: string | null;
   lat: number | null;
   lng: number | null;
 }
+
+const VENUE_COLUMNS =
+  "id, slug, name, address, neighborhood, region_slug, city_slug, neighborhood_slug, lat, lng";
 
 export async function resolveVenue(slug: string | undefined): Promise<VenueRow | null> {
   if (!slug) return null;
   const client = getServiceClient();
   const { data, error } = await client
     .from("venues")
-    .select("id, slug, name, address, neighborhood, lat, lng")
+    .select(VENUE_COLUMNS)
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw new Error(`venue lookup failed for ${slug}: ${error.message}`);
   return (data as VenueRow | null) ?? null;
+}
+
+interface ResolvedLocation {
+  neighborhood: string | null;
+  region_slug: string | null;
+  city_slug: string | null;
+  neighborhood_slug: string | null;
+}
+
+// Resolve a free-text neighborhood label (and, as a fallback, coordinates) onto
+// canonical taxonomy slugs. When the label doesn't resolve but we have a pin,
+// reverse-geocode the coords and try the returned suburb/neighbourhood/city.
+async function resolveLocationSlugs(args: {
+  neighborhood: string | null;
+  lat: number | null;
+  lng: number | null;
+}): Promise<ResolvedLocation> {
+  let ref = resolveLocationLabel(args.neighborhood);
+  let label = ref?.label ?? args.neighborhood ?? null;
+
+  if (!ref && args.lat != null && args.lng != null) {
+    const rev = await reverseGeocode(args.lat, args.lng);
+    if (rev) {
+      ref =
+        resolveLocationLabel(rev.neighbourhood) ??
+        resolveLocationLabel(rev.suburb) ??
+        resolveLocationLabel(rev.city);
+      if (ref) label = ref.label;
+    }
+  }
+
+  const a = ancestrySlugs(ref);
+  return {
+    neighborhood: label,
+    region_slug: a.regionSlug,
+    city_slug: a.citySlug,
+    neighborhood_slug: a.neighborhoodSlug,
+  };
 }
 
 // Human-readable slug for an extracted venue name. Stays stable across re-ingest
@@ -113,6 +158,14 @@ export async function resolveOrCreateVenue(args: {
   if (args.address) coords = await geocode(args.address);
   if (!coords) coords = await geocode(`${args.venueName}, ${cityHint}`);
 
+  // Resolve canonical location slugs, reverse-geocoding from the pin when the
+  // LLM-supplied neighborhood label doesn't map to the taxonomy.
+  const loc = await resolveLocationSlugs({
+    neighborhood: args.neighborhood,
+    lat: coords?.lat ?? null,
+    lng: coords?.lng ?? null,
+  });
+
   const client = getServiceClient();
   const { data, error } = await client
     .from("venues")
@@ -120,11 +173,14 @@ export async function resolveOrCreateVenue(args: {
       slug,
       name: args.venueName,
       address: args.address ?? "",
-      neighborhood: args.neighborhood ?? "",
+      neighborhood: loc.neighborhood ?? "",
+      region_slug: loc.region_slug,
+      city_slug: loc.city_slug,
+      neighborhood_slug: loc.neighborhood_slug,
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
     })
-    .select("id, slug, name, address, neighborhood, lat, lng")
+    .select(VENUE_COLUMNS)
     .single();
   if (error) {
     // Most likely cause: a concurrent insert from a parallel ingest already
@@ -149,6 +205,19 @@ export function buildListingInsert(args: {
     venueId: venue?.id ?? null,
     dateStart: normalized.dateStart,
   });
+  // For venue-bound sources, the venue's neighborhood is authoritative — the
+  // LLM tends to default to "Downtown" when the caption doesn't say.
+  const neighborhood = venue?.neighborhood || normalized.neighborhood || null;
+  // Prefer the venue's pre-resolved slugs (it already reverse-geocoded if
+  // needed); otherwise resolve the chosen neighborhood label synchronously.
+  const ancestry =
+    venue && (venue.region_slug || venue.city_slug || venue.neighborhood_slug)
+      ? {
+          regionSlug: venue.region_slug,
+          citySlug: venue.city_slug,
+          neighborhoodSlug: venue.neighborhood_slug,
+        }
+      : ancestrySlugs(resolveLocationLabel(neighborhood));
   return {
     slug: makeSlug(normalized.title, `${source.sourceLabel}:${item.sourceId}`),
     type: normalized.type,
@@ -156,9 +225,10 @@ export function buildListingInsert(args: {
     description: normalized.description,
     venue_id: venue?.id ?? null,
     address: venue?.address ?? null,
-    // For venue-bound sources, the venue's neighborhood is authoritative —
-    // the LLM tends to default to "Downtown" when the caption doesn't say.
-    neighborhood: venue?.neighborhood || normalized.neighborhood || null,
+    neighborhood,
+    region_slug: ancestry.regionSlug,
+    city_slug: ancestry.citySlug,
+    neighborhood_slug: ancestry.neighborhoodSlug,
     category: normalized.category || source.defaultCategory || null,
     date_start: normalized.dateStart,
     date_end: normalized.dateEnd,

@@ -81,6 +81,11 @@ export interface DbListing {
   venue_id: string | null;
   address: string | null;
   neighborhood: string | null;
+  // Resolved taxonomy slugs (lib/data/locations.ts). Denormalized from
+  // neighborhood; nullable when the place can't be resolved.
+  region_slug: string | null;
+  city_slug: string | null;
+  neighborhood_slug: string | null;
   category: string | null;
   date_start: string | null;
   date_end: string | null;
