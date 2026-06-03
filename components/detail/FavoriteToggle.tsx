@@ -1,6 +1,10 @@
 "use client";
 
-import { FavoriteLimitReached, useFavorites } from "@/lib/hooks/useFavorites";
+import {
+  AuthRequiredError,
+  FavoriteLimitReached,
+  useFavorites,
+} from "@/lib/hooks/useFavorites";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { HeartIcon } from "./icons";
@@ -12,14 +16,16 @@ interface Props {
 export function FavoriteToggle({ listingId }: Props) {
   const { isFavorited, toggle, hydrated } = useFavorites();
   const { user } = useAuth();
-  const { openUpgrade } = useAuthContext();
+  const { openUpgrade, openOnboarding } = useAuthContext();
   const active = hydrated && isFavorited(listingId);
 
   const handleClick = () => {
     try {
       toggle(listingId, { plan: user?.plan });
     } catch (err) {
-      if (err instanceof FavoriteLimitReached) {
+      if (err instanceof AuthRequiredError) {
+        openOnboarding(0);
+      } else if (err instanceof FavoriteLimitReached) {
         openUpgrade();
       }
     }

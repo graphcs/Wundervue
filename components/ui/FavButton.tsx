@@ -1,6 +1,10 @@
 "use client";
 
-import { useFavorites, FavoriteLimitReached } from "@/lib/hooks/useFavorites";
+import {
+  useFavorites,
+  FavoriteLimitReached,
+  AuthRequiredError,
+} from "@/lib/hooks/useFavorites";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { canAccessListing } from "@/lib/auth/insiderGate";
@@ -15,7 +19,7 @@ interface Props {
 export function FavButton({ listingId, tags, className = "" }: Props) {
   const { isFavorited, toggle, hydrated } = useFavorites();
   const { user } = useAuth();
-  const { openUpgrade, profile } = useAuthContext();
+  const { openUpgrade, openOnboarding, profile } = useAuthContext();
   const active = hydrated && isFavorited(listingId);
   const locked = tags ? !canAccessListing({ tags }, profile?.plan) : false;
 
@@ -29,7 +33,9 @@ export function FavButton({ listingId, tags, className = "" }: Props) {
     try {
       toggle(listingId, { plan: user?.plan });
     } catch (err) {
-      if (err instanceof FavoriteLimitReached) {
+      if (err instanceof AuthRequiredError) {
+        openOnboarding(0);
+      } else if (err instanceof FavoriteLimitReached) {
         openUpgrade();
       }
     }

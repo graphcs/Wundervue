@@ -1,106 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
+import { useAuthContext } from "@/components/auth/AuthProvider";
+import {
+  AuthRequiredError,
+  createUserCollectionStore,
+  useUserCollection,
+} from "./userCollection";
 
-const STORAGE_KEY = "wv.favorites";
-const FREE_LIMIT = 5;
-// Same-tab writes don't fire the native `storage` event, so we dispatch
-// our own and have every hook instance listen — keeps fav button,
-// dropdown count, and saved-events panel in sync without a refresh.
-const SYNC_EVENT = "wv.favorites:change";
+const FREE_LIMIT = 10;
+
+export { AuthRequiredError };
 
 export class FavoriteLimitReached extends Error {
   constructor() {
-    super("Free plan limited to 5 favorites");
+    super(`Free plan limited to ${FREE_LIMIT} favorites`);
     this.name = "FavoriteLimitReached";
   }
 }
 
-function readInitial(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw) as Array<string | number>;
-    return new Set(arr.map((v) => String(v)));
-  } catch {
-    return new Set();
-  }
-}
-
-function persist(set: Set<string>) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
-    // Defer the dispatch so subscribers don't setState synchronously during
-    // the firing component's render commit (React errors with
-    // "Cannot update a component while rendering a different component").
-    queueMicrotask(() => window.dispatchEvent(new Event(SYNC_EVENT)));
-  } catch {
-    // ignore
-  }
-}
+// Module-level singleton so every fav button / dropdown / panel shares state.
+// NB: favorites.listing_id is a uuid column, so only DB-backed listings persist.
+// Favoriting an in-memory fixture listing (non-uuid id) optimistically toggles
+// but the insert is rejected and rolled back — acceptable since fixtures are
+// demo-only and real listings always carry uuids.
+const store = createUserCollectionStore({ table: "favorites", idColumn: "listing_id" });
 
 export function useFavorites() {
-  const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
-  const [hydrated, setHydrated] = useState(false);
-  // Mirror state in a ref so the limit check can run synchronously outside
-  // setFavorites — throwing inside the setState updater would surface to
-  // React's error boundary instead of the caller's try/catch under
-  // concurrent React.
-  const favoritesRef = useRef<Set<string>>(favorites);
+  const { session, hydrated: authHydrated } = useAuthContext();
+  const userId = session?.userId ?? null;
+  const { ids: favorites, loaded } = useUserCollection(store, userId, authHydrated);
 
-  useEffect(() => {
-    favoritesRef.current = favorites;
-  }, [favorites]);
-
-  useEffect(() => {
-    const sync = () => {
-      const initial = readInitial();
-      favoritesRef.current = initial;
-      setFavorites(initial);
-    };
-    sync();
-    setHydrated(true);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) sync();
-    };
-    window.addEventListener(SYNC_EVENT, sync);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(SYNC_EVENT, sync);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
-
-  const isFavorited = useCallback(
-    (id: string) => favorites.has(id),
-    [favorites],
-  );
+  const isFavorited = useCallback((id: string) => store.has(id), []);
 
   const toggle = useCallback(
     (id: string, opts: { plan?: "free" | "insider" } = {}) => {
-      const current = favoritesRef.current;
-      const isAdding = !current.has(id);
-      if (
-        isAdding &&
-        opts.plan !== "insider" &&
-        current.size >= FREE_LIMIT
-      ) {
+      if (!userId) throw new AuthRequiredError();
+      const isAdding = !store.has(id);
+      if (isAdding && opts.plan !== "insider" && store.getIds().size >= FREE_LIMIT) {
         throw new FavoriteLimitReached();
       }
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        favoritesRef.current = next;
-        persist(next);
-        return next;
-      });
+      store.mutate(id, isAdding);
     },
-    [],
+    [userId],
   );
 
-  return { favorites, isFavorited, toggle, hydrated, limit: FREE_LIMIT };
+  return {
+    favorites,
+    isFavorited,
+    toggle,
+    hydrated: authHydrated && loaded,
+    limit: FREE_LIMIT,
+  };
 }

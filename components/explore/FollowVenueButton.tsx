@@ -2,9 +2,8 @@
 
 import {
   useFollowedVenues,
-  FollowLimitReached,
+  AuthRequiredError,
 } from "@/lib/hooks/useFollowedVenues";
-import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 
 interface Props {
@@ -13,16 +12,15 @@ interface Props {
 
 export function FollowVenueButton({ venueId }: Props) {
   const { isFollowed, toggle, hydrated } = useFollowedVenues();
-  const { user } = useAuth();
-  const { openUpgrade } = useAuthContext();
+  const { openOnboarding } = useAuthContext();
   const active = hydrated && isFollowed(venueId);
 
   const handleClick = () => {
     try {
-      toggle(venueId, { plan: user?.plan });
+      toggle(venueId);
     } catch (err) {
-      if (err instanceof FollowLimitReached) {
-        openUpgrade();
+      if (err instanceof AuthRequiredError) {
+        openOnboarding(0);
       }
     }
   };
