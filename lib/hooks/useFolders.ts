@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuthContext } from "@/components/auth/AuthProvider";
+import { randomShareSlug } from "@/lib/shareSlug";
 
 export interface Folder {
   id: string;
@@ -59,28 +60,41 @@ export function useFolders() {
       if (!isInsider) throw new FolderInsiderError();
       const sb = getSupabaseBrowserClient();
       // share_slug has no DB default on the production table, so mint one here.
-      const shareSlug = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+      const shareSlug = randomShareSlug();
       const { data, error } = await sb
         .from("saved_folders")
         .insert({ user_id: userId, name: name.trim(), kind, share_slug: shareSlug })
         .select("id, name, kind, share_slug")
         .single();
-      if (error) throw error;
-      await refresh();
+      if (error) {
+        console.error("[useFolders] create failed", error.code, error.message, error.details);
+        // Re-throw as a real Error so the message survives (Supabase's error
+        // object renders as "{}" in the console/overlay).
+        throw new Error(error.message || error.code || "Could not create folder");
+      }
       const row = data as { id: string; name: string; kind: "basic" | "advanced"; share_slug: string };
-      return { id: row.id, name: row.name, kind: row.kind, shareSlug: row.share_slug };
+      const folder: Folder = { id: row.id, name: row.name, kind: row.kind, shareSlug: row.share_slug };
+      // Append to local state immediately so the folder shows in the chips and
+      // every item's dropdown without waiting for a re-fetch.
+      setFolders((prev) => [...prev, folder]);
+      return folder;
     },
-    [userId, isInsider, refresh],
+    [userId, isInsider],
   );
 
   const remove = useCallback(
     async (id: string): Promise<void> => {
+      // Drop from local state immediately; re-sync from the server if the
+      // delete fails.
+      setFolders((prev) => prev.filter((f) => f.id !== id));
       const sb = getSupabaseBrowserClient();
       // Detach any saved items first so they don't point at a dead folder.
       await sb.from("favorites").update({ folder_id: null }).eq("folder_id", id);
       const { error } = await sb.from("saved_folders").delete().eq("id", id);
-      if (error) throw error;
-      await refresh();
+      if (error) {
+        await refresh();
+        throw error;
+      }
     },
     [refresh],
   );

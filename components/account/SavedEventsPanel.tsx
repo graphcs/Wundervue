@@ -6,6 +6,7 @@ import { useAuthContext } from "@/components/auth/AuthProvider";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useFolders, FolderInsiderError } from "@/lib/hooks/useFolders";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { randomShareSlug } from "@/lib/shareSlug";
 import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
@@ -106,6 +107,7 @@ export function SavedEventsPanel() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [savesShareSlug, setSavesShareSlug] = useState<string | null>(null);
   const favIds = Array.from(favorites);
   const favKey = favIds.sort().join(",");
@@ -134,7 +136,7 @@ export function SavedEventsPanel() {
 
   async function mintSavesShare() {
     if (!userId) return;
-    const slug = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const slug = randomShareSlug();
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase
       .from("profiles")
@@ -220,6 +222,7 @@ export function SavedEventsPanel() {
       return;
     }
     setNewName("");
+    setCreateError(null);
     setCreating(true);
   }
 
@@ -227,6 +230,7 @@ export function SavedEventsPanel() {
     const name = newName.trim();
     if (!name || saving) return;
     setSaving(true);
+    setCreateError(null);
     try {
       const folder = await create(name);
       setActiveFolder(folder.id);
@@ -234,7 +238,7 @@ export function SavedEventsPanel() {
       setNewName("");
     } catch (err) {
       if (err instanceof FolderInsiderError) openUpgrade();
-      else console.error("[SavedEventsPanel] create folder failed", err);
+      else setCreateError(err instanceof Error ? err.message : "Could not create folder");
     } finally {
       setSaving(false);
     }
@@ -443,6 +447,9 @@ export function SavedEventsPanel() {
             )}
             New folder{!isInsider && " · Insider"}
           </button>
+        )}
+        {createError && (
+          <span className="text-coral mt-0.5 w-full text-[11px]">{createError}</span>
         )}
       </div>
 
