@@ -7,6 +7,7 @@ import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useFolders, FolderInsiderError } from "@/lib/hooks/useFolders";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { randomShareSlug } from "@/lib/shareSlug";
+import { isPastListing } from "@/lib/listings/isPast";
 import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
@@ -298,15 +299,8 @@ export function SavedEventsPanel() {
   }, [savedEventsOpen, favKey]);
 
   // A saved listing is "past" once its effective end is before today.
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const cutoff = todayStart.getTime();
-  const isPast = (l: Listing) => {
-    const end = l.endAt ?? l.startAt;
-    if (!end) return false;
-    const t = Date.parse(end);
-    return !Number.isNaN(t) && t < cutoff;
-  };
+  const now = new Date();
+  const isPast = (l: Listing) => isPastListing(l, now);
   const typeMatch = (l: Listing) =>
     typeFilter === "all"
       ? true

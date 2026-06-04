@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Listing } from "@/lib/types";
 import {
   getVenueBySlugAsync,
   getVenueListingsAllAsync,
 } from "@/lib/data/listings.server";
+import { isPastListing } from "@/lib/listings/isPast";
 import { VenueHeader } from "@/components/explore/VenueHeader";
 import { VenueTabs } from "@/components/explore/VenueTabs";
 
@@ -29,15 +29,6 @@ export async function generateMetadata({
   };
 }
 
-// A listing is "past" once its effective end (date_end ?? date_start) is before
-// the start of today. Undated listings (perpetual deals) are never past.
-function isPast(l: Listing, todayStart: number): boolean {
-  const end = l.endAt ?? l.startAt;
-  if (!end) return false;
-  const t = Date.parse(end);
-  return !Number.isNaN(t) && t < todayStart;
-}
-
 export default async function VenuePage({ params }: PageProps) {
   const { slug } = await params;
   const venue = await getVenueBySlugAsync(slug);
@@ -45,12 +36,9 @@ export default async function VenuePage({ params }: PageProps) {
 
   const listings = await getVenueListingsAllAsync(slug);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const cutoff = todayStart.getTime();
-
-  const live = listings.filter((l) => !isPast(l, cutoff));
-  const past = listings.filter((l) => isPast(l, cutoff));
+  const now = new Date();
+  const live = listings.filter((l) => !isPastListing(l, now));
+  const past = listings.filter((l) => isPastListing(l, now));
   const upcoming = live.filter((l) => l.type === "event" || l.type === "both");
   const deals = live.filter((l) => l.type === "deal" || l.type === "both");
 
