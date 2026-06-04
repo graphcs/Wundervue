@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useFollowedVenues } from "@/lib/hooks/useFollowedVenues";
@@ -31,7 +32,6 @@ export function ProfileDropdown({ onClose }: Props) {
     signOut,
     openSavedEvents,
     openSavedVenues,
-    openSettings,
     openUpgrade,
     openManageSub,
   } = useAuthContext();
@@ -91,14 +91,14 @@ export function ProfileDropdown({ onClose }: Props) {
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => run(openSettings)}
+        <Link
+          href="/account"
+          onClick={onClose}
           className="hover:bg-tag-bg text-dark flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors"
         >
           <MenuIcon path={<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>} />
-          Account Settings
-        </button>
+          Account
+        </Link>
 
         {profile.plan === "free" ? (
           <button

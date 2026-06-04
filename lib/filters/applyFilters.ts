@@ -3,6 +3,7 @@ import {
   neighborhoodLabel,
   neighborhoodSlug,
 } from "@/lib/data/neighborhoods";
+import { locationMatchesSelection } from "@/lib/data/locations";
 import { categoryLabel, categorySlug } from "@/lib/data/categories";
 
 function startOfDay(d: Date): Date {
@@ -62,6 +63,24 @@ function getDateRange(
   }
 }
 
+// Sort a filtered list by the user's chosen ordering. Listings without a
+// start time sort last regardless of direction (they have no place on a
+// soonest/latest timeline).
+export function sortListings(listings: Listing[], sort: Filters["sort"]): Listing[] {
+  const time = (l: Listing) => {
+    const t = l.startAt ? Date.parse(l.startAt) : NaN;
+    return Number.isNaN(t) ? null : t;
+  };
+  return [...listings].sort((a, b) => {
+    const ta = time(a);
+    const tb = time(b);
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1; // a has no date → after b
+    if (tb === null) return -1;
+    return sort === "latest" ? tb - ta : ta - tb;
+  });
+}
+
 export function applyFilters(
   listings: Listing[],
   filters: Filters,
@@ -73,16 +92,17 @@ export function applyFilters(
   const tags = new Set(filters.lifestyle);
   const q = filters.q?.trim().toLowerCase();
 
-  return listings.filter((l) => {
+  const matched = listings.filter((l) => {
     if (filters.type === "events" && l.type !== "event" && l.type !== "both")
       return false;
     if (filters.type === "deals" && l.type !== "deal" && l.type !== "both")
       return false;
     if (filters.type === "both" && l.type !== "both") return false;
 
-    if (hoods.size) {
-      const slug = neighborhoodSlug(l.neighborhood);
-      if (!slug || !hoods.has(slug)) return false;
+    // Hierarchical location match: a selected region/city slug also matches
+    // listings in its descendant neighborhoods (lib/data/locations.ts).
+    if (hoods.size && !locationMatchesSelection(l.neighborhood, hoods)) {
+      return false;
     }
 
     if (cats.size) {
@@ -114,6 +134,8 @@ export function applyFilters(
 
     return true;
   });
+
+  return sortListings(matched, filters.sort);
 }
 
 export { neighborhoodLabel, neighborhoodSlug, categoryLabel, categorySlug };

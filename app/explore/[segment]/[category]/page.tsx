@@ -54,8 +54,8 @@ export default async function ExploreCombinedPage({
   const all = await getMergedListings();
   const filtered = applyFilters(all, filters);
 
-  const isMap = filters.view === "map";
-  const { items, page, totalPages } = isMap
+  const showAll = filters.view === "map" || filters.view === "calendar";
+  const { items, page, totalPages } = showAll
     ? { items: filtered, page: 1, totalPages: 1 }
     : paginate(filtered, sp, filters.pageSize);
 

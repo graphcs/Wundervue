@@ -1,6 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL } from "@/lib/supabase/env";
-import { deleteListingImagesBySlug } from "@/lib/ingest/uploadImage";
 
 export interface ExpireOptions {
   apply: boolean;
@@ -11,8 +10,8 @@ export interface ExpireOptions {
 export interface ExpireResult {
   cutoff: string;
   found: number;
-  deleted: number;
-  imagesDeleted: number;
+  /** Rows newly flagged is_past on this run. */
+  flagged: number;
   rows: Array<{ id: string; title: string; type: string; date_start: string | null; date_end: string | null }>;
 }
 
@@ -47,10 +46,12 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
 
   // Effective end date is COALESCE(date_end, date_start). We match either
   // (date_end < cutoff) OR (date_end IS NULL AND date_start < cutoff).
-  // Rows with both null are perpetual deals — skip them.
+  // Rows with both null are perpetual deals — skip them. Already-flagged rows
+  // are skipped so the run is idempotent.
   let q = c
     .from("listings")
     .select("id, slug, title, type, date_start, date_end")
+    .eq("is_past", false)
     .or(
       `date_end.lt.${cutoff},and(date_end.is.null,date_start.lt.${cutoff})`,
     );
@@ -66,26 +67,20 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
   }
   if (rows.length > 20) log(`  …and ${rows.length - 20} more`);
 
-  let deleted = 0;
-  let imagesDeleted = 0;
+  let flagged = 0;
   if (opts.apply && rows.length > 0) {
-    // Drop storage objects first — if it fails we still want to free the row.
-    // A leaked storage object is cheaper than a stuck table row, and the bucket
-    // can be swept periodically with a separate maintenance job if needed.
-    try {
-      imagesDeleted = await deleteListingImagesBySlug(rows.map((r) => r.slug));
-    } catch (err) {
-      log(`[expire-past-events] storage cleanup failed (continuing): ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    const { error: delErr } = await c
+    // Soft-flag, don't delete. The row + its image are kept so a user's
+    // previously-saved event still resolves on its detail page and can power
+    // the Past Saved tab / venue archives. The main feed already hides these
+    // via its `date_start >= today` filter.
+    const { error: updErr } = await c
       .from("listings")
-      .delete()
+      .update({ is_past: true })
       .in("id", rows.map((r) => r.id));
-    if (delErr) throw new Error(`delete failed: ${delErr.message}`);
-    deleted = rows.length;
-    log(`[expire-past-events] deleted ${deleted} rows, ${imagesDeleted} storage objects`);
+    if (updErr) throw new Error(`flag failed: ${updErr.message}`);
+    flagged = rows.length;
+    log(`[expire-past-events] flagged ${flagged} rows is_past`);
   }
 
-  return { cutoff, found: rows.length, deleted, imagesDeleted, rows };
+  return { cutoff, found: rows.length, flagged, rows };
 }

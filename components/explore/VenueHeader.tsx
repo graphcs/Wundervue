@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Venue } from "@/lib/types";
 import { getListingsByVenueId } from "@/lib/data/listings";
+import { venueCategoryLabel } from "@/lib/data/categories";
 import { buildDirectionsUrl } from "@/lib/links";
 import { FollowVenueButton } from "./FollowVenueButton";
 import {
@@ -11,10 +12,14 @@ import {
 interface Props {
   venue: Venue;
   showClose?: boolean;
+  // Total listings at this venue. Provided by the DB-backed venue page; the
+  // explore overlay omits it and falls back to the fixture count.
+  listingCount?: number;
 }
 
-export function VenueHeader({ venue, showClose = false }: Props) {
-  const eventCount = getListingsByVenueId(venue.id).length;
+export function VenueHeader({ venue, showClose = false, listingCount }: Props) {
+  const eventCount = listingCount ?? getListingsByVenueId(venue.id).length;
+  const categories = venue.categories ?? [];
 
   return (
     <section className="border-border relative mb-6 rounded-2xl border bg-white px-6 py-5">
@@ -51,6 +56,19 @@ export function VenueHeader({ venue, showClose = false }: Props) {
           </p>
         </div>
 
+        {categories.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((slug) => (
+              <span
+                key={slug}
+                className="bg-tag-bg text-graphite rounded-full px-2.5 py-1 text-[11px] font-medium"
+              >
+                {venueCategoryLabel(slug)}
+              </span>
+            ))}
+          </div>
+        )}
+
         <p className="text-graphite text-[14px] leading-relaxed">
           {venue.description}
         </p>
@@ -72,7 +90,7 @@ export function VenueHeader({ venue, showClose = false }: Props) {
         </div>
 
         <div className="mt-1">
-          <FollowVenueButton venueId={venue.id} />
+          <FollowVenueButton venueId={venue.slug} />
         </div>
       </div>
     </section>

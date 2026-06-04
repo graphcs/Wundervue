@@ -27,7 +27,8 @@ function getClient(): ApifyClient {
 }
 
 export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
-  if (!source.url) {
+  const urls = Array.isArray(source.url) ? source.url : source.url ? [source.url] : [];
+  if (urls.length === 0) {
     throw new Error(`source ${source.id} missing url`);
   }
   const client = getClient();
@@ -35,7 +36,7 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
   const run = await withRetry(() =>
     client.actor(ACTOR_ID).call(
       {
-        startUrls: [{ url: source.url }],
+        startUrls: urls.map((url) => ({ url })),
         // Default page-function returns title/description/url/image per page.
         // For source-specific extraction, override via Apify console for that actor.
         // Image-picking helpers (isUsableUrl / pickFromSrcset / pickImageAttr)
@@ -83,7 +84,7 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
             return items;
           }
         `,
-        maxRequestsPerCrawl: 1,
+        maxRequestsPerCrawl: urls.length,
       },
       { timeout: 300 },
     ),
@@ -92,21 +93,29 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   const rows = items as ApifyWebItem[];
 
-  return rows
-    .filter((r) => (r.text ?? r.description ?? r.title)?.trim())
-    .map((r): RawItem => {
-      const body = [r.title, r.description, r.text].filter(Boolean).join("\n\n");
-      // Content hash so re-runs against re-ordered Apify dataset output still
-      // upsert the same row. r.url is usually item-unique on its own, but the
-      // hash also covers the case where two items share a URL (e.g. multi-tab
-      // listing pages that resolve to the same canonical link).
-      const contentHash = createHash("sha1").update(body).digest("hex").slice(0, 12);
-      return {
-        sourceId: `${source.id}:${r.url ?? "no-url"}#${contentHash}`,
-        sourceUrl: r.url,
-        text: body,
-        imageUrl: r.image,
-        fetchedAt: r.loadedTime ?? new Date().toISOString(),
-      };
+  // Dedupe by source_id within the run: duplicate (source, source_id) rows
+  // would fail the batch upsert with "ON CONFLICT DO UPDATE command cannot
+  // affect row a second time".
+  const seen = new Set<string>();
+  const out: RawItem[] = [];
+  for (const r of rows) {
+    if (!(r.text ?? r.description ?? r.title)?.trim()) continue;
+    const body = [r.title, r.description, r.text].filter(Boolean).join("\n\n");
+    // Content hash so re-runs against re-ordered Apify dataset output still
+    // upsert the same row. r.url is usually item-unique on its own, but the
+    // hash also covers the case where two items share a URL (e.g. multi-tab
+    // listing pages that resolve to the same canonical link).
+    const contentHash = createHash("sha1").update(body).digest("hex").slice(0, 12);
+    const sourceId = `${source.id}:${r.url ?? "no-url"}#${contentHash}`;
+    if (seen.has(sourceId)) continue;
+    seen.add(sourceId);
+    out.push({
+      sourceId,
+      sourceUrl: r.url,
+      text: body,
+      imageUrl: r.image,
+      fetchedAt: r.loadedTime ?? new Date().toISOString(),
     });
+  }
+  return source.maxItems ? out.slice(0, source.maxItems) : out;
 }

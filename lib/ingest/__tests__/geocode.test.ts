@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeForGeocoder } from "../geocode";
+import { inDenverMetro, sanitizeForGeocoder } from "../geocode";
+
+describe("inDenverMetro", () => {
+  it("accepts points across the metro (Denver, Boulder, Golden, Parker)", () => {
+    expect(inDenverMetro(39.7392, -104.9903)).toBe(true); // Downtown Denver
+    expect(inDenverMetro(40.015, -105.2705)).toBe(true); // Boulder
+    expect(inDenverMetro(39.7555, -105.2211)).toBe(true); // Golden
+    expect(inDenverMetro(39.5186, -104.7614)).toBe(true); // Parker
+  });
+
+  it("rejects out-of-region results (the 'Washington Park → WA state' bug)", () => {
+    expect(inDenverMetro(47.7511, -120.7401)).toBe(false); // Washington state
+    expect(inDenverMetro(40.8136, -96.7026)).toBe(false); // Lincoln, NE
+    expect(inDenverMetro(0, 0)).toBe(false);
+  });
+});
 
 describe("sanitizeForGeocoder", () => {
   it("strips Unit/Suite/Apt fragments and the trailing ', USA'", () => {

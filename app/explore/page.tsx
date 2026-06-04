@@ -27,8 +27,9 @@ export default async function ExplorePage({ searchParams }: PageProps) {
   const filtered = applyFilters(all, filters);
   const ordered = reorderForPlan(filtered, plan);
 
-  const isMap = filters.view === "map";
-  const { items, page, totalPages } = isMap
+  // Map + calendar show the full filtered set (no pagination); grid paginates.
+  const showAll = filters.view === "map" || filters.view === "calendar";
+  const { items, page, totalPages } = showAll
     ? { items: ordered, page: 1, totalPages: 1 }
     : paginate(ordered, sp, filters.pageSize);
 

@@ -5,6 +5,23 @@
 // repeated venues within a single ingest run.
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
+
+// Denver Metro bounding box (generous: Boulder/Lyons/Longmont in the north,
+// Parker/Lone Tree in the south, Golden/Morrison west, Aurora east). Any
+// geocode result outside this is a mismatch — e.g. "Washington Park" resolving
+// to Washington *state*, or "Lincoln St" to Nebraska. We reject those rather
+// than pin a Denver listing thousands of miles away on the map.
+const DENVER_BBOX = { minLat: 39.3, maxLat: 40.4, minLng: -105.5, maxLng: -104.4 };
+
+export function inDenverMetro(lat: number, lng: number): boolean {
+  return (
+    lat >= DENVER_BBOX.minLat &&
+    lat <= DENVER_BBOX.maxLat &&
+    lng >= DENVER_BBOX.minLng &&
+    lng <= DENVER_BBOX.maxLng
+  );
+}
 // OSM policy requires a real contact in the User-Agent. We default to the
 // production identity but allow staging/dev to override via env so changes
 // don't require a code edit.
@@ -81,12 +98,76 @@ export async function geocode(address: string): Promise<GeocodeResult | null> {
       cache.set(key, null);
       return null;
     }
+    // Reject results outside Denver Metro — a wrong-region pin (Washington
+    // state, Nebraska, etc.) is worse than no pin. Cache the rejection so we
+    // don't re-query the same bad address within a run.
+    if (!inDenverMetro(lat, lng)) {
+      console.error(`[geocode] out-of-region result for ${address}: ${lat},${lng}`);
+      cache.set(key, null);
+      return null;
+    }
     const result: GeocodeResult = { lat, lng };
     cache.set(key, result);
     return result;
   } catch (err) {
     // Network failure / timeout / abort — transient, don't poison the cache.
     console.error(`[geocode] fetch failed for ${address}`, err);
+    return null;
+  }
+}
+
+export interface ReverseGeocodeResult {
+  /** OSM "neighbourhood"/"suburb" — best candidate for our neighborhood match. */
+  neighbourhood?: string;
+  suburb?: string;
+  /** city / town / village. */
+  city?: string;
+}
+
+const reverseCache = new Map<string, ReverseGeocodeResult | null>();
+
+// Coordinates → place names via Nominatim reverse geocoding. Used as a fallback
+// when the LLM can't confidently name a neighborhood but we have a pinned
+// location. Returns the suburb/neighbourhood/city strings; the caller resolves
+// them against the taxonomy (lib/data/locations.ts).
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<ReverseGeocodeResult | null> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!inDenverMetro(lat, lng)) return null;
+  const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  if (reverseCache.has(key)) return reverseCache.get(key) ?? null;
+
+  await paceForRateLimit();
+  const url = new URL(NOMINATIM_REVERSE_URL);
+  url.searchParams.set("lat", String(lat));
+  url.searchParams.set("lon", String(lng));
+  url.searchParams.set("format", "json");
+  url.searchParams.set("zoom", "16"); // neighbourhood-level detail
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, "Accept-Language": "en" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      console.error(`[geocode] reverse non-2xx for ${key}: ${res.status}`);
+      return null;
+    }
+    const data = (await res.json()) as {
+      address?: Record<string, string | undefined>;
+    };
+    const a = data.address ?? {};
+    const result: ReverseGeocodeResult = {
+      neighbourhood: a.neighbourhood,
+      suburb: a.suburb,
+      city: a.city ?? a.town ?? a.village,
+    };
+    reverseCache.set(key, result);
+    return result;
+  } catch (err) {
+    console.error(`[geocode] reverse fetch failed for ${key}`, err);
     return null;
   }
 }

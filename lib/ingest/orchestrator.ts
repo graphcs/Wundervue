@@ -3,9 +3,13 @@ import { fetchInstagram } from "./connectors/instagram";
 import { fetchSerpEvents } from "./connectors/serpEvents";
 import { fetchApifyWeb } from "./connectors/apifyWeb";
 import { fetchCheerioWeb } from "./connectors/cheerioWeb";
+import { fetchVenuePilot } from "./connectors/venuePilot";
+import { fetchWixEvents } from "./connectors/wixEvents";
+import { fetchFullCalendarFeed } from "./connectors/fullCalendarFeed";
+import { fetchMlbSchedule } from "./connectors/mlbSchedule";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
-import { clusterAndMarkDuplicates } from "./dedupCluster";
+import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -31,6 +35,14 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchApifyWeb(source);
     case "cheerioWeb":
       return fetchCheerioWeb(source);
+    case "venuePilot":
+      return fetchVenuePilot(source);
+    case "wixEvents":
+      return fetchWixEvents(source);
+    case "fullCalendarFeed":
+      return fetchFullCalendarFeed(source);
+    case "mlbSchedule":
+      return fetchMlbSchedule(source);
   }
 }
 
@@ -120,6 +132,17 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
       fuzzyMarked = cluster.markedDuplicate;
     } catch (err) {
       console.error(`[ingest:${source.id}] cluster pass failed`, err);
+    }
+
+    // Venue-scoped title dedup: merges the same exhibition/event posted to a
+    // venue multiple times with different (or no) dates — the case the same-day
+    // cluster pass above can't see. Safe for recurring series (a date-distance
+    // guard keeps weekly same-title events separate).
+    try {
+      const merged = await mergeVenueTitleDuplicates(source.sourceLabel);
+      fuzzyMarked += merged.markedDuplicate;
+    } catch (err) {
+      console.error(`[ingest:${source.id}] venue-title dedup failed`, err);
     }
 
     const result: IngestResult = {

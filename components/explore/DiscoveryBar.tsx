@@ -3,13 +3,14 @@
 import { useState, type FormEvent } from "react";
 import { Pill } from "@/components/ui/Pill";
 import { MultiDropdownPill } from "./MultiDropdownPill";
+import { LocationFilterDropdown } from "./LocationFilterDropdown";
+import { SortDropdown } from "./SortDropdown";
 import { DateDropdown } from "./DateDropdown";
 import { useFilters } from "@/lib/hooks/useFilters";
 import { useAuthContext } from "@/components/auth/AuthProvider";
-import { NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { CATEGORIES } from "@/lib/data/categories";
 import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
-import type { LifestyleTag, TypeFilter } from "@/lib/types";
+import type { LifestyleTag, TypeFilter, ViewMode } from "@/lib/types";
 
 function SearchIcon() {
   return (
@@ -64,9 +65,29 @@ function MapPinIcon({ active }: { active: boolean }) {
   );
 }
 
+function CalendarIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? "#fff" : "#121821"}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 interface ViewToggleProps {
-  value: "grid" | "map";
-  onChange: (v: "grid" | "map") => void;
+  value: ViewMode;
+  onChange: (v: ViewMode) => void;
   mapDisabled?: boolean;
 }
 
@@ -97,6 +118,16 @@ function ViewToggle({ value, onChange, mapDisabled = false }: ViewToggleProps) {
         <MapPinIcon active={value === "map"} />
         Map
       </button>
+      <button
+        type="button"
+        onClick={() => onChange("calendar")}
+        className={`${base} ${
+          value === "calendar" ? "bg-dark text-white" : "text-graphite hover:text-dark"
+        }`}
+      >
+        <CalendarIcon active={value === "calendar"} />
+        Calendar
+      </button>
     </div>
   );
 }
@@ -121,7 +152,6 @@ export function DiscoveryBar() {
     replaceFilters({ q: q.trim() || undefined });
   };
 
-  const hoodOptions = NEIGHBORHOODS.filter((n) => n.slug !== pathNeighborhood);
   const catOptions = CATEGORIES.filter((c) => c.slug !== pathCategory);
 
   return (
@@ -179,13 +209,17 @@ export function DiscoveryBar() {
             }
           />
 
-          <MultiDropdownPill
-            label="Neighborhood"
-            options={hoodOptions}
+          <LocationFilterDropdown
+            label="Location"
             selected={filters.neighborhoods.filter(
               (s) => s !== pathNeighborhood,
             )}
             onToggle={toggleNeighborhood}
+            onClear={() =>
+              replaceFilters({
+                neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
+              })
+            }
           />
 
           <MultiDropdownPill
@@ -221,6 +255,13 @@ export function DiscoveryBar() {
           >
             Free Only
           </Pill>
+
+          <div className="mx-1.5 h-[18px] w-px bg-[#d5d5d5]" />
+
+          <SortDropdown
+            value={filters.sort}
+            onChange={(sort) => replaceFilters({ sort })}
+          />
 
           <div className="ml-auto">
             <ViewToggle

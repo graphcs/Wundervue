@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CATEGORIES } from "@/lib/data/categories";
-import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
+import { LLM_LOCATION_LABELS } from "@/lib/data/locations";
 import { withRetry } from "./retry";
 import type { NormalizedListing, RawItem, SourceConfig } from "./types";
 
@@ -26,7 +26,8 @@ export function buildOpenRouterClient(): Anthropic {
 }
 
 const ALLOWED_CATEGORIES = CATEGORIES.map((c) => c.label);
-const ALLOWED_NEIGHBORHOODS = ONBOARDING_NEIGHBORHOODS;
+// Full Denver Metro taxonomy: Central Denver neighborhoods + suburb cities.
+const ALLOWED_NEIGHBORHOODS = LLM_LOCATION_LABELS;
 
 const TOOL_SCHEMA: Anthropic.Tool = {
   name: TOOL_NAME,

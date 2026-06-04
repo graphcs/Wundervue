@@ -14,6 +14,32 @@ function isCadence(value: string | null): value is Cadence {
   return value !== null && (VALID_TIERS as string[]).includes(value);
 }
 
+// Parse optional `shards`/`shard` query params for splitting one cadence across
+// multiple cron invocations (so a large tier stays under the function timeout).
+// Returns null on malformed input so the caller can 400. Absent params mean
+// "run the whole tier" → { shards: 1, shard: 0 }.
+function parseShard(
+  params: URLSearchParams,
+): { shards: number; shard: number } | null {
+  const shardsRaw = params.get("shards");
+  const shardRaw = params.get("shard");
+  if (shardsRaw === null && shardRaw === null) {
+    return { shards: 1, shard: 0 };
+  }
+  const shards = Number(shardsRaw);
+  const shard = Number(shardRaw);
+  if (
+    !Number.isInteger(shards) ||
+    !Number.isInteger(shard) ||
+    shards < 1 ||
+    shard < 0 ||
+    shard >= shards
+  ) {
+    return null;
+  }
+  return { shards, shard };
+}
+
 async function runWithConcurrency<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
@@ -39,7 +65,14 @@ async function handle(request: NextRequest): Promise<Response> {
   if (!isCadence(tier)) {
     return new Response(`invalid tier: ${tier}`, { status: 400 });
   }
-  const sources = getEnabledSources(tier);
+  const sharding = parseShard(request.nextUrl.searchParams);
+  if (!sharding) {
+    return new Response("invalid shard/shards", { status: 400 });
+  }
+  const { shards, shard } = sharding;
+  // Partition deterministically by index so the union of shard=0..shards-1
+  // covers every source exactly once with no overlap. shards=1 → all sources.
+  const sources = getEnabledSources(tier).filter((_s, i) => i % shards === shard);
   const results: IngestResult[] = await runWithConcurrency(
     sources,
     (s) => ingestSource(s),
@@ -50,7 +83,10 @@ async function handle(request: NextRequest): Promise<Response> {
   // failures stay 200 so a transient SerpAPI 503 doesn't page on-call.
   const allFailed = results.length > 0 && results.every((r) => r.status === "failed");
   const status = allFailed ? 500 : 200;
-  return Response.json({ tier, count: results.length, results }, { status });
+  return Response.json(
+    { tier, shard, shards, count: results.length, results },
+    { status },
+  );
 }
 
 export async function GET(request: NextRequest) {

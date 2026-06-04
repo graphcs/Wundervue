@@ -191,18 +191,19 @@ export async function getListingBySlugAsync(slug: string): Promise<Listing | und
 
 export async function getVenueBySlugAsync(slug: string): Promise<Venue | undefined> {
   const fixture = getFixtureVenueBySlug(slug);
-  if (fixture) return fixture;
+  // Even for a fixture venue, prefer DB categories (the fixture has none).
   try {
     const client = await getSupabaseServerClient();
     const { data } = await client
       .from("venues")
-      .select("id, slug, name, description, address, neighborhood, image_url, lat, lng")
+      .select("id, slug, name, description, address, neighborhood, image_url, lat, lng, categories")
       .eq("slug", slug)
       .maybeSingle();
-    if (!data) return undefined;
+    if (!data) return fixture;
     const r = data as {
       id: string; slug: string; name: string; description: string; address: string;
       neighborhood: string; image_url: string | null; lat: number | null; lng: number | null;
+      categories: string[] | null;
     };
     return {
       id: r.slug,
@@ -211,13 +212,14 @@ export async function getVenueBySlugAsync(slug: string): Promise<Venue | undefin
       description: r.description,
       address: r.address,
       neighborhood: r.neighborhood,
-      imageUrl: r.image_url ?? undefined,
+      imageUrl: r.image_url ?? fixture?.imageUrl ?? undefined,
       lat: r.lat ?? 0,
       lng: r.lng ?? 0,
+      categories: r.categories ?? [],
     };
   } catch (err) {
     console.error("[listings] getVenueBySlugAsync failed", err);
-    return undefined;
+    return fixture;
   }
 }
 
@@ -225,5 +227,116 @@ export async function getListingsByVenueSlugAsync(venueSlug: string): Promise<Li
   // Pull from merged set so fixture + scraped events at the same venue both surface.
   const all = await getMergedListings();
   return all.filter((l) => l.venueId === venueSlug);
+}
+
+// All published listings at a venue, INCLUDING past ones (no date cutoff), so
+// the venue page can show an archive tab. Falls back to the future-only merged
+// set for fixture-only venues that have no DB row.
+export async function getVenueListingsAllAsync(venueSlug: string): Promise<Listing[]> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { data: venueRow } = await client
+      .from("venues")
+      .select("id, slug, name")
+      .eq("slug", venueSlug)
+      .maybeSingle();
+    if (!venueRow) return getListingsByVenueSlugAsync(venueSlug);
+
+    const { data: rows } = await client
+      .from("listings")
+      .select(
+        "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
+      )
+      .eq("venue_id", (venueRow as { id: string }).id)
+      .not("published_at", "is", null)
+      .order("date_start", { ascending: true, nullsFirst: false });
+
+    const venueMap = new Map<string, DbVenueRow>();
+    venueMap.set((venueRow as DbVenueRow).id, venueRow as DbVenueRow);
+    const fromDb = ((rows ?? []) as DbListingRow[]).map((r) => rowToListing(r, venueMap));
+    if (fromDb.length > 0) return fromDb;
+    // No DB listings (e.g. fixture-only venue) — fall back to fixtures.
+    return getListingsByVenueSlugAsync(venueSlug);
+  } catch (err) {
+    console.error("[listings] getVenueListingsAllAsync failed", err);
+    return getListingsByVenueSlugAsync(venueSlug);
+  }
+}
+
+export interface BrowseVenue {
+  slug: string;
+  name: string;
+  description: string;
+  address: string;
+  neighborhood: string;
+  categories: string[];
+  upcomingCount: number;
+}
+
+// Real venues (from ingestion) that have at least one upcoming listing, sorted
+// by activity. Powers the /venues browse grid. Counts use the same "today UTC"
+// cutoff as the explore feed so "upcoming" means the same thing everywhere.
+export async function getBrowseVenues(): Promise<BrowseVenue[]> {
+  try {
+    const client = await getSupabaseServerClient();
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const cutoff = todayStart.toISOString();
+
+    const [venuesRes, listingsRes] = await Promise.all([
+      client.from("venues").select("id, slug, name, description, address, neighborhood, categories"),
+      client
+        .from("listings")
+        .select("venue_id")
+        .not("published_at", "is", null)
+        .not("venue_id", "is", null)
+        .gte("date_start", cutoff),
+    ]);
+
+    const counts = new Map<string, number>();
+    for (const r of (listingsRes.data ?? []) as Array<{ venue_id: string | null }>) {
+      if (!r.venue_id) continue;
+      counts.set(r.venue_id, (counts.get(r.venue_id) ?? 0) + 1);
+    }
+
+    const out: BrowseVenue[] = [];
+    for (const v of (venuesRes.data ?? []) as Array<{
+      id: string; slug: string; name: string; description: string | null; address: string | null;
+      neighborhood: string | null; categories: string[] | null;
+    }>) {
+      const upcomingCount = counts.get(v.id) ?? 0;
+      if (upcomingCount === 0) continue;
+      out.push({
+        slug: v.slug,
+        name: v.name,
+        description: v.description ?? "",
+        address: v.address ?? "",
+        neighborhood: v.neighborhood ?? "",
+        categories: v.categories ?? [],
+        upcomingCount,
+      });
+    }
+    out.sort((a, b) => b.upcomingCount - a.upcomingCount || a.name.localeCompare(b.name));
+    return out;
+  } catch (err) {
+    console.error("[listings] getBrowseVenues failed", err);
+    return [];
+  }
+}
+
+// slug → category slugs, for chips/filtering on the venues browse page.
+export async function getVenueCategoryMapBySlug(): Promise<Map<string, string[]>> {
+  try {
+    const client = await getSupabaseServerClient();
+    const { data } = await client.from("venues").select("slug, categories");
+    const map = new Map<string, string[]>();
+    for (const row of (data ?? []) as Array<{ slug: string; categories: string[] | null }>) {
+      if (row.categories && row.categories.length) map.set(row.slug, row.categories);
+    }
+    return map;
+  } catch (err) {
+    console.error("[listings] getVenueCategoryMapBySlug failed", err);
+    return new Map();
+  }
 }
 

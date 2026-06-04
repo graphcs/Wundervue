@@ -1,6 +1,7 @@
 import type { Filters, Listing } from "@/lib/types";
 import { ListingGrid } from "./ListingGrid";
 import { MapView } from "./MapView";
+import { CalendarView } from "./CalendarView";
 import { Pagination } from "./Pagination";
 import { PerPagePicker } from "./PerPagePicker";
 
@@ -22,6 +23,7 @@ export function ExploreResults({
   basePath,
 }: Props) {
   if (view === "map") return <MapView listings={listings} />;
+  if (view === "calendar") return <CalendarView listings={listings} />;
   return (
     <>
       <ListingGrid listings={listings} />
