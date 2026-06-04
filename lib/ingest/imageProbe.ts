@@ -60,6 +60,14 @@ export interface ImageProbeOk {
 export interface ImageProbeFail {
   ok: false;
   reason: string;
+  // Populated only when the fetch succeeded and the bytes decode to a real
+  // image, but it failed a *quality* check (too small / wrong aspect). Lets
+  // callers reuse the already-downloaded bytes as a graceful fallback (a real
+  // poster beats dropping the listing) without a second fetch. Absent for hard
+  // failures (network error, non-image, empty/placeholder body).
+  bytes?: Uint8Array;
+  contentType?: string;
+  ext?: ImageProbeOk["ext"];
 }
 
 export type ImageProbeResult = ImageProbeOk | ImageProbeFail;
@@ -92,12 +100,15 @@ export async function probeImage(url: string): Promise<ImageProbeResult> {
   const dims = readDimensions(buf);
   if (!dims) return { ok: false, reason: "unrecognized image format" };
 
+  // Quality rejects below carry the decoded bytes so callers can fall back to
+  // this real image if no better option (og:image, AI generation) pans out.
+  const ext = dims.ext === "gif" ? ("png" as const) : dims.ext;
   if (dims.width < MIN_WIDTH || dims.height < MIN_HEIGHT) {
-    return { ok: false, reason: `too small: ${dims.width}x${dims.height}` };
+    return { ok: false, reason: `too small: ${dims.width}x${dims.height}`, bytes: buf, contentType, ext };
   }
   const aspect = dims.width / dims.height;
   if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) {
-    return { ok: false, reason: `bad aspect ratio: ${aspect.toFixed(2)}` };
+    return { ok: false, reason: `bad aspect ratio: ${aspect.toFixed(2)}`, bytes: buf, contentType, ext };
   }
 
   return {
