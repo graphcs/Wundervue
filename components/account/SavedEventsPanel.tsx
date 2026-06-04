@@ -108,6 +108,7 @@ export function SavedEventsPanel() {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [savesShareSlug, setSavesShareSlug] = useState<string | null>(null);
   const favIds = Array.from(favorites);
   const favKey = favIds.sort().join(",");
@@ -201,7 +202,6 @@ export function SavedEventsPanel() {
   }
 
   async function handleDeleteFolder(id: string) {
-    if (!window.confirm("Delete this folder? Its saved items become unfiled.")) return;
     try {
       await remove(id);
       // Detach locally so filtered views update without a refetch.
@@ -320,13 +320,46 @@ export function SavedEventsPanel() {
   const past = saved.filter((l) => isPast(l) && typeMatch(l) && folderMatch(l));
   const list = tab === "upcoming" ? upcoming : past;
 
+  const confirmDeleteName = folders.find((f) => f.id === confirmDeleteId)?.name ?? "this folder";
+
   return (
-    <SlideOver
-      open={savedEventsOpen}
-      onClose={closeSavedEvents}
-      title="Saved Events"
-      subtitle={`${saved.length} ${saved.length === 1 ? "item" : "items"}`}
-    >
+    <>
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-6">
+          <div className="w-full max-w-[300px] rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-dark text-[16px] font-semibold">Delete folder?</h3>
+            <p className="text-graphite mt-1.5 text-[13px] leading-relaxed">
+              “{confirmDeleteName}” will be removed. Its saved items stay saved and become unfiled.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                className="border-border text-dark rounded-pill border px-4 py-2 text-[13px] font-medium hover:bg-tag-bg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = confirmDeleteId;
+                  setConfirmDeleteId(null);
+                  if (id) void handleDeleteFolder(id);
+                }}
+                className="bg-coral rounded-pill px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <SlideOver
+        open={savedEventsOpen}
+        onClose={closeSavedEvents}
+        title="Saved Events"
+        subtitle={`${saved.length} ${saved.length === 1 ? "item" : "items"}`}
+      >
       <div className="border-border flex gap-1 border-b px-5">
         {(["upcoming", "past"] as const).map((t) => {
           const active = t === tab;
@@ -388,7 +421,7 @@ export function SavedEventsPanel() {
               </button>
               <button
                 type="button"
-                onClick={() => handleDeleteFolder(f.id)}
+                onClick={() => setConfirmDeleteId(f.id)}
                 aria-label={`Delete folder ${f.name}`}
                 title="Delete folder"
                 className={active ? "text-white/60 hover:text-white" : "text-chrome hover:text-coral"}
@@ -602,6 +635,7 @@ export function SavedEventsPanel() {
           })}
         </ul>
       )}
-    </SlideOver>
+      </SlideOver>
+    </>
   );
 }
