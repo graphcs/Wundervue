@@ -32,6 +32,9 @@ alter table public.venue_follows enable row level security;
 
 create policy "favorites owner read"   on public.favorites for select using (auth.uid() = user_id);
 create policy "favorites owner insert" on public.favorites for insert with check (auth.uid() = user_id);
+-- UPDATE policy is required: the app reassigns favorites.folder_id (folder
+-- assignment + folder-delete detach). Without it, RLS denies those updates.
+create policy "favorites owner update" on public.favorites for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "favorites owner delete" on public.favorites for delete using (auth.uid() = user_id);
 
 create policy "venue_follows owner read"   on public.venue_follows for select using (auth.uid() = user_id);
