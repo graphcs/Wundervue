@@ -2,7 +2,15 @@ import type { ListingType, LifestyleTag, ListingSource } from "@/lib/types";
 
 export type Cadence = "hourly" | "daily" | "weekly";
 
-export type ConnectorKind = "instagram" | "serpEvents" | "apifyWeb" | "cheerioWeb";
+export type ConnectorKind =
+  | "instagram"
+  | "serpEvents"
+  | "apifyWeb"
+  | "cheerioWeb"
+  | "venuePilot"
+  | "wixEvents"
+  | "fullCalendarFeed"
+  | "mlbSchedule";
 
 export interface SourceConfig {
   id: string;
@@ -20,9 +28,17 @@ export interface SourceConfig {
   // Instagram hashtags (no leading #). Single string or array for
   // multi-tag coverage, e.g. ["denverdogs", "yappyhourdenver"].
   hashtag?: string | string[];
+  // venuePilot — VenuePilot account id(s) from the venue's embed config.
+  venuePilotAccountIds?: number[];
+  // mlbSchedule — MLB StatsAPI team id (Colorado Rockies = 115).
+  mlbTeamId?: number;
   query?: string;              // serpEvents — Google Events search query
   serpHtichips?: string;       // serpEvents — optional Google date/type filter (e.g. "date:week")
-  url?: string;                // apifyWeb / cheerioWeb
+  // apifyWeb / cheerioWeb. A single page URL, or an array to scrape several
+  // pages in one source (e.g. a site whose /events calendar is JS-rendered but
+  // whose individual event subpages are static). Each URL is fetched and its
+  // content handed to the normalizer independently.
+  url?: string | string[];
   selectors?: {
     item: string;
     title?: string;
@@ -31,6 +47,12 @@ export interface SourceConfig {
     image?: string;
     link?: string;
   };
+  // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
+  // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
+  // shows) would otherwise push every future event through LLM normalization
+  // and image resolution. Items are kept in document order, so this yields the
+  // soonest N; weekly re-runs pull the window forward.
+  maxItems?: number;
 
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;

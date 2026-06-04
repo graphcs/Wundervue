@@ -79,7 +79,15 @@ export function pickImageAttr($el: Cheerio<Element>): string | undefined {
   const fromSrcset = pickFromSrcset($el.attr("srcset"));
   if (fromSrcset) return fromSrcset;
 
-  for (const attr of ["data-src", "data-lazy-src", "data-original"] as const) {
+  for (const attr of [
+    "data-src",
+    "data-lazy-src",
+    "data-original",
+    // WordPress / theme lazy-loaders that stash the full URL here (e.g. Red
+    // Rocks' events grid) while `src` holds a base64 placeholder.
+    "data-image",
+    "data-webp-image",
+  ] as const) {
     const value = $el.attr(attr);
     if (isUsableUrl(value)) return value;
   }

@@ -2,7 +2,9 @@
   "crons": [
     { "path": "/api/ingest/run-tier?tier=hourly", "schedule": "0 * * * *" },
     { "path": "/api/ingest/run-tier?tier=daily", "schedule": "0 12 * * *" },
-    { "path": "/api/ingest/run-tier?tier=weekly", "schedule": "0 12 * * 1" },
+    { "path": "/api/ingest/run-tier?tier=weekly&shards=3&shard=0", "schedule": "0 12 * * 1" },
+    { "path": "/api/ingest/run-tier?tier=weekly&shards=3&shard=1", "schedule": "0 12 * * 2" },
+    { "path": "/api/ingest/run-tier?tier=weekly&shards=3&shard=2", "schedule": "0 12 * * 3" },
     { "path": "/api/maintenance?task=expire-past", "schedule": "30 12 * * *" },
     { "path": "/api/maintenance?task=sweep-urls", "schedule": "0 13 * * 1" }
   ]

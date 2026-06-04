@@ -12,6 +12,7 @@ import type {
 import { eventKey, makeSlug } from "./dedup";
 import { geocode, reverseGeocode } from "./geocode";
 import { ancestrySlugs, resolveLocationLabel } from "@/lib/data/locations";
+import { findCanonicalSlug } from "./venueCanonical";
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -40,6 +41,28 @@ export interface VenueRow {
 
 const VENUE_COLUMNS =
   "id, slug, name, address, neighborhood, region_slug, city_slug, neighborhood_slug, lat, lng";
+
+// Lightweight in-process cache of (slug, name) for every venue, used by
+// resolveOrCreateVenue to canonicalize extracted names against existing rows.
+// Loaded once per process; appended to when we create a venue so later lookups
+// in the same run see it.
+let venueListCache: Array<{ slug: string; name: string }> | null = null;
+
+async function getAllVenuesLite(): Promise<Array<{ slug: string; name: string }>> {
+  if (venueListCache) return venueListCache;
+  const client = getServiceClient();
+  const { data, error } = await client.from("venues").select("slug, name");
+  if (error) throw new Error(`venue list load failed: ${error.message}`);
+  venueListCache = (data ?? []) as Array<{ slug: string; name: string }>;
+  return venueListCache;
+}
+
+// Force a reload from the DB (used just before creating a venue so a concurrent
+// run's new rows are visible to canonicalization).
+async function refreshAllVenuesLite(): Promise<Array<{ slug: string; name: string }>> {
+  venueListCache = null;
+  return getAllVenuesLite();
+}
 
 export async function resolveVenue(slug: string | undefined): Promise<VenueRow | null> {
   if (!slug) return null;
@@ -148,6 +171,29 @@ export async function resolveOrCreateVenue(args: {
   const existing = await resolveVenue(slug);
   if (existing) return existing;
 
+  // Canonicalize: an existing venue may be the same place under a different
+  // name/slug (e.g. "Little Blue Pigeon Books" -> seeded "little-blue-pigeon").
+  // Match on a normalized key before creating a duplicate row.
+  const canonicalSlug = findCanonicalSlug(args.venueName, await getAllVenuesLite());
+  if (canonicalSlug && canonicalSlug !== slug) {
+    const canonical = await resolveVenue(canonicalSlug);
+    if (canonical) return canonical;
+  }
+
+  // About to create a new venue. The cache can be stale (a concurrent run, or
+  // another warm instance, may have just created a matching venue), and the
+  // insert race-recovery below only catches identical slugs. Refresh once from
+  // the DB and re-check the canonical key so we don't create a variant
+  // duplicate. Bounded cost: one reload per genuinely-new venue.
+  const freshCanonicalSlug = findCanonicalSlug(args.venueName, await refreshAllVenuesLite());
+  if (freshCanonicalSlug && freshCanonicalSlug !== slug) {
+    const canonical = await resolveVenue(freshCanonicalSlug);
+    if (canonical) return canonical;
+  }
+  // The exact slug may also have appeared since our first check.
+  const racedExisting = await resolveVenue(slug);
+  if (racedExisting) return racedExisting;
+
   // Try to geocode in this order: full address first (most precise), then a
   // "<venue name>, <city>" fallback for cases where the address is missing or
   // too vague to resolve (e.g. "13th Street, Boulder, CO"). Nominatim has good
@@ -190,7 +236,11 @@ export async function resolveOrCreateVenue(args: {
     console.error(`[venues] insert failed for slug=${slug}`, error);
     return null;
   }
-  return data as VenueRow;
+  const created = data as VenueRow;
+  // Keep the canonicalization cache current within the run so a later listing
+  // citing the same new venue (different phrasing) matches this row.
+  if (venueListCache) venueListCache.push({ slug: created.slug, name: created.name });
+  return created;
 }
 
 export function buildListingInsert(args: {
