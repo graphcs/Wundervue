@@ -6,14 +6,20 @@ const calls: Array<{ method: string; args: unknown[] }> = [];
 
 function makeBuilder() {
   const builder: Record<string, unknown> = {};
+  // Bind the response when the query is issued (synchronously, as each chain
+  // method is called) rather than when `await` adopts the thenable on a later
+  // microtask — otherwise two in-flight queries would both read the latest
+  // global nextResponse.
+  let resp = nextResponse;
   for (const m of ["select", "insert", "delete", "eq"]) {
     builder[m] = (...args: unknown[]) => {
       calls.push({ method: m, args });
+      resp = nextResponse;
       return builder;
     };
   }
   builder.then = (onFulfilled: (v: typeof nextResponse) => unknown) =>
-    Promise.resolve(nextResponse).then(onFulfilled);
+    Promise.resolve(resp).then(onFulfilled);
   return builder;
 }
 
@@ -86,6 +92,25 @@ describe("userCollection store", () => {
   it("throws AuthRequiredError when no user is set", () => {
     const store = newStore();
     expect(() => store.mutate("x", true)).toThrow(AuthRequiredError);
+  });
+
+  it("rolls back only the failed id, preserving a concurrent mutation", async () => {
+    const store = newStore();
+    store.syncUser("user-1");
+    await flush();
+
+    // A's write fails; B's (started while A is in flight) succeeds.
+    nextResponse = { data: [], error: { message: "boom" } };
+    store.mutate("A", true);
+    nextResponse = { data: [], error: null };
+    store.mutate("B", true);
+
+    expect(store.has("A")).toBe(true); // both optimistic
+    expect(store.has("B")).toBe(true);
+    await flush();
+
+    expect(store.has("A")).toBe(false); // failed write rolled back
+    expect(store.has("B")).toBe(true); // concurrent mutation NOT clobbered
   });
 
   it("does not reload for the same user (dedup)", async () => {

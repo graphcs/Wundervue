@@ -91,8 +91,7 @@ export function createUserCollectionStore(config: CollectionConfig): UserCollect
     has: (id) => ids.has(id),
     mutate(id, add) {
       if (!userId) throw new AuthRequiredError();
-      const prev = ids;
-      const next = new Set(prev);
+      const next = new Set(ids);
       if (add) next.add(id);
       else next.delete(id);
       ids = next;
@@ -109,7 +108,12 @@ export function createUserCollectionStore(config: CollectionConfig): UserCollect
               .eq(config.idColumn, id);
         if (error) {
           console.error(`[${config.table}] ${add ? "insert" : "delete"} failed`, error);
-          ids = prev; // rollback the optimistic change
+          // Roll back ONLY this id against the latest set, so a concurrent
+          // mutation of a different id isn't clobbered by a stale snapshot.
+          const reverted = new Set(ids);
+          if (add) reverted.delete(id);
+          else reverted.add(id);
+          ids = reverted;
           notify();
         }
       })();
