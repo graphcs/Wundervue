@@ -258,7 +258,8 @@ export function OnboardingModal() {
   const continueFromPlan = async () => {
     if (!plan) return;
     if (plan === "free") {
-      await updateProfile({ plan });
+      // Profiles default to 'free'; plan is server-controlled (Stripe webhook),
+      // so there's nothing to write here.
       setStep(6);
       return;
     }

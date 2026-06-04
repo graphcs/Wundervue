@@ -212,7 +212,10 @@ export const supabaseAuthRepo: AuthRepo = {
 
     const dbPatch: Partial<ProfileRow> = {};
     if (patch.name !== undefined) dbPatch.name = patch.name;
-    if (patch.plan !== undefined) dbPatch.plan = patch.plan;
+    // NB: `plan` (and stripe_customer_id) are intentionally NOT writable here.
+    // Entitlements are set only by the Stripe webhook (service role); a DB
+    // trigger rejects any client-side change. See migration
+    // 20260604120000_profiles_entitlement_guard.sql.
     if (patch.interests !== undefined) dbPatch.interests = patch.interests;
     if (patch.neighborhoods !== undefined)
       dbPatch.neighborhoods = patch.neighborhoods;
