@@ -59,8 +59,9 @@ export async function GET(
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="wundervue-saved.ics"',
-      // Calendar apps refetch periodically; let them cache briefly.
-      "Cache-Control": "public, max-age=3600",
+      // Private per-user feed keyed by a URL secret — never let shared/proxy
+      // caches retain it. Calendar apps refetch on their own schedule.
+      "Cache-Control": "private, max-age=3600",
     },
   });
 }
