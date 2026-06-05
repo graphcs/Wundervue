@@ -10,13 +10,7 @@ export type ConnectorKind =
   | "venuePilot"
   | "wixEvents"
   | "fullCalendarFeed"
-  | "mlbSchedule"
-  | "nbaSchedule"
-  | "nhlSchedule"
-  | "nflSchedule"
-  | "aquariumCalendar"
-  | "wpRestEvents"
-  | "comedyWorksCalendar";
+  | "mlbSchedule";
 
 export interface SourceConfig {
   id: string;
@@ -38,22 +32,6 @@ export interface SourceConfig {
   venuePilotAccountIds?: number[];
   // mlbSchedule — MLB StatsAPI team id (Colorado Rockies = 115).
   mlbTeamId?: number;
-  // nbaSchedule — NBA franchise id for the home-game filter (Denver Nuggets =
-  // 1610612743) plus the team slug used in the data.nba.com feed path and the
-  // public schedule URL (nba.com/<slug>/schedule, e.g. "nuggets").
-  nbaTeamId?: number;
-  nbaTeamSlug?: string;
-  // nhlSchedule — NHL team abbreviation for the home-game filter (Colorado
-  // Avalanche = "COL") plus the team slug used in the public schedule URL
-  // (nhl.com/<slug>/schedule, e.g. "avalanche"). The season is resolved
-  // automatically via the API's /now endpoint, so no year is configured.
-  nhlTeamAbbrev?: string;
-  nhlTeamSlug?: string;
-  // nflSchedule — ESPN team abbreviation for the schedule feed + home-game
-  // filter (Denver Broncos = "DEN"). The human-facing schedule link comes from
-  // `url` (e.g. denverbroncos.com/schedule). The season is resolved by ESPN's
-  // default team-schedule endpoint, so no year is configured.
-  nflTeamAbbrev?: string;
   query?: string;              // serpEvents — Google Events search query
   serpHtichips?: string;       // serpEvents — optional Google date/type filter (e.g. "date:week")
   // apifyWeb / cheerioWeb. A single page URL, or an array to scrape several
@@ -69,14 +47,6 @@ export interface SourceConfig {
     image?: string;
     link?: string;
   };
-  // comedyWorksCalendar — how many months past the current one to crawl (the
-  // calendar pages one month per URL). Default 3 (current + next 3 = 4 months).
-  monthsAhead?: number;
-  // comedyWorksCalendar — which physical club this source covers. The calendar
-  // interleaves both Comedy Works clubs (and external "concerts"); the connector
-  // keeps only events tagged for this club so each source can pin authoritatively
-  // via defaultVenueSlug. Omit to collect every club (untagged concerts excluded).
-  comedyWorksClub?: "downtown" | "south";
   // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
   // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
   // shows) would otherwise push every future event through LLM normalization
