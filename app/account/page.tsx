@@ -9,13 +9,17 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ONBOARDING_INTERESTS } from "@/lib/data/categories";
 import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { LIFESTYLE_OPTIONS } from "@/lib/data/lifestyleOptions";
-import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
+import { useSavedListings } from "@/lib/hooks/useSavedListings";
+import { DEFAULT_PREFS, NOTIFICATION_META, type NotificationPrefs, type NotificationType } from "@/lib/notify/types";
 import { ListingGrid } from "@/components/explore/ListingGrid";
+import { MapView } from "@/components/explore/MapView";
+import { CalendarView } from "@/components/explore/CalendarView";
 
 const TABS = [
   { id: "profile", label: "Profile" },
   { id: "preferences", label: "Interests & Neighborhoods" },
   { id: "saved", label: "Saved" },
+  { id: "calendar", label: "Calendar" },
   { id: "following", label: "Following" },
   { id: "billing", label: "Billing" },
   { id: "notifications", label: "Notifications" },
@@ -93,6 +97,7 @@ export default function AccountPage() {
           {tab === "profile" && <ProfileTab />}
           {tab === "preferences" && <PreferencesTab />}
           {tab === "saved" && <SavedTab />}
+          {tab === "calendar" && <CalendarTab />}
           {tab === "following" && <FollowingTab />}
           {tab === "billing" && <BillingTab />}
           {tab === "notifications" && <NotificationsTab />}
@@ -268,55 +273,56 @@ function PreferencesTab() {
   );
 }
 
-const LISTING_COLUMNS =
-  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags";
-
-function rowToListing(r: Record<string, unknown>): Listing {
-  return {
-    id: r.id as string, slug: r.slug as string, type: r.type as ListingType, title: r.title as string,
-    description: (r.description as string) ?? "", venueId: (r.venue_id as string) ?? "", venueName: "",
-    address: (r.address as string) ?? "", neighborhood: (r.neighborhood as string) ?? "", category: (r.category as string) ?? "",
-    startAt: (r.date_start as string) ?? "", endAt: (r.date_end as string) ?? null, dateDisplay: (r.date_display as string) ?? "",
-    timeDisplay: (r.time_display as string) ?? "", isFree: Boolean(r.is_free), dealValue: (r.deal_value as string) ?? undefined,
-    imageUrl: (r.image_url as string) ?? "", source: r.source as ListingSource, sourceUrl: (r.source_url as string) ?? undefined,
-    tags: ((r.tags as string[]) ?? []) as LifestyleTag[], lat: null, lng: null,
-  };
-}
+type SavedView = "grid" | "map" | "calendar";
 
 function SavedTab() {
   const { favorites } = useFavorites();
-  const { openSavedEvents } = useAuthContext();
-  const [saved, setSaved] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(false);
-  const ids = Array.from(favorites);
-  const key = ids.slice().sort().join(",");
+  const { openSavedEvents, profile, openUpgrade } = useAuthContext();
+  const isInsider = profile?.plan === "insider";
+  const [view, setView] = useState<SavedView>("grid");
+  const { listings: saved, loading } = useSavedListings(Array.from(favorites));
 
-  useEffect(() => {
-    if (ids.length === 0) {
-      setSaved([]);
+  // Free users get grid only (per the tier matrix); map/calendar are Insider.
+  const VIEW_OPTIONS: { id: SavedView; label: string; insider: boolean }[] = [
+    { id: "grid", label: "Grid", insider: false },
+    { id: "map", label: "Map", insider: true },
+    { id: "calendar", label: "Calendar", insider: true },
+  ];
+  function pickView(o: { id: SavedView; insider: boolean }) {
+    if (o.insider && !isInsider) {
+      openUpgrade();
       return;
     }
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      const sb = getSupabaseBrowserClient();
-      const { data } = await sb.from("listings").select(LISTING_COLUMNS).in("id", ids);
-      if (cancelled) return;
-      setSaved(((data ?? []) as Array<Record<string, unknown>>).map((r) => rowToListing(r)));
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    setView(o.id);
+  }
 
   return (
     <Card title="Saved events & deals" desc="Organize saves into folders and share them.">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={openSavedEvents} className="bg-dark rounded-pill px-5 py-2 text-[13px] font-medium text-white hover:opacity-90">
           Manage saves & folders
         </button>
+        {saved.length > 0 && (
+          <div className="border-border flex rounded-pill border p-0.5">
+            {VIEW_OPTIONS.map((o) => {
+              const active = view === o.id;
+              const locked = o.insider && !isInsider;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => pickView(o)}
+                  title={locked ? "Map & Calendar views are an Insider feature" : undefined}
+                  className={`rounded-pill px-3 py-1 text-[12px] font-medium transition-colors ${
+                    active ? "bg-dark text-white" : "text-graphite hover:text-dark"
+                  } ${locked ? "opacity-60" : ""}`}
+                >
+                  {o.label}{locked ? " · Insider" : ""}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       {loading ? (
         <p className="text-gray text-[13px]">Loading…</p>
@@ -324,10 +330,112 @@ function SavedTab() {
         <p className="text-gray text-[13px]">
           Nothing saved yet. <Link href="/explore" className="text-coral font-medium hover:underline">Browse events</Link>.
         </p>
+      ) : view === "map" && isInsider ? (
+        <MapView listings={saved} />
+      ) : view === "calendar" && isInsider ? (
+        <CalendarView listings={saved} />
       ) : (
         <ListingGrid listings={saved} />
       )}
     </Card>
+  );
+}
+
+function CalendarTab() {
+  const { profile, session, openUpgrade } = useAuthContext();
+  const { favorites } = useFavorites();
+  const isInsider = profile?.plan === "insider";
+  const userId = session?.userId ?? null;
+  const [token, setToken] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { listings: saved } = useSavedListings(Array.from(favorites));
+
+  useEffect(() => {
+    if (!userId || !isInsider) return;
+    let cancelled = false;
+    (async () => {
+      const sb = getSupabaseBrowserClient();
+      const { data } = await sb.from("profiles").select("calendar_token").eq("user_id", userId).maybeSingle();
+      if (!cancelled) setToken((data as { calendar_token: string | null } | null)?.calendar_token ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, isInsider]);
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/calendar/token", { method: "POST" });
+      if (res.ok) setToken((await res.json()).token);
+    } finally {
+      setGenerating(false);
+    }
+  }
+  async function copy() {
+    if (!feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  if (!isInsider) {
+    return (
+      <Card title="Calendar sync" desc="Subscribe to your saved events in Google, Apple, or Outlook calendars.">
+        <div className="border-coral rounded-xl border-2 bg-white p-5 text-center">
+          <h3 className="text-dark text-[15px] font-medium">Calendar sync is an Insider feature</h3>
+          <p className="text-gray mx-auto mt-1 max-w-sm text-[13px]">
+            Upgrade to get a private calendar feed of your saved events that stays in sync automatically.
+          </p>
+          <button type="button" onClick={openUpgrade} className="bg-dark rounded-pill mt-4 px-6 py-2.5 text-[13px] font-medium text-white hover:opacity-90">
+            Upgrade to Insider
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card title="Calendar sync" desc="Subscribe to your saved events in any calendar app — it updates as you save and unsave.">
+        {feedUrl ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <input readOnly value={feedUrl} className="border-border text-graphite min-w-0 flex-1 rounded-lg border px-3 py-2 text-[12px]" />
+              <button type="button" onClick={copy} className="border-border text-dark rounded-pill shrink-0 border px-4 py-2 text-[12px] font-medium hover:bg-tag-bg">
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href={feedUrl.replace(/^https?:/, "webcal:")} className="bg-dark rounded-pill px-4 py-2 text-[12px] font-medium text-white hover:opacity-90">
+                Add to calendar
+              </a>
+              <button type="button" onClick={generate} disabled={generating} className="text-gray hover:text-dark text-[12px] font-medium disabled:opacity-50">
+                {generating ? "Regenerating…" : "Regenerate link"}
+              </button>
+            </div>
+            <p className="text-gray text-[12px] leading-relaxed">
+              In Google Calendar, choose <strong>Other calendars → From URL</strong> and paste this link. Regenerating revokes the old link.
+            </p>
+          </div>
+        ) : (
+          <button type="button" onClick={generate} disabled={generating} className="bg-dark rounded-pill px-5 py-2.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+            {generating ? "Generating…" : "Generate calendar link"}
+          </button>
+        )}
+      </Card>
+      {saved.length > 0 && (
+        <Card title="Your saved calendar" desc="Everything you've saved, by date.">
+          <CalendarView listings={saved} />
+        </Card>
+      )}
+    </>
   );
 }
 
@@ -433,53 +541,78 @@ function BillingTab() {
   );
 }
 
-const NOTIF_KEY = "wv.notifPrefs";
-function NotificationsTab() {
-  const [prefs, setPrefs] = useState({ email: true, deals: true, reminders: false });
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(NOTIF_KEY);
-      if (raw) setPrefs({ ...prefs, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const set = (patch: Partial<typeof prefs>) => {
-    const next = { ...prefs, ...patch };
-    setPrefs(next);
-    try {
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
-  const rows: Array<{ k: keyof typeof prefs; label: string; desc: string }> = [
-    { k: "email", label: "Email updates", desc: "Weekly recommendations tailored to you" },
-    { k: "deals", label: "Deal alerts", desc: "New deals in your neighborhoods" },
-    { k: "reminders", label: "Event reminders", desc: "A ping the day of your saved events" },
-  ];
+function NotifToggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
-    <Card title="Notifications" desc="Choose what you'd like to hear about. Delivery is rolling out soon.">
-      <div className="flex flex-col">
-        {rows.map((r) => (
-          <div key={r.k} className="border-border flex items-center justify-between gap-4 border-b py-3 last:border-0">
-            <div>
-              <div className="text-dark text-[13px] font-medium">{r.label}</div>
-              <div className="text-gray text-[12px]">{r.desc}</div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={prefs[r.k]}
-              onClick={() => set({ [r.k]: !prefs[r.k] })}
-              className={`relative h-6 w-[42px] shrink-0 rounded-full transition-colors ${prefs[r.k] ? "bg-coral" : "bg-[#d5d5d5]"}`}
-            >
-              <span className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow transition-all" style={{ left: prefs[r.k] ? 21 : 3 }} />
-            </button>
-          </div>
-        ))}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onClick}
+      className={`relative h-6 w-[42px] shrink-0 rounded-full transition-colors ${on ? "bg-coral" : "bg-[#d5d5d5]"} ${disabled ? "opacity-50" : ""}`}
+    >
+      <span className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow transition-all" style={{ left: on ? 21 : 3 }} />
+    </button>
+  );
+}
+
+function NotificationsTab() {
+  const { profile, session, openUpgrade } = useAuthContext();
+  const isInsider = profile?.plan === "insider";
+  const userId = session?.userId ?? null;
+  const [prefs, setPrefs] = useState<NotificationPrefs>({});
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await getSupabaseBrowserClient().from("profiles").select("notification_prefs").eq("user_id", userId).maybeSingle();
+      const np = (data as { notification_prefs: NotificationPrefs | null } | null)?.notification_prefs;
+      if (!cancelled && np) setPrefs(np);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const value = (k: NotificationType) => prefs[k] ?? DEFAULT_PREFS[k];
+  const set = (k: NotificationType) => {
+    const next = { ...prefs, [k]: !value(k) };
+    setPrefs(next);
+    if (!userId) return;
+    // .then() so the lazy supabase builder actually runs.
+    getSupabaseBrowserClient()
+      .from("profiles")
+      .update({ notification_prefs: next })
+      .eq("user_id", userId)
+      .then((res: { error: { message: string } | null }) => {
+        if (res.error) console.error("[notifications] save failed", res.error);
+      });
+  };
+
+  const Row = ({ k, label, desc, locked }: { k: NotificationType; label: string; desc: string; locked?: boolean }) => (
+    <div className="border-border flex items-center justify-between gap-4 border-b py-3 last:border-0">
+      <div>
+        <div className="text-dark text-[13px] font-medium">{label}{locked ? " · Insider" : ""}</div>
+        <div className="text-gray text-[12px]">{desc}</div>
       </div>
-    </Card>
+      <NotifToggle on={!locked && value(k)} disabled={locked} onClick={() => (locked ? openUpgrade() : set(k))} />
+    </div>
+  );
+
+  return (
+    <>
+      <Card title="Notifications" desc="Choose what you'd like to hear about. Alerts show in your notifications bell; email is coming soon.">
+        <div className="flex flex-col">
+          {NOTIFICATION_META.filter((m) => m.tier === "basic").map((m) => (
+            <Row key={m.type} k={m.type} label={m.label} desc={m.desc} />
+          ))}
+        </div>
+      </Card>
+      <Card title="Advanced notifications" desc="Insider-only alerts for the things you care about most.">
+        <div className="flex flex-col">
+          {NOTIFICATION_META.filter((m) => m.tier === "advanced").map((m) => (
+            <Row key={m.type} k={m.type} label={m.label} desc={m.desc} locked={!isInsider} />
+          ))}
+        </div>
+      </Card>
+    </>
   );
 }

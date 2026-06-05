@@ -4,17 +4,13 @@ import { getVenue } from "@/lib/data/venues";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { DealTag } from "@/components/ui/DealTag";
-import { buildCalendarUrl, buildDirectionsUrl } from "@/lib/links";
+import { buildDirectionsUrl } from "@/lib/links";
 import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
 import { ReportButton } from "./ReportButton";
-import {
-  CalendarIcon,
-  CompassIcon,
-  HouseIcon,
-  PinIcon,
-} from "./icons";
+import { CalendarButton } from "./CalendarButton";
+import { CompassIcon, HouseIcon, PinIcon } from "./icons";
 
 interface Props {
   listing: Listing;
@@ -152,15 +148,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           <ShareButton listing={listing} />
         </div>
 
-        <a
-          href={buildCalendarUrl(listing)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="border-dark text-dark hover:bg-dark rounded-pill inline-flex items-center justify-center gap-2 border-[1.5px] bg-white px-4 py-3 text-[13px] font-medium transition-colors hover:text-white"
-        >
-          <CalendarIcon size={14} />
-          Save to Google Calendar
-        </a>
+        <CalendarButton listing={listing} />
 
         {variant === "panel" && (
           <button
