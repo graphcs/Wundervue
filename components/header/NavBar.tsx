@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ProfileIcon } from "./ProfileIcon";
+import { NotificationBell } from "./NotificationBell";
 import { SpotlightsPanel } from "./SpotlightsPanel";
 import navData from "@/lib/data/wundervue-nav.json";
 
@@ -150,7 +151,8 @@ export function NavBar() {
             );
           })}
         </ul>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center gap-2">
+          <NotificationBell />
           <ProfileIcon />
         </div>
       </nav>
