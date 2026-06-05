@@ -4,15 +4,13 @@ import { getVenue } from "@/lib/data/venues";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { DealTag } from "@/components/ui/DealTag";
-import { buildCalendarUrl, buildDirectionsUrl } from "@/lib/links";
+import { buildDirectionsUrl } from "@/lib/links";
+import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
-import {
-  CalendarIcon,
-  CompassIcon,
-  HouseIcon,
-  PinIcon,
-} from "./icons";
+import { ReportButton } from "./ReportButton";
+import { CalendarButton } from "./CalendarButton";
+import { CompassIcon, HouseIcon, PinIcon } from "./icons";
 
 interface Props {
   listing: Listing;
@@ -80,6 +78,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
             {listing.category}
           </span>
           {listing.dealValue && <DealTag value={listing.dealValue} />}
+          <LifestyleTagChips tags={listing.tags} />
         </div>
 
         <h1
@@ -149,15 +148,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           <ShareButton listing={listing} />
         </div>
 
-        <a
-          href={buildCalendarUrl(listing)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="border-dark text-dark hover:bg-dark rounded-pill inline-flex items-center justify-center gap-2 border-[1.5px] bg-white px-4 py-3 text-[13px] font-medium transition-colors hover:text-white"
-        >
-          <CalendarIcon size={14} />
-          Save to Google Calendar
-        </a>
+        <CalendarButton listing={listing} />
 
         {variant === "panel" && (
           <button
@@ -171,16 +162,19 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           </button>
         )}
 
-        <div className="border-border border-t pt-4">
-          <InfoLabel>Source</InfoLabel>
-          <a
-            href={listing.sourceUrl ?? "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-coral inline-flex items-center gap-1 text-[13px] font-medium hover:underline"
-          >
-            View original post on {listing.source} ↗
-          </a>
+        <div className="border-border flex items-center justify-between border-t pt-4">
+          <div>
+            <InfoLabel>Source</InfoLabel>
+            <a
+              href={listing.sourceUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-coral inline-flex items-center gap-1 text-[13px] font-medium hover:underline"
+            >
+              View original post on {listing.source} ↗
+            </a>
+          </div>
+          <ReportButton listingId={listing.id} />
         </div>
       </div>
     </article>

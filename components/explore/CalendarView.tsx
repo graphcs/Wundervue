@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
+import { TIME_BUCKETS, groupByTimeBucket } from "@/lib/calendar/timeBuckets";
 
 interface Props {
   listings: Listing[];
 }
+
+type ViewMode = "month" | "week" | "day";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -30,11 +33,50 @@ function dayKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function dateFromKey(key: string): Date {
+  return new Date(`${key}T00:00:00`);
+}
+
+function addDaysKey(key: string, n: number): string {
+  const d = dateFromKey(key);
+  d.setDate(d.getDate() + n);
+  return dayKey(d);
+}
+
+function startOfWeek(d: Date): Date {
+  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  s.setDate(s.getDate() - s.getDay()); // Sunday-start week
+  return s;
+}
+
+function sortByStart(items: Listing[]): Listing[] {
+  return [...items].sort(
+    (a, b) => (Date.parse(a.startAt || "") || 0) - (Date.parse(b.startAt || "") || 0),
+  );
+}
+
 function FreePill() {
   return (
     <span className="bg-coral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
       Free
     </span>
+  );
+}
+
+// A single event row in the day/week lists.
+function EventRow({ l }: { l: Listing }) {
+  const meta = [l.timeDisplay, l.venueName, l.neighborhood].filter(Boolean).join(" · ");
+  return (
+    <Link
+      href={detailHref(l)}
+      className="hover:bg-tag-bg flex items-center justify-between gap-4 rounded-lg px-3 py-2.5"
+    >
+      <div className="min-w-0">
+        <h4 className="text-dark truncate text-[13px] font-medium">{l.title}</h4>
+        {meta && <p className="text-gray mt-0.5 truncate text-[11px]">{meta}</p>}
+      </div>
+      {l.isFree && <FreePill />}
+    </Link>
   );
 }
 
@@ -73,115 +115,269 @@ export function CalendarView({ listings }: Props) {
   }, [listings]);
 
   const initialMonth = useMemo(() => {
-    const d = soonestKey ? new Date(`${soonestKey}T00:00:00`) : new Date();
+    const d = soonestKey ? dateFromKey(soonestKey) : new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   }, [soonestKey]);
 
+  const todayKey = dayKey(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [{ year, month }, setMonth] = useState(initialMonth);
   const [selected, setSelected] = useState<string | null>(soonestKey);
 
+  // Anchor day for week/day views (selection, else soonest, else today).
+  const anchor = selected ?? soonestKey ?? todayKey;
+
+  function changeMode(m: ViewMode) {
+    if (m !== "month" && !selected) setSelected(soonestKey ?? todayKey);
+    setViewMode(m);
+  }
+
+  function go(delta: number) {
+    if (viewMode === "month") {
+      const d = new Date(year, month + delta, 1);
+      setMonth({ year: d.getFullYear(), month: d.getMonth() });
+    } else {
+      setSelected(addDaysKey(anchor, delta * (viewMode === "week" ? 7 : 1)));
+    }
+  }
+
+  function goToday() {
+    const now = new Date();
+    setMonth({ year: now.getFullYear(), month: now.getMonth() });
+    setSelected(todayKey);
+  }
+
+  // ── Header title per mode ────────────────────────────────────────────────
+  let title: string;
+  if (viewMode === "month") {
+    title = `${MONTHS[month]} ${year}`;
+  } else if (viewMode === "day") {
+    const d = dateFromKey(anchor);
+    title = `${FULL_WEEKDAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  } else {
+    const s = startOfWeek(dateFromKey(anchor));
+    const e = new Date(s);
+    e.setDate(e.getDate() + 6);
+    title =
+      s.getMonth() === e.getMonth()
+        ? `${MONTHS[s.getMonth()]} ${s.getDate()}–${e.getDate()}, ${e.getFullYear()}`
+        : `${MONTHS[s.getMonth()]} ${s.getDate()} – ${MONTHS[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
+  }
+
+  // ── Month grid cells ─────────────────────────────────────────────────────
   const firstOfMonth = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const leadingBlanks = firstOfMonth.getDay();
   const cells: Array<number | null> = [
-    ...Array<null>(leadingBlanks).fill(null),
+    ...Array<null>(firstOfMonth.getDay()).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const todayKey = dayKey(new Date());
-  const selectedItems = selected ? (byDay.get(selected) ?? []) : [];
-  const selectedDate = selected ? new Date(`${selected}T00:00:00`) : null;
+  // ── Week days ────────────────────────────────────────────────────────────
+  const weekDays = useMemo(() => {
+    const s = startOfWeek(dateFromKey(anchor));
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(s);
+      d.setDate(d.getDate() + i);
+      return dayKey(d);
+    });
+  }, [anchor]);
 
-  const go = (delta: number) => {
-    const d = new Date(year, month + delta, 1);
-    setMonth({ year: d.getFullYear(), month: d.getMonth() });
-  };
+  const dayItems = sortByStart(byDay.get(anchor) ?? []);
+  const dayGroups = groupByTimeBucket(dayItems);
 
   return (
     <div>
       <div className="border-border overflow-hidden rounded-xl border bg-white">
-        <div className="border-border flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-dark text-[15px] font-semibold">
-            {MONTHS[month]} {year}
-          </h2>
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => go(-1)} aria-label="Previous month" className="hover:bg-tag-bg text-graphite flex h-8 w-8 items-center justify-center rounded-full">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <button type="button" onClick={() => setMonth(initialMonth)} className="text-graphite hover:text-dark rounded-pill px-3 py-1 text-[12px] font-medium">
-              Today
-            </button>
-            <button type="button" onClick={() => go(1)} aria-label="Next month" className="hover:bg-tag-bg text-graphite flex h-8 w-8 items-center justify-center rounded-full">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
+        <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-3">
+          <h2 className="text-dark text-[15px] font-semibold">{title}</h2>
+          <div className="flex items-center gap-2">
+            {/* Month / Week / Day toggle */}
+            <div className="border-border flex rounded-pill border p-0.5">
+              {(["month", "week", "day"] as ViewMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => changeMode(m)}
+                  className={`rounded-pill px-3 py-1 text-[12px] font-medium capitalize transition-colors ${
+                    viewMode === m ? "bg-dark text-white" : "text-graphite hover:text-dark"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => go(-1)} aria-label="Previous" className="hover:bg-tag-bg text-graphite flex h-8 w-8 items-center justify-center rounded-full">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button type="button" onClick={goToday} className="text-graphite hover:text-dark rounded-pill px-3 py-1 text-[12px] font-medium">
+                Today
+              </button>
+              <button type="button" onClick={() => go(1)} aria-label="Next" className="hover:bg-tag-bg text-graphite flex h-8 w-8 items-center justify-center rounded-full">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b border-border">
-          {WEEKDAYS.map((d) => (
-            <div key={d} className="text-graphite px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide">
-              {d}
+        {viewMode === "month" && (
+          <>
+            <div className="border-border grid grid-cols-7 border-b">
+              {WEEKDAYS.map((d) => (
+                <div key={d} className="text-graphite px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide">
+                  {d}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+            <div className="grid grid-cols-7">
+              {cells.map((day, i) => {
+                if (day === null) {
+                  return <div key={`b${i}`} className="border-border min-h-[108px] border-b border-r bg-[#fafafa]" />;
+                }
+                const key = dayKey(new Date(year, month, day));
+                const items = byDay.get(key) ?? [];
+                const isToday = key === todayKey;
+                const isSelected = key === selected;
+                // Position the hover popover inward so the grid card's
+                // overflow-hidden doesn't clip it on the bottom row / edge cols.
+                const col = i % 7;
+                const lastRow = Math.floor(i / 7) >= cells.length / 7 - 1;
+                const popPos = `${lastRow ? "bottom-full mb-1" : "top-full mt-1"} ${
+                  col === 0 ? "left-0" : col === 6 ? "right-0" : "left-1/2 -translate-x-1/2"
+                }`;
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={() => setSelected(key)}
+                    className={`group relative min-h-[108px] cursor-pointer border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-[#fafafa] ${
+                      isSelected ? "ring-coral z-10 ring-2 ring-inset" : ""
+                    }`}
+                  >
+                    <div className="mb-1 flex items-start justify-between">
+                      <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[12px] ${isToday ? "bg-dark font-semibold text-white" : "text-graphite"}`}>
+                        {day}
+                      </span>
+                      {items.length > 0 && (
+                        <span className="text-gray text-[10px] font-medium">{items.length}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {items.slice(0, MAX_PREVIEW).map((l) => (
+                        <span
+                          key={l.id}
+                          className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium leading-tight ${
+                            l.type === "deal" ? "bg-coral/15 text-coral" : "bg-dark/10 text-dark"
+                          }`}
+                        >
+                          {l.title}
+                        </span>
+                      ))}
+                      {items.length > MAX_PREVIEW && (
+                        <span className="text-coral px-1.5 text-[10px] font-medium">
+                          +{items.length - MAX_PREVIEW} more
+                        </span>
+                      )}
+                    </div>
 
-        <div className="grid grid-cols-7">
-          {cells.map((day, i) => {
-            if (day === null) {
-              return <div key={`b${i}`} className="border-border min-h-[108px] border-b border-r bg-[#fafafa]" />;
-            }
-            const key = dayKey(new Date(year, month, day));
-            const items = byDay.get(key) ?? [];
-            const isToday = key === todayKey;
-            const isSelected = key === selected;
-            return (
-              <button
-                type="button"
-                key={key}
-                onClick={() => setSelected(key)}
-                className={`min-h-[108px] cursor-pointer border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-[#fafafa] ${
-                  isSelected ? "ring-coral z-10 ring-2 ring-inset" : ""
-                }`}
-              >
-                <div className="mb-1 flex items-start justify-between">
-                  <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[12px] ${isToday ? "bg-dark font-semibold text-white" : "text-graphite"}`}>
-                    {day}
-                  </span>
-                  {items.length > 0 && (
-                    <span className="text-gray text-[10px] font-medium">{items.length}</span>
-                  )}
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {items.slice(0, MAX_PREVIEW).map((l) => (
-                    <span
-                      key={l.id}
-                      title={l.title}
-                      className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium leading-tight ${
-                        l.type === "deal" ? "bg-coral/15 text-coral" : "bg-dark/10 text-dark"
-                      }`}
-                    >
-                      {l.title}
+                    {/* Hover-to-see-day: full list of the day's events on hover. */}
+                    {items.length > 0 && (
+                      <div className={`border-border pointer-events-none absolute z-30 hidden w-60 rounded-xl border bg-white p-2.5 text-left shadow-xl group-hover:block ${popPos}`}>
+                        <p className="text-graphite mb-1.5 text-[11px] font-semibold">
+                          {MONTHS[month]} {day} · {items.length} event{items.length > 1 ? "s" : ""}
+                        </p>
+                        <ul className="flex flex-col gap-1">
+                          {sortByStart(items).map((l) => (
+                            <li key={l.id} className="flex items-baseline gap-1.5">
+                              <span className="text-gray shrink-0 text-[10px]">{l.timeDisplay || "—"}</span>
+                              <span className="text-dark truncate text-[11px] font-medium">{l.title}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {viewMode === "week" && (
+          <div className="grid grid-cols-7">
+            {weekDays.map((key) => {
+              const d = dateFromKey(key);
+              const items = sortByStart(byDay.get(key) ?? []);
+              const isToday = key === todayKey;
+              return (
+                <div key={key} className="border-border min-h-[280px] border-b border-r last:border-r-0">
+                  <button
+                    type="button"
+                    onClick={() => { setSelected(key); changeMode("day"); }}
+                    className="hover:bg-tag-bg flex w-full items-center justify-between border-b border-border px-2 py-2 text-left"
+                  >
+                    <span className="text-graphite text-[11px] font-semibold uppercase">{WEEKDAYS[d.getDay()]}</span>
+                    <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[12px] ${isToday ? "bg-dark font-semibold text-white" : "text-graphite"}`}>
+                      {d.getDate()}
                     </span>
-                  ))}
-                  {items.length > MAX_PREVIEW && (
-                    <span className="text-coral px-1.5 text-[10px] font-medium">
-                      +{items.length - MAX_PREVIEW} more
-                    </span>
-                  )}
+                  </button>
+                  <div className="flex flex-col gap-1 p-1.5">
+                    {items.length === 0 ? (
+                      <span className="text-gray px-1 py-2 text-[11px]">—</span>
+                    ) : (
+                      items.map((l) => (
+                        <Link
+                          key={l.id}
+                          href={detailHref(l)}
+                          className={`truncate rounded px-1.5 py-1 text-[11px] font-medium leading-tight ${
+                            l.type === "deal" ? "bg-coral/15 text-coral" : "bg-dark/10 text-dark"
+                          }`}
+                        >
+                          {l.timeDisplay ? `${l.timeDisplay} · ` : ""}{l.title}
+                        </Link>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
+        {viewMode === "day" && (
+          <div className="p-4">
+            {dayItems.length === 0 ? (
+              <p className="text-gray py-10 text-center text-[13px]">No events on this day.</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {TIME_BUCKETS.filter((b) => dayGroups[b.id].length > 0).map((b) => (
+                  <div key={b.id}>
+                    <h3 className="text-graphite mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
+                      {b.label}
+                    </h3>
+                    <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
+                      {dayGroups[b.id].map((l) => (
+                        <EventRow key={l.id} l={l} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {selectedDate && (
+      {/* Month view keeps the click-to-select day detail panel below the grid. */}
+      {viewMode === "month" && selected && (
         <div className="border-border mt-4 overflow-hidden rounded-xl border bg-white">
           <div className="border-border flex items-center justify-between border-b px-5 py-3.5">
             <h3 className="text-dark text-[15px] font-semibold">
-              {FULL_WEEKDAYS[selectedDate.getDay()]}, {MONTHS[selectedDate.getMonth()]}{" "}
-              {selectedDate.getDate()}, {selectedDate.getFullYear()}
+              {(() => {
+                const d = dateFromKey(selected);
+                return `${FULL_WEEKDAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+              })()}
             </h3>
             <button
               type="button"
@@ -192,28 +388,23 @@ export function CalendarView({ listings }: Props) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
-          {selectedItems.length === 0 ? (
+          {dayItems.length === 0 ? (
             <p className="text-gray px-5 py-8 text-center text-[13px]">No events on this day.</p>
           ) : (
-            <ul className="divide-border divide-y">
-              {selectedItems.map((l) => {
-                const meta = [l.timeDisplay, l.venueName, l.neighborhood].filter(Boolean).join(" · ");
-                return (
-                  <li key={l.id}>
-                    <Link
-                      href={detailHref(l)}
-                      className="hover:bg-tag-bg flex items-center justify-between gap-4 px-5 py-3.5"
-                    >
-                      <div className="min-w-0">
-                        <h4 className="text-dark truncate text-[14px] font-medium">{l.title}</h4>
-                        {meta && <p className="text-gray mt-0.5 truncate text-[12px]">{meta}</p>}
-                      </div>
-                      {l.isFree && <FreePill />}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="flex flex-col gap-4 p-4">
+              {TIME_BUCKETS.filter((b) => dayGroups[b.id].length > 0).map((b) => (
+                <div key={b.id}>
+                  <h4 className="text-graphite mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
+                    {b.label}
+                  </h4>
+                  <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
+                    {dayGroups[b.id].map((l) => (
+                      <EventRow key={l.id} l={l} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

@@ -9,6 +9,7 @@ import { FavButton } from "@/components/ui/FavButton";
 import { DealTag } from "@/components/ui/DealTag";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { canAccessListing, isListingInsiderOnly } from "@/lib/auth/insiderGate";
+import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 
 interface Props {
   listing: Listing;
@@ -62,6 +63,11 @@ function CardBody({ listing, locked }: { listing: Listing; locked: boolean }) {
             {listing.category}
           </span>
         </div>
+        {listing.tags && listing.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <LifestyleTagChips tags={listing.tags} size="sm" />
+          </div>
+        )}
         <h3 className="text-dark line-clamp-2 text-base font-medium leading-tight">
           {listing.title}
         </h3>

@@ -30,6 +30,14 @@ export const LIFESTYLE_TAGS = [
   { id: "outdoor", label: "Outdoor", emoji: "⛰️" },
 ] as const;
 
+// Lookup by tag id for rendering a listing's lifestyle tags as labeled chips
+// (used by both the card and the detail view). Single source of truth so the
+// chips, filter pills, and URL parser never drift apart.
+export const LIFESTYLE_TAG_BY_ID: Record<
+  string,
+  { id: string; label: string; emoji: string }
+> = Object.fromEntries(LIFESTYLE_TAGS.map((t) => [t.id, t]));
+
 export const DATE_PRESETS = [
   { id: "any", label: "Any Date" },
   { id: "today", label: "Today" },

@@ -2,10 +2,11 @@
 
 import { useMemo, useRef } from "react";
 import Link from "next/link";
-import { Map as MapGL, Marker, Popup, NavigationControl } from "react-map-gl/maplibre";
+import { Map as MapGL, Marker, Popup, NavigationControl, Source, Layer } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Listing, ListingType } from "@/lib/types";
+import { DENVER_REGIONS } from "@/lib/data/denverRegions";
 
 const DENVER_CENTER = { longitude: -104.9903, latitude: 39.7392, zoom: 12 };
 const TILE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -115,6 +116,35 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
         style={{ width: "100%", height: "100%" }}
       >
         <NavigationControl position="top-right" showCompass={false} />
+
+        {/* Denver region boundaries (from the "Wundervue Denver Regions" map),
+            drawn beneath the listing pins for geographic context. */}
+        <Source id="denver-regions" type="geojson" data={DENVER_REGIONS}>
+          <Layer
+            id="denver-regions-fill"
+            type="fill"
+            paint={{ "fill-color": "#ff535b", "fill-opacity": 0.04 }}
+          />
+          <Layer
+            id="denver-regions-outline"
+            type="line"
+            paint={{ "line-color": "#ff535b", "line-width": 1.2, "line-opacity": 0.35 }}
+          />
+          <Layer
+            id="denver-regions-label"
+            type="symbol"
+            layout={{
+              "text-field": ["get", "label"],
+              "text-size": 11,
+              "text-font": ["Noto Sans Regular"],
+            }}
+            paint={{
+              "text-color": "#6b7280",
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 1.2,
+            }}
+          />
+        </Source>
 
         {groups.map((g) => {
           const style = PIN_STYLES[groupType(g.listings)];
