@@ -431,10 +431,22 @@ export const SOURCES: SourceConfig[] = [
   {
     id: "cerebral-brewing-web",
     enabled: true,
-    connector: "apifyWeb",
+    // WordPress `event` post-type archive, server-rendered — the homepage
+    // apifyWeb scrape surfaced ~nothing, but /events/ lists every upcoming show
+    // as a static .excerpt-box.event card that in-process cheerio (free) parses
+    // cleanly. The date span carries the taproom (Congress Park / Aurora Arts /
+    // West Highland); all are Cerebral, so they stay pinned to the one venue.
+    connector: "cheerioWeb",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://cerebralbrewing.com/",
+    url: "https://cerebralbrewing.com/events/",
+    selectors: {
+      item: ".excerpt-box.event",
+      title: ".excerpt-box-title",
+      date: ".excerpt-box-date",
+      image: "img.image",
+    },
+    maxItems: 40,
     defaultVenueSlug: "cerebral-brewing",
     defaultCategory: "Food & Drink",
   },
@@ -447,6 +459,90 @@ export const SOURCES: SourceConfig[] = [
     handle: "cerebralbrewing",
     defaultVenueSlug: "cerebral-brewing",
     defaultCategory: "Food & Drink",
+  },
+  {
+    // West Highland taproom's own account — a genuinely event-rich feed (trivia,
+    // run club, drag brunch/bingo, Pitch-a-Friend, fundraisers), distinct from
+    // the main @cerebralbrewing account. Pins to the West Highland venue
+    // (seeded in 20260604180000_cerebral_west_highland_venue.sql), ~3 miles from
+    // the Congress Park original, so these don't mis-pin on the map.
+    id: "cerebral-west-highland-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "cerebral.westhighland",
+    defaultVenueSlug: "cerebral-west-highland",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Downtown Aquarium's full-year calendar.asp (Landry's). A custom connector
+    // attaches month-header dates, decodes the page's Windows-1252 bytes, and
+    // filters out the ~65% of entries that are repetitive program/camp
+    // registrations — keeping only the discoverable special events (animal-
+    // awareness days, Wine Fest, Witches Tea, holiday dinners). The sibling
+    // promos.aquariumrestaurants.com landing page is image-only and just links
+    // back to this calendar, so it's intentionally not a separate source.
+    // Category is left per-event (animal days vs Wine Fest vs dinners differ).
+    id: "downtown-aquarium-web",
+    enabled: true,
+    connector: "aquariumCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.aquariumrestaurants.com/downtownaquariumdenver/calendar.asp",
+    maxItems: 40,
+    defaultVenueSlug: "downtown-aquarium",
+  },
+  {
+    // Denver Zoo runs on a JS-heavy WordPress theme, but its events live in a
+    // clean "atomic-event" custom post type exposed via the wp-json REST API —
+    // far better than scraping the rendered page. The connector builds blobs
+    // from each post's title + excerpt + the date parsed from the body. Per-
+    // event category varies (animal birthdays vs Zoo Lights vs adult nights),
+    // so it's left to the normalizer.
+    id: "denver-zoo-web",
+    enabled: true,
+    connector: "wpRestEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denverzoo.org/wp-json/wp/v2/atomic-event",
+    maxItems: 40,
+    defaultVenueSlug: "denver-zoo",
+  },
+  // Comedy Works runs two Denver clubs (Downtown in LoDo, South in Greenwood
+  // Village) off one Rails calendar that pages a month per URL and interleaves
+  // both clubs plus external "concerts". A custom connector crawls the current
+  // month + the next few, follows each show's /comedians/<slug> page for its
+  // showtimes, price, address and description, and emits one item per show-date.
+  // One source per club: `comedyWorksClub` filters the shared calendar so each
+  // pins authoritatively via its defaultVenueSlug (see
+  // 20260604210000_comedy_works_venues.sql) instead of relying on LLM venue
+  // extraction. Category is Comedy for both.
+  {
+    id: "comedy-works-downtown-web",
+    enabled: true,
+    connector: "comedyWorksCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://comedyworks.com/shows/calendar",
+    comedyWorksClub: "downtown",
+    monthsAhead: 3,
+    maxItems: 40,
+    defaultVenueSlug: "comedy-works-downtown",
+    defaultCategory: "Comedy",
+  },
+  {
+    id: "comedy-works-south-web",
+    enabled: true,
+    connector: "comedyWorksCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://comedyworks.com/shows/calendar",
+    comedyWorksClub: "south",
+    monthsAhead: 3,
+    maxItems: 40,
+    defaultVenueSlug: "comedy-works-south",
+    defaultCategory: "Comedy",
   },
 
   // Sports teams — pin to their home venue. Team sites (mlb/nba/nhl/nfl) are
@@ -479,10 +575,17 @@ export const SOURCES: SourceConfig[] = [
   {
     id: "denver-broncos-web",
     enabled: true,
-    connector: "apifyWeb",
+    // denverbroncos.com is a heavy SPA; pull the schedule from ESPN's public
+    // NFL feed instead (future home games at Empower Field only). ESPN's default
+    // team endpoint serves the upcoming season, so it returns nothing in the
+    // offseason gap and advances when the next schedule publishes. `url` is the
+    // human-facing link the connector attaches to each game.
+    connector: "nflSchedule",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.denverbroncos.com/",
+    nflTeamAbbrev: "DEN",
+    url: "https://www.denverbroncos.com/schedule/",
+    maxItems: 60,
     defaultVenueSlug: "empower-field",
     defaultCategory: "Sports",
   },
@@ -499,10 +602,15 @@ export const SOURCES: SourceConfig[] = [
   {
     id: "denver-nuggets-web",
     enabled: true,
-    connector: "apifyWeb",
+    // nba.com/nuggets is a heavy SPA; pull the schedule from NBA's public
+    // data.nba.com feed instead (future home games at Ball Arena only). Returns
+    // nothing in the offseason and auto-advances when the next season publishes.
+    connector: "nbaSchedule",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.nba.com/nuggets/",
+    nbaTeamId: 1610612743,
+    nbaTeamSlug: "nuggets",
+    maxItems: 60,
     defaultVenueSlug: "ball-arena",
     defaultCategory: "Sports",
   },
@@ -519,16 +627,31 @@ export const SOURCES: SourceConfig[] = [
   {
     id: "colorado-avalanche-web",
     enabled: true,
-    connector: "apifyWeb",
+    // nhl.com/avalanche is a heavy SPA; pull the schedule from NHL's public
+    // api-web.nhle.com feed instead (future home games at Ball Arena only). The
+    // /now endpoint auto-resolves the current season, so it returns nothing in
+    // the offseason and advances when the next schedule publishes.
+    connector: "nhlSchedule",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.nhl.com/avalanche/",
+    nhlTeamAbbrev: "COL",
+    nhlTeamSlug: "avalanche",
+    maxItems: 60,
     defaultVenueSlug: "ball-arena",
     defaultCategory: "Sports",
   },
   {
     id: "colorado-avalanche-ig",
-    enabled: true,
+    // Disabled: @coloradoavalanche is a brand/news account (game hype, player
+    // tributes, roster moves), not an event-posting one — a 12-post inspection
+    // surfaced 0 upcoming datable events. The team's real events are its home
+    // games, now pulled authoritatively from the NHL API (colorado-avalanche-web,
+    // connector: "nhlSchedule"). Keeping this on would only risk duplicate game
+    // listings (IG games carry sourceLabel "Instagram", so the per-label dedup
+    // passes wouldn't match them against the API's "Website" rows) for ~0
+    // net-new events. Theme nights still arrive via denver-sports-events
+    // (SerpAPI) and ball-arena-web.
+    enabled: false,
     connector: "instagram",
     cadence: "weekly",
     sourceLabel: "Instagram",
