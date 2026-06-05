@@ -10,6 +10,7 @@ import { ONBOARDING_INTERESTS } from "@/lib/data/categories";
 import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { LIFESTYLE_OPTIONS } from "@/lib/data/lifestyleOptions";
 import { useSavedListings } from "@/lib/hooks/useSavedListings";
+import { DEFAULT_PREFS, NOTIFICATION_META, type NotificationPrefs, type NotificationType } from "@/lib/notify/types";
 import { ListingGrid } from "@/components/explore/ListingGrid";
 import { MapView } from "@/components/explore/MapView";
 import { CalendarView } from "@/components/explore/CalendarView";
@@ -540,53 +541,78 @@ function BillingTab() {
   );
 }
 
-const NOTIF_KEY = "wv.notifPrefs";
-function NotificationsTab() {
-  const [prefs, setPrefs] = useState({ email: true, deals: true, reminders: false });
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(NOTIF_KEY);
-      if (raw) setPrefs({ ...prefs, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const set = (patch: Partial<typeof prefs>) => {
-    const next = { ...prefs, ...patch };
-    setPrefs(next);
-    try {
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
-  const rows: Array<{ k: keyof typeof prefs; label: string; desc: string }> = [
-    { k: "email", label: "Email updates", desc: "Weekly recommendations tailored to you" },
-    { k: "deals", label: "Deal alerts", desc: "New deals in your neighborhoods" },
-    { k: "reminders", label: "Event reminders", desc: "A ping the day of your saved events" },
-  ];
+function NotifToggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
-    <Card title="Notifications" desc="Choose what you'd like to hear about. Delivery is rolling out soon.">
-      <div className="flex flex-col">
-        {rows.map((r) => (
-          <div key={r.k} className="border-border flex items-center justify-between gap-4 border-b py-3 last:border-0">
-            <div>
-              <div className="text-dark text-[13px] font-medium">{r.label}</div>
-              <div className="text-gray text-[12px]">{r.desc}</div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={prefs[r.k]}
-              onClick={() => set({ [r.k]: !prefs[r.k] })}
-              className={`relative h-6 w-[42px] shrink-0 rounded-full transition-colors ${prefs[r.k] ? "bg-coral" : "bg-[#d5d5d5]"}`}
-            >
-              <span className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow transition-all" style={{ left: prefs[r.k] ? 21 : 3 }} />
-            </button>
-          </div>
-        ))}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onClick}
+      className={`relative h-6 w-[42px] shrink-0 rounded-full transition-colors ${on ? "bg-coral" : "bg-[#d5d5d5]"} ${disabled ? "opacity-50" : ""}`}
+    >
+      <span className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow transition-all" style={{ left: on ? 21 : 3 }} />
+    </button>
+  );
+}
+
+function NotificationsTab() {
+  const { profile, session, openUpgrade } = useAuthContext();
+  const isInsider = profile?.plan === "insider";
+  const userId = session?.userId ?? null;
+  const [prefs, setPrefs] = useState<NotificationPrefs>({});
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await getSupabaseBrowserClient().from("profiles").select("notification_prefs").eq("user_id", userId).maybeSingle();
+      const np = (data as { notification_prefs: NotificationPrefs | null } | null)?.notification_prefs;
+      if (!cancelled && np) setPrefs(np);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const value = (k: NotificationType) => prefs[k] ?? DEFAULT_PREFS[k];
+  const set = (k: NotificationType) => {
+    const next = { ...prefs, [k]: !value(k) };
+    setPrefs(next);
+    if (!userId) return;
+    // .then() so the lazy supabase builder actually runs.
+    getSupabaseBrowserClient()
+      .from("profiles")
+      .update({ notification_prefs: next })
+      .eq("user_id", userId)
+      .then((res: { error: { message: string } | null }) => {
+        if (res.error) console.error("[notifications] save failed", res.error);
+      });
+  };
+
+  const Row = ({ k, label, desc, locked }: { k: NotificationType; label: string; desc: string; locked?: boolean }) => (
+    <div className="border-border flex items-center justify-between gap-4 border-b py-3 last:border-0">
+      <div>
+        <div className="text-dark text-[13px] font-medium">{label}{locked ? " · Insider" : ""}</div>
+        <div className="text-gray text-[12px]">{desc}</div>
       </div>
-    </Card>
+      <NotifToggle on={!locked && value(k)} disabled={locked} onClick={() => (locked ? openUpgrade() : set(k))} />
+    </div>
+  );
+
+  return (
+    <>
+      <Card title="Notifications" desc="Choose what you'd like to hear about. Alerts show in your notifications bell; email is coming soon.">
+        <div className="flex flex-col">
+          {NOTIFICATION_META.filter((m) => m.tier === "basic").map((m) => (
+            <Row key={m.type} k={m.type} label={m.label} desc={m.desc} />
+          ))}
+        </div>
+      </Card>
+      <Card title="Advanced notifications" desc="Insider-only alerts for the things you care about most.">
+        <div className="flex flex-col">
+          {NOTIFICATION_META.filter((m) => m.tier === "advanced").map((m) => (
+            <Row key={m.type} k={m.type} label={m.label} desc={m.desc} locked={!isInsider} />
+          ))}
+        </div>
+      </Card>
+    </>
   );
 }
