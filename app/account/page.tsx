@@ -11,6 +11,8 @@ import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { LIFESTYLE_OPTIONS } from "@/lib/data/lifestyleOptions";
 import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
 import { ListingGrid } from "@/components/explore/ListingGrid";
+import { MapView } from "@/components/explore/MapView";
+import { CalendarView } from "@/components/explore/CalendarView";
 
 const TABS = [
   { id: "profile", label: "Profile" },
@@ -269,7 +271,7 @@ function PreferencesTab() {
 }
 
 const LISTING_COLUMNS =
-  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags";
+  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng";
 
 function rowToListing(r: Record<string, unknown>): Listing {
   return {
@@ -279,17 +281,36 @@ function rowToListing(r: Record<string, unknown>): Listing {
     startAt: (r.date_start as string) ?? "", endAt: (r.date_end as string) ?? null, dateDisplay: (r.date_display as string) ?? "",
     timeDisplay: (r.time_display as string) ?? "", isFree: Boolean(r.is_free), dealValue: (r.deal_value as string) ?? undefined,
     imageUrl: (r.image_url as string) ?? "", source: r.source as ListingSource, sourceUrl: (r.source_url as string) ?? undefined,
-    tags: ((r.tags as string[]) ?? []) as LifestyleTag[], lat: null, lng: null,
+    tags: ((r.tags as string[]) ?? []) as LifestyleTag[],
+    lat: (r.lat as number | null) ?? null, lng: (r.lng as number | null) ?? null,
   };
 }
 
+type SavedView = "grid" | "map" | "calendar";
+
 function SavedTab() {
   const { favorites } = useFavorites();
-  const { openSavedEvents } = useAuthContext();
+  const { openSavedEvents, profile, openUpgrade } = useAuthContext();
+  const isInsider = profile?.plan === "insider";
+  const [view, setView] = useState<SavedView>("grid");
   const [saved, setSaved] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
   const ids = Array.from(favorites);
   const key = ids.slice().sort().join(",");
+
+  // Free users get grid only (per the tier matrix); map/calendar are Insider.
+  const VIEW_OPTIONS: { id: SavedView; label: string; insider: boolean }[] = [
+    { id: "grid", label: "Grid", insider: false },
+    { id: "map", label: "Map", insider: true },
+    { id: "calendar", label: "Calendar", insider: true },
+  ];
+  function pickView(o: { id: SavedView; insider: boolean }) {
+    if (o.insider && !isInsider) {
+      openUpgrade();
+      return;
+    }
+    setView(o.id);
+  }
 
   useEffect(() => {
     if (ids.length === 0) {
@@ -313,10 +334,31 @@ function SavedTab() {
 
   return (
     <Card title="Saved events & deals" desc="Organize saves into folders and share them.">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={openSavedEvents} className="bg-dark rounded-pill px-5 py-2 text-[13px] font-medium text-white hover:opacity-90">
           Manage saves & folders
         </button>
+        {saved.length > 0 && (
+          <div className="border-border flex rounded-pill border p-0.5">
+            {VIEW_OPTIONS.map((o) => {
+              const active = view === o.id;
+              const locked = o.insider && !isInsider;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => pickView(o)}
+                  title={locked ? "Map & Calendar views are an Insider feature" : undefined}
+                  className={`rounded-pill px-3 py-1 text-[12px] font-medium transition-colors ${
+                    active ? "bg-dark text-white" : "text-graphite hover:text-dark"
+                  } ${locked ? "opacity-60" : ""}`}
+                >
+                  {o.label}{locked ? " · Insider" : ""}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       {loading ? (
         <p className="text-gray text-[13px]">Loading…</p>
@@ -324,6 +366,10 @@ function SavedTab() {
         <p className="text-gray text-[13px]">
           Nothing saved yet. <Link href="/explore" className="text-coral font-medium hover:underline">Browse events</Link>.
         </p>
+      ) : view === "map" && isInsider ? (
+        <MapView listings={saved} />
+      ) : view === "calendar" && isInsider ? (
+        <CalendarView listings={saved} />
       ) : (
         <ListingGrid listings={saved} />
       )}
