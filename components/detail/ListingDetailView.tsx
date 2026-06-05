@@ -8,6 +8,7 @@ import { buildCalendarUrl, buildDirectionsUrl } from "@/lib/links";
 import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
+import { ReportButton } from "./ReportButton";
 import {
   CalendarIcon,
   CompassIcon,
@@ -173,16 +174,19 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           </button>
         )}
 
-        <div className="border-border border-t pt-4">
-          <InfoLabel>Source</InfoLabel>
-          <a
-            href={listing.sourceUrl ?? "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-coral inline-flex items-center gap-1 text-[13px] font-medium hover:underline"
-          >
-            View original post on {listing.source} ↗
-          </a>
+        <div className="border-border flex items-center justify-between border-t pt-4">
+          <div>
+            <InfoLabel>Source</InfoLabel>
+            <a
+              href={listing.sourceUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-coral inline-flex items-center gap-1 text-[13px] font-medium hover:underline"
+            >
+              View original post on {listing.source} ↗
+            </a>
+          </div>
+          <ReportButton listingId={listing.id} />
         </div>
       </div>
     </article>
