@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { InsiderBadge } from "@/components/ui/InsiderBadge";
 import { useAuthContext } from "@/components/auth/AuthProvider";
+import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 
 interface Props {
   listing: Listing;
@@ -45,6 +46,7 @@ export function InsiderLockedPreview({ listing }: Props) {
           <span className="bg-tag-bg text-graphite rounded-full px-2.5 py-1 text-[11px] font-medium">
             {listing.category}
           </span>
+          <LifestyleTagChips tags={listing.tags} />
         </div>
         <h1 className="text-dark mb-2 text-[24px] font-medium leading-tight">
           {listing.title}

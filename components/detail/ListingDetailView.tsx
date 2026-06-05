@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { DealTag } from "@/components/ui/DealTag";
 import { buildCalendarUrl, buildDirectionsUrl } from "@/lib/links";
+import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
 import {
@@ -80,6 +81,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
             {listing.category}
           </span>
           {listing.dealValue && <DealTag value={listing.dealValue} />}
+          <LifestyleTagChips tags={listing.tags} />
         </div>
 
         <h1
