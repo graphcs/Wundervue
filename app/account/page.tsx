@@ -9,7 +9,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ONBOARDING_INTERESTS } from "@/lib/data/categories";
 import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { LIFESTYLE_OPTIONS } from "@/lib/data/lifestyleOptions";
-import type { Listing, ListingType, ListingSource, LifestyleTag } from "@/lib/types";
+import { useSavedListings } from "@/lib/hooks/useSavedListings";
 import { ListingGrid } from "@/components/explore/ListingGrid";
 import { MapView } from "@/components/explore/MapView";
 import { CalendarView } from "@/components/explore/CalendarView";
@@ -18,6 +18,7 @@ const TABS = [
   { id: "profile", label: "Profile" },
   { id: "preferences", label: "Interests & Neighborhoods" },
   { id: "saved", label: "Saved" },
+  { id: "calendar", label: "Calendar" },
   { id: "following", label: "Following" },
   { id: "billing", label: "Billing" },
   { id: "notifications", label: "Notifications" },
@@ -95,6 +96,7 @@ export default function AccountPage() {
           {tab === "profile" && <ProfileTab />}
           {tab === "preferences" && <PreferencesTab />}
           {tab === "saved" && <SavedTab />}
+          {tab === "calendar" && <CalendarTab />}
           {tab === "following" && <FollowingTab />}
           {tab === "billing" && <BillingTab />}
           {tab === "notifications" && <NotificationsTab />}
@@ -270,22 +272,6 @@ function PreferencesTab() {
   );
 }
 
-const LISTING_COLUMNS =
-  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng";
-
-function rowToListing(r: Record<string, unknown>): Listing {
-  return {
-    id: r.id as string, slug: r.slug as string, type: r.type as ListingType, title: r.title as string,
-    description: (r.description as string) ?? "", venueId: (r.venue_id as string) ?? "", venueName: "",
-    address: (r.address as string) ?? "", neighborhood: (r.neighborhood as string) ?? "", category: (r.category as string) ?? "",
-    startAt: (r.date_start as string) ?? "", endAt: (r.date_end as string) ?? null, dateDisplay: (r.date_display as string) ?? "",
-    timeDisplay: (r.time_display as string) ?? "", isFree: Boolean(r.is_free), dealValue: (r.deal_value as string) ?? undefined,
-    imageUrl: (r.image_url as string) ?? "", source: r.source as ListingSource, sourceUrl: (r.source_url as string) ?? undefined,
-    tags: ((r.tags as string[]) ?? []) as LifestyleTag[],
-    lat: (r.lat as number | null) ?? null, lng: (r.lng as number | null) ?? null,
-  };
-}
-
 type SavedView = "grid" | "map" | "calendar";
 
 function SavedTab() {
@@ -293,10 +279,7 @@ function SavedTab() {
   const { openSavedEvents, profile, openUpgrade } = useAuthContext();
   const isInsider = profile?.plan === "insider";
   const [view, setView] = useState<SavedView>("grid");
-  const [saved, setSaved] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(false);
-  const ids = Array.from(favorites);
-  const key = ids.slice().sort().join(",");
+  const { listings: saved, loading } = useSavedListings(Array.from(favorites));
 
   // Free users get grid only (per the tier matrix); map/calendar are Insider.
   const VIEW_OPTIONS: { id: SavedView; label: string; insider: boolean }[] = [
@@ -311,26 +294,6 @@ function SavedTab() {
     }
     setView(o.id);
   }
-
-  useEffect(() => {
-    if (ids.length === 0) {
-      setSaved([]);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      const sb = getSupabaseBrowserClient();
-      const { data } = await sb.from("listings").select(LISTING_COLUMNS).in("id", ids);
-      if (cancelled) return;
-      setSaved(((data ?? []) as Array<Record<string, unknown>>).map((r) => rowToListing(r)));
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
 
   return (
     <Card title="Saved events & deals" desc="Organize saves into folders and share them.">
@@ -374,6 +337,104 @@ function SavedTab() {
         <ListingGrid listings={saved} />
       )}
     </Card>
+  );
+}
+
+function CalendarTab() {
+  const { profile, session, openUpgrade } = useAuthContext();
+  const { favorites } = useFavorites();
+  const isInsider = profile?.plan === "insider";
+  const userId = session?.userId ?? null;
+  const [token, setToken] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { listings: saved } = useSavedListings(Array.from(favorites));
+
+  useEffect(() => {
+    if (!userId || !isInsider) return;
+    let cancelled = false;
+    (async () => {
+      const sb = getSupabaseBrowserClient();
+      const { data } = await sb.from("profiles").select("calendar_token").eq("user_id", userId).maybeSingle();
+      if (!cancelled) setToken((data as { calendar_token: string | null } | null)?.calendar_token ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, isInsider]);
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/calendar/token", { method: "POST" });
+      if (res.ok) setToken((await res.json()).token);
+    } finally {
+      setGenerating(false);
+    }
+  }
+  async function copy() {
+    if (!feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  if (!isInsider) {
+    return (
+      <Card title="Calendar sync" desc="Subscribe to your saved events in Google, Apple, or Outlook calendars.">
+        <div className="border-coral rounded-xl border-2 bg-white p-5 text-center">
+          <h3 className="text-dark text-[15px] font-medium">Calendar sync is an Insider feature</h3>
+          <p className="text-gray mx-auto mt-1 max-w-sm text-[13px]">
+            Upgrade to get a private calendar feed of your saved events that stays in sync automatically.
+          </p>
+          <button type="button" onClick={openUpgrade} className="bg-dark rounded-pill mt-4 px-6 py-2.5 text-[13px] font-medium text-white hover:opacity-90">
+            Upgrade to Insider
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card title="Calendar sync" desc="Subscribe to your saved events in any calendar app — it updates as you save and unsave.">
+        {feedUrl ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <input readOnly value={feedUrl} className="border-border text-graphite min-w-0 flex-1 rounded-lg border px-3 py-2 text-[12px]" />
+              <button type="button" onClick={copy} className="border-border text-dark rounded-pill shrink-0 border px-4 py-2 text-[12px] font-medium hover:bg-tag-bg">
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href={feedUrl.replace(/^https?:/, "webcal:")} className="bg-dark rounded-pill px-4 py-2 text-[12px] font-medium text-white hover:opacity-90">
+                Add to calendar
+              </a>
+              <button type="button" onClick={generate} disabled={generating} className="text-gray hover:text-dark text-[12px] font-medium disabled:opacity-50">
+                {generating ? "Regenerating…" : "Regenerate link"}
+              </button>
+            </div>
+            <p className="text-gray text-[12px] leading-relaxed">
+              In Google Calendar, choose <strong>Other calendars → From URL</strong> and paste this link. Regenerating revokes the old link.
+            </p>
+          </div>
+        ) : (
+          <button type="button" onClick={generate} disabled={generating} className="bg-dark rounded-pill px-5 py-2.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+            {generating ? "Generating…" : "Generate calendar link"}
+          </button>
+        )}
+      </Card>
+      {saved.length > 0 && (
+        <Card title="Your saved calendar" desc="Everything you've saved, by date.">
+          <CalendarView listings={saved} />
+        </Card>
+      )}
+    </>
   );
 }
 

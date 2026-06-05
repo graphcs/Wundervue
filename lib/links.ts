@@ -1,18 +1,9 @@
 import type { Listing } from "@/lib/types";
+import { toIcsDate } from "@/lib/calendar/ics";
 
+// Google Calendar's template URL uses the same UTC basic format as iCalendar.
 function toGoogleDateTime(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return (
-    d.getUTCFullYear().toString() +
-    pad(d.getUTCMonth() + 1) +
-    pad(d.getUTCDate()) +
-    "T" +
-    pad(d.getUTCHours()) +
-    pad(d.getUTCMinutes()) +
-    pad(d.getUTCSeconds()) +
-    "Z"
-  );
+  return toIcsDate(iso) ?? "";
 }
 
 export function buildCalendarUrl(listing: Listing): string {
