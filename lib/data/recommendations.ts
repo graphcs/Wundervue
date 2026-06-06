@@ -33,7 +33,7 @@ export function scoreListing(listing: Listing, profile: RecoProfile): number {
 // Per-listing "Because you…" explanation, strongest signal first. Returns null
 // when nothing specific drove it (a soonest-order filler).
 export function forYouReason(listing: Listing, w: Wanted, behavior?: ForYouBehavior): string | null {
-  if (behavior?.followedVenues.has(listing.venueId)) {
+  if (listing.venueId && behavior?.followedVenues.has(listing.venueId)) {
     return `Because you follow ${listing.venueName || "this venue"}`;
   }
   const slug = listing.category ? categorySlug(listing.category) : undefined;
