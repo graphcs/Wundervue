@@ -18,27 +18,23 @@ describe("canReceive gating", () => {
 });
 
 describe("listingMatchesProfile", () => {
-  const listing = {
-    category: "Music",
-    neighborhood: "LoDo",
-    neighborhoodSlug: "lodo",
-    tags: ["date-night"],
-  };
+  // Onboarding ids map to listing vocabulary: interest "concerts" → "music",
+  // lifestyle "couple" → "date-night". Neighborhoods are labels.
+  const listing = { category: "Music", neighborhood: "LoDo", tags: ["date-night"] };
 
   it("matches everything when the user has no prefs set", () => {
     expect(listingMatchesProfile(listing, {})).toBe(true);
   });
 
-  it("matches on category, neighborhood (slug or label), or lifestyle tag", () => {
-    expect(listingMatchesProfile(listing, { interests: ["Music"] })).toBe(true);
-    expect(listingMatchesProfile(listing, { neighborhoods: ["lodo"] })).toBe(true);
+  it("matches on mapped category, neighborhood label, or mapped lifestyle tag", () => {
+    expect(listingMatchesProfile(listing, { interests: ["concerts"] })).toBe(true);
     expect(listingMatchesProfile(listing, { neighborhoods: ["LoDo"] })).toBe(true);
-    expect(listingMatchesProfile(listing, { lifestyle: ["date-night"] })).toBe(true);
+    expect(listingMatchesProfile(listing, { lifestyle: ["couple"] })).toBe(true);
   });
 
   it("does not match when prefs are set but none overlap", () => {
     expect(
-      listingMatchesProfile(listing, { interests: ["Sports"], neighborhoods: ["rino"], lifestyle: ["outdoor"] }),
+      listingMatchesProfile(listing, { interests: ["sports"], neighborhoods: ["RiNo"], lifestyle: ["kids"] }),
     ).toBe(false);
   });
 });

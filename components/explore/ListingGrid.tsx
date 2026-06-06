@@ -4,14 +4,16 @@ import { EmptyState } from "./EmptyState";
 
 interface Props {
   listings: Listing[];
+  // For You only: id → "Because you …" reason rendered on each card.
+  reasons?: Record<string, string>;
 }
 
-export function ListingGrid({ listings }: Props) {
+export function ListingGrid({ listings, reasons }: Props) {
   if (listings.length === 0) return <EmptyState />;
   return (
     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {listings.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
+        <ListingCard key={listing.id} listing={listing} reason={reasons?.[listing.id]} />
       ))}
     </div>
   );

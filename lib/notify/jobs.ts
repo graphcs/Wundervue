@@ -19,15 +19,15 @@ interface ListingRow {
   slug: string;
   title: string;
   neighborhood: string | null;
-  neighborhood_slug: string | null;
   category: string | null;
   tags: string[] | null;
+  is_free: boolean | null;
   venue_id: string | null;
   date_start: string | null;
 }
 
 const LISTING_COLS =
-  "id, slug, title, neighborhood, neighborhood_slug, category, tags, venue_id, date_start";
+  "id, slug, title, neighborhood, category, tags, is_free, venue_id, date_start";
 const LISTING_LIMIT = 500;
 
 function monthKey(d: Date) {
@@ -108,7 +108,7 @@ async function newUpcomingListings(sinceIso: string, nowIso: string): Promise<Li
 }
 
 function toMatchListing(l: ListingRow) {
-  return { category: l.category, neighborhood: l.neighborhood, neighborhoodSlug: l.neighborhood_slug, tags: l.tags };
+  return { category: l.category, neighborhood: l.neighborhood, tags: l.tags, isFree: l.is_free };
 }
 
 export interface JobResult {

@@ -13,6 +13,8 @@ import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 
 interface Props {
   listing: Listing;
+  // For You only: why this surfaced ("Because you follow …"). Renders a chip.
+  reason?: string;
 }
 
 function CalendarIcon() {
@@ -35,9 +37,15 @@ function CalendarIcon() {
   );
 }
 
-function CardBody({ listing, locked }: { listing: Listing; locked: boolean }) {
+function CardBody({ listing, locked, reason }: { listing: Listing; locked: boolean; reason?: string }) {
   return (
     <>
+      {reason && (
+        <div className="bg-coral/10 text-coral flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold">
+          <span aria-hidden>✨</span>
+          {reason}
+        </div>
+      )}
       <div className="bg-tag-bg relative h-[150px] w-full overflow-hidden">
         <Badge type={listing.type} />
         {listing.isFree && <FreeBadge />}
@@ -95,7 +103,7 @@ function CardBody({ listing, locked }: { listing: Listing; locked: boolean }) {
   );
 }
 
-export function ListingCard({ listing }: Props) {
+export function ListingCard({ listing, reason }: Props) {
   const { profile, openUpgrade } = useAuthContext();
   const locked = !canAccessListing(listing, profile?.plan);
   const href =
@@ -111,7 +119,7 @@ export function ListingCard({ listing }: Props) {
         aria-label={`Upgrade to view ${listing.title}`}
         className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
       >
-        <CardBody listing={listing} locked />
+        <CardBody listing={listing} locked reason={reason} />
       </button>
     );
   }
@@ -121,7 +129,7 @@ export function ListingCard({ listing }: Props) {
       href={href}
       className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
-      <CardBody listing={listing} locked={false} />
+      <CardBody listing={listing} locked={false} reason={reason} />
     </Link>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getMergedListings } from "@/lib/data/listings.server";
 import {
   NEIGHBORHOODS,
@@ -51,6 +51,9 @@ export default async function ExploreCombinedPage({
     neighborhoodFromPath: segment,
     categoryFromPath: category,
   });
+  // For You is a global personalized feed (gated + ranked on the main explore
+  // page), not segment-scoped — send it there instead of rendering a plain grid.
+  if (filters.view === "for-you") redirect("/explore?view=for-you");
   const all = await getMergedListings();
   const filtered = applyFilters(all, filters);
 
