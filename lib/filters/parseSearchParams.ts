@@ -5,6 +5,7 @@ import type {
   LifestyleTag,
   PageSize,
   SortOption,
+  ViewMode,
 } from "@/lib/types";
 
 const VALID_DATES: DatePreset[] = [
@@ -18,6 +19,7 @@ const VALID_DATES: DatePreset[] = [
 ];
 const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
 const VALID_SORTS: SortOption[] = ["soonest", "latest"];
+const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar", "for-you"];
 const VALID_PAGE_SIZES: PageSize[] = [9, 12, 15, 18];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
@@ -99,7 +101,7 @@ export function parseSearchParams(
     sort: (VALID_SORTS as string[]).includes(sort ?? "")
       ? (sort as SortOption)
       : "soonest",
-    view: view === "map" ? "map" : view === "calendar" ? "calendar" : "grid",
+    view: (VALID_VIEWS as string[]).includes(view ?? "") ? (view as ViewMode) : "grid",
     pageSize,
     venue: first(params, "venue"),
   };

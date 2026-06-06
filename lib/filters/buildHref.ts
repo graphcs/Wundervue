@@ -39,7 +39,8 @@ export function buildHref({
   if (filters.freeOnly) sp.set("free", "1");
   if (filters.q) sp.set("q", filters.q);
   if (filters.sort && filters.sort !== "soonest") sp.set("sort", filters.sort);
-  if (filters.view === "map" || filters.view === "calendar") {
+  // Persist any non-default view (grid is the default, so it's omitted).
+  if (filters.view && filters.view !== "grid") {
     sp.set("view", filters.view);
   }
   if (filters.pageSize && filters.pageSize !== 9) {

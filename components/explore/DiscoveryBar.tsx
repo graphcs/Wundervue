@@ -89,13 +89,25 @@ interface ViewToggleProps {
   value: ViewMode;
   onChange: (v: ViewMode) => void;
   mapDisabled?: boolean;
+  forYouLocked?: boolean;
+  onForYou: () => void;
 }
 
-function ViewToggle({ value, onChange, mapDisabled = false }: ViewToggleProps) {
+function ViewToggle({ value, onChange, mapDisabled = false, forYouLocked = false, onForYou }: ViewToggleProps) {
   const base =
     "inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-bold transition-colors whitespace-nowrap";
   return (
     <div className="rounded-pill border-[1.5px] border-[#d0d0d0] bg-white overflow-hidden inline-flex">
+      <button
+        type="button"
+        onClick={onForYou}
+        title={forYouLocked ? "For You — an Insider feature" : undefined}
+        className={`${base} ${
+          value === "for-you" ? "bg-dark text-white" : "text-graphite hover:text-dark"
+        } ${forYouLocked ? "opacity-60" : ""}`}
+      >
+        ✨ For You
+      </button>
       <button
         type="button"
         onClick={() => onChange("grid")}
@@ -267,6 +279,8 @@ export function DiscoveryBar() {
             <ViewToggle
               value={filters.view}
               onChange={(v) => replaceFilters({ view: v })}
+              forYouLocked={lifestyleGated}
+              onForYou={() => (lifestyleGated ? openUpgrade() : replaceFilters({ view: "for-you" }))}
             />
           </div>
         </div>

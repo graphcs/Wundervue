@@ -77,7 +77,7 @@ export type PageSize = 9 | 12 | 15 | 18;
 // save-count aggregation before they can be offered.
 export type SortOption = "soonest" | "latest";
 
-export type ViewMode = "grid" | "map" | "calendar";
+export type ViewMode = "grid" | "map" | "calendar" | "for-you";
 
 export interface Filters {
   type: TypeFilter;
