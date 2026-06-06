@@ -14,6 +14,8 @@ import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
 
 interface Props {
   listing: Listing;
+  // For You only: why this surfaced ("Because you follow …"). Renders a chip.
+  reason?: string;
   // Hide the favorite (heart) button — e.g. in the folder editor.
   hideFav?: boolean;
   // Optional control rendered in the image's top-right (clipped to the card's
@@ -44,16 +46,24 @@ function CalendarIcon() {
 function CardBody({
   listing,
   locked,
+  reason,
   hideFav,
   topRight,
 }: {
   listing: Listing;
   locked: boolean;
+  reason?: string;
   hideFav?: boolean;
   topRight?: ReactNode;
 }) {
   return (
     <>
+      {reason && (
+        <div className="bg-coral/10 text-coral flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold">
+          <span aria-hidden>✨</span>
+          {reason}
+        </div>
+      )}
       <div className="bg-tag-bg relative h-[150px] w-full overflow-hidden">
         <Badge type={listing.type} />
         {listing.isFree && <FreeBadge />}
@@ -113,7 +123,7 @@ function CardBody({
   );
 }
 
-export function ListingCard({ listing, hideFav, topRight }: Props) {
+export function ListingCard({ listing, reason, hideFav, topRight }: Props) {
   const { profile, openUpgrade } = useAuthContext();
   const locked = !canAccessListing(listing, profile?.plan);
   const href =
@@ -129,7 +139,7 @@ export function ListingCard({ listing, hideFav, topRight }: Props) {
         aria-label={`Upgrade to view ${listing.title}`}
         className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
       >
-        <CardBody listing={listing} locked hideFav={hideFav} topRight={topRight} />
+        <CardBody listing={listing} locked reason={reason} hideFav={hideFav} topRight={topRight} />
       </button>
     );
   }
@@ -139,7 +149,7 @@ export function ListingCard({ listing, hideFav, topRight }: Props) {
       href={href}
       className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
-      <CardBody listing={listing} locked={false} hideFav={hideFav} topRight={topRight} />
+      <CardBody listing={listing} locked={false} reason={reason} hideFav={hideFav} topRight={topRight} />
     </Link>
   );
 }
