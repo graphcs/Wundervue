@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSharedFolder } from "@/lib/data/folders.server";
+import { getSharedFolder, canEditFolder } from "@/lib/data/folders.server";
 import { ListingGrid } from "@/components/explore/ListingGrid";
+import { FolderEditor } from "@/components/folders/FolderEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export default async function SharedFolderPage({ params }: PageProps) {
   const folder = await getSharedFolder(share_slug);
   if (!folder) notFound();
 
+  // Editable for the owner or a collaborator (real folders only, not the
+  // "all saves" share which has no folder id).
+  const canEdit = await canEditFolder(folder.id, folder.ownerId);
+
   return (
     <div className="mx-auto max-w-[1100px] px-7 py-8">
       <header className="mb-6">
@@ -37,7 +42,11 @@ export default async function SharedFolderPage({ params }: PageProps) {
         </p>
       </header>
 
-      <ListingGrid listings={folder.listings} />
+      {canEdit ? (
+        <FolderEditor folderId={folder.id} initialListings={folder.listings} />
+      ) : (
+        <ListingGrid listings={folder.listings} />
+      )}
 
       <div className="border-border mt-8 flex justify-center border-t pt-6">
         <Link

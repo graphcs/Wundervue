@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
@@ -15,6 +16,11 @@ interface Props {
   listing: Listing;
   // For You only: why this surfaced ("Because you follow …"). Renders a chip.
   reason?: string;
+  // Hide the favorite (heart) button — e.g. in the folder editor.
+  hideFav?: boolean;
+  // Optional control rendered in the image's top-right (clipped to the card's
+  // rounded corner), in place of the heart. Used for the folder "remove" button.
+  topRight?: ReactNode;
 }
 
 function CalendarIcon() {
@@ -37,7 +43,19 @@ function CalendarIcon() {
   );
 }
 
-function CardBody({ listing, locked, reason }: { listing: Listing; locked: boolean; reason?: string }) {
+function CardBody({
+  listing,
+  locked,
+  reason,
+  hideFav,
+  topRight,
+}: {
+  listing: Listing;
+  locked: boolean;
+  reason?: string;
+  hideFav?: boolean;
+  topRight?: ReactNode;
+}) {
   return (
     <>
       {reason && (
@@ -54,7 +72,9 @@ function CardBody({ listing, locked, reason }: { listing: Listing; locked: boole
             <InsiderBadge />
           </span>
         )}
-        {!locked && <FavButton listingId={listing.id} tags={listing.tags} />}
+        {/* A locked card is itself a <button>; nesting another button is invalid HTML. */}
+        {!locked && topRight && <div className="absolute right-1.5 top-1.5 z-10">{topRight}</div>}
+        {!locked && !hideFav && <FavButton listingId={listing.id} tags={listing.tags} />}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={listing.imageUrl}
@@ -103,7 +123,7 @@ function CardBody({ listing, locked, reason }: { listing: Listing; locked: boole
   );
 }
 
-export function ListingCard({ listing, reason }: Props) {
+export function ListingCard({ listing, reason, hideFav, topRight }: Props) {
   const { profile, openUpgrade } = useAuthContext();
   const locked = !canAccessListing(listing, profile?.plan);
   const href =
@@ -119,7 +139,7 @@ export function ListingCard({ listing, reason }: Props) {
         aria-label={`Upgrade to view ${listing.title}`}
         className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
       >
-        <CardBody listing={listing} locked reason={reason} />
+        <CardBody listing={listing} locked reason={reason} hideFav={hideFav} topRight={topRight} />
       </button>
     );
   }
@@ -129,7 +149,7 @@ export function ListingCard({ listing, reason }: Props) {
       href={href}
       className="group border-border relative flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
-      <CardBody listing={listing} locked={false} reason={reason} />
+      <CardBody listing={listing} locked={false} reason={reason} hideFav={hideFav} topRight={topRight} />
     </Link>
   );
 }

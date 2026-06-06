@@ -89,13 +89,15 @@ describe("getSharedFolder", () => {
 
   it("resolves a folder slug to its listings", async () => {
     h.state.tables = {
-      saved_folders: { single: { id: "f1", name: "Weekend", kind: "basic" } },
-      favorites: { rows: [{ listing_id: "l1" }] },
+      // Membership now lives in folder_items, not favorites.folder_id.
+      saved_folders: { single: { id: "f1", user_id: "u1", name: "Weekend", kind: "basic" } },
+      folder_items: { rows: [{ listing_id: "l1" }] },
       listings: { rows: [listingRow] },
       venues: { rows: [{ id: "v1", name: "Mission Ballroom" }] },
     };
     const folder = await getSharedFolder("good-slug");
     expect(folder!.name).toBe("Weekend");
+    expect(folder!.ownerId).toBe("u1");
     expect(folder!.listings).toHaveLength(1);
     expect(folder!.listings[0].venueName).toBe("Mission Ballroom");
   });
