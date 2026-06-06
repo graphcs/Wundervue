@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useFolders, FolderInsiderError } from "@/lib/hooks/useFolders";
+import { useFolderMembership } from "@/lib/hooks/useFolderMembership";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { randomShareSlug } from "@/lib/shareSlug";
 import { isPastListing } from "@/lib/listings/isPast";
@@ -102,8 +103,16 @@ export function SavedEventsPanel() {
   const [tab, setTab] = useState<SavedTab>("upcoming");
   const [typeFilter, setTypeFilter] = useState<SavedTypeFilter>("all");
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
-  // listing id → folder id (or null when unfiled)
-  const [assignments, setAssignments] = useState<Map<string, string | null>>(new Map());
+  // Folder membership (folder_items) shared with the account Saved tab.
+  const [membership, setMembership] = useFolderMembership(folders.map((f) => f.id));
+  // Panel view: one folder per event (first owner-folder in creation order wins).
+  const assignments = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const f of folders) {
+      for (const lid of membership.get(f.id) ?? []) if (!map.has(lid)) map.set(lid, f.id);
+    }
+    return map;
+  }, [folders, membership]);
   const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -165,52 +174,45 @@ export function SavedEventsPanel() {
     setSavesShareSlug(null);
   }
 
-  // Load folder assignments for the user's favorites when the panel opens.
-  useEffect(() => {
-    if (!savedEventsOpen || !userId) {
-      setAssignments(new Map());
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase
-        .from("favorites")
-        .select("listing_id, folder_id")
-        .eq("user_id", userId);
-      if (cancelled) return;
-      const map = new Map<string, string | null>();
-      for (const r of (data ?? []) as Array<{ listing_id: string; folder_id: string | null }>) {
-        map.set(r.listing_id, r.folder_id);
-      }
-      setAssignments(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [savedEventsOpen, userId, favKey]);
-
   async function assignToFolder(listingId: string, folderId: string | null) {
     if (!userId) return;
     const supabase = getSupabaseBrowserClient();
-    setAssignments((prev) => new Map(prev).set(listingId, folderId));
-    const { error } = await supabase
-      .from("favorites")
-      .update({ folder_id: folderId })
-      .eq("user_id", userId)
-      .eq("listing_id", listingId);
-    if (error) console.error("[SavedEventsPanel] assign failed", error);
+    const folderIds = folders.map((f) => f.id);
+    const prev = membership; // snapshot to revert if a write fails
+    // Membership lives in folder_items: clear this event from the user's folders,
+    // then add it to the chosen one. Update the shared membership optimistically.
+    setMembership((current) => {
+      const next = new Map(current);
+      for (const fid of folderIds) {
+        if (next.get(fid)?.has(listingId)) {
+          const set = new Set(next.get(fid));
+          set.delete(listingId);
+          next.set(fid, set);
+        }
+      }
+      if (folderId) next.set(folderId, new Set(next.get(folderId)).add(listingId));
+      return next;
+    });
+    const revert = (error: unknown) => {
+      console.error("[SavedEventsPanel] assign failed", error);
+      setMembership(prev);
+    };
+    if (folderIds.length > 0) {
+      const { error } = await supabase.from("folder_items").delete().eq("listing_id", listingId).in("folder_id", folderIds);
+      if (error) return revert(error);
+    }
+    if (folderId) {
+      const { error } = await supabase
+        .from("folder_items")
+        .insert({ folder_id: folderId, listing_id: listingId, added_by: userId });
+      if (error) return revert(error);
+    }
   }
 
   async function handleDeleteFolder(id: string) {
     try {
       await remove(id);
-      // Detach locally so filtered views update without a refetch.
-      setAssignments((prev) => {
-        const next = new Map(prev);
-        for (const [k, v] of next) if (v === id) next.set(k, null);
-        return next;
-      });
+      // Membership refetches when `folders` changes; just clear the active filter.
       if (activeFolder === id) setActiveFolder(null);
     } catch (err) {
       console.error("[SavedEventsPanel] delete folder failed", err);
@@ -255,6 +257,8 @@ export function SavedEventsPanel() {
   // A folder shares by its random slug. "All saves" shares via a revocable
   // profile slug (Insider only) the owner mints/clears — never the user id.
   const folderShareUrl = activeFolderObj ? `${origin}/folders/${activeFolderObj.shareSlug}` : null;
+  // Edit link: any Insider who opens it joins as a collaborator (add/remove items).
+  const folderEditUrl = activeFolderObj ? `${origin}/folders/${activeFolderObj.shareSlug}/join` : null;
   const canShareAllSaves = activeFolder === null && isInsider && !!userId;
   const allSavesUrl = savesShareSlug ? `${origin}/saves/${savesShareSlug}` : null;
 
@@ -495,6 +499,27 @@ export function SavedEventsPanel() {
             className="bg-dark rounded-pill shrink-0 px-3 py-1 text-[12px] font-medium text-white hover:opacity-90"
           >
             {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      )}
+
+      {folderEditUrl && (
+        <div className="border-border bg-tag-bg/40 flex items-center gap-2 border-b px-5 py-2.5">
+          <span className="text-gray shrink-0 text-[11px] font-medium uppercase tracking-wide" title="Insiders who open this link can add or remove items">
+            Edit
+          </span>
+          <input
+            readOnly
+            value={folderEditUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="border-border text-graphite min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-[12px]"
+          />
+          <button
+            type="button"
+            onClick={() => copy(folderEditUrl)}
+            className="border-border text-dark hover:bg-tag-bg rounded-pill shrink-0 border px-3 py-1 text-[12px] font-medium"
+          >
+            Invite
           </button>
         </div>
       )}

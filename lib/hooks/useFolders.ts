@@ -88,8 +88,7 @@ export function useFolders() {
       // delete fails.
       setFolders((prev) => prev.filter((f) => f.id !== id));
       const sb = getSupabaseBrowserClient();
-      // Detach any saved items first so they don't point at a dead folder.
-      await sb.from("favorites").update({ folder_id: null }).eq("folder_id", id);
+      // folder_items rows cascade on folder delete; nothing else to detach.
       const { error } = await sb.from("saved_folders").delete().eq("id", id);
       if (error) {
         await refresh();

@@ -10,6 +10,8 @@ import { ONBOARDING_INTERESTS } from "@/lib/data/categories";
 import { ONBOARDING_NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { LIFESTYLE_OPTIONS } from "@/lib/data/lifestyleOptions";
 import { useSavedListings } from "@/lib/hooks/useSavedListings";
+import { useFolders } from "@/lib/hooks/useFolders";
+import { useFolderMembership } from "@/lib/hooks/useFolderMembership";
 import { DEFAULT_PREFS, NOTIFICATION_META, type NotificationPrefs, type NotificationType } from "@/lib/notify/types";
 import { ListingGrid } from "@/components/explore/ListingGrid";
 import { MapView } from "@/components/explore/MapView";
@@ -275,12 +277,36 @@ function PreferencesTab() {
 
 type SavedView = "grid" | "map" | "calendar";
 
+function FolderChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-pill px-3 py-1 text-[12px] font-medium transition-colors ${
+        active ? "bg-dark text-white" : "border-border text-graphite hover:text-dark border"
+      }`}
+    >
+      {label}
+      <span className={active ? "text-white/70" : "text-gray"}> · {count}</span>
+    </button>
+  );
+}
+
 function SavedTab() {
   const { favorites } = useFavorites();
+  const { folders } = useFolders();
   const { openSavedEvents, profile, openUpgrade } = useAuthContext();
   const isInsider = profile?.plan === "insider";
   const [view, setView] = useState<SavedView>("grid");
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const { listings: saved, loading } = useSavedListings(Array.from(favorites));
+
+  // Folder membership (folder_items) → folder id → set of listing ids, so the
+  // Saved tab can be filtered to a single folder, not just "all saves".
+  const [membership] = useFolderMembership(folders.map((f) => f.id));
+  // Ignore a stale filter whose folder no longer exists (no effect needed).
+  const validActiveFolder = activeFolder && folders.some((f) => f.id === activeFolder) ? activeFolder : null;
+  const visible = validActiveFolder ? saved.filter((l) => membership.get(validActiveFolder)?.has(l.id)) : saved;
 
   // Free users get grid only (per the tier matrix); map/calendar are Insider.
   const VIEW_OPTIONS: { id: SavedView; label: string; insider: boolean }[] = [
@@ -324,18 +350,34 @@ function SavedTab() {
           </div>
         )}
       </div>
+      {folders.length > 0 && saved.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <FolderChip label="All saves" count={saved.length} active={validActiveFolder === null} onClick={() => setActiveFolder(null)} />
+          {folders.map((f) => (
+            <FolderChip
+              key={f.id}
+              label={f.name}
+              count={membership.get(f.id)?.size ?? 0}
+              active={validActiveFolder === f.id}
+              onClick={() => setActiveFolder(f.id)}
+            />
+          ))}
+        </div>
+      )}
       {loading ? (
         <p className="text-gray text-[13px]">Loading…</p>
       ) : saved.length === 0 ? (
         <p className="text-gray text-[13px]">
           Nothing saved yet. <Link href="/explore" className="text-coral font-medium hover:underline">Browse events</Link>.
         </p>
+      ) : visible.length === 0 ? (
+        <p className="text-gray text-[13px]">No saved events in this folder yet.</p>
       ) : view === "map" && isInsider ? (
-        <MapView listings={saved} />
+        <MapView listings={visible} />
       ) : view === "calendar" && isInsider ? (
-        <CalendarView listings={saved} />
+        <CalendarView listings={visible} />
       ) : (
-        <ListingGrid listings={saved} />
+        <ListingGrid listings={visible} />
       )}
     </Card>
   );
