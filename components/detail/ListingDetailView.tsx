@@ -11,6 +11,7 @@ import { ShareButton } from "./ShareButton";
 import { ReportButton } from "./ReportButton";
 import { CalendarButton } from "./CalendarButton";
 import { CompassIcon, HouseIcon, PinIcon } from "./icons";
+import { hasSocialProof, formatSaveCount } from "@/lib/socialProof";
 
 interface Props {
   listing: Listing;
@@ -90,6 +91,13 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
         >
           {listing.title}
         </h1>
+
+        {hasSocialProof(listing.saveCount) && (
+          <p className="text-coral inline-flex items-center gap-1.5 text-[13px] font-semibold">
+            <span aria-hidden>♥</span>
+            {formatSaveCount(listing.saveCount!)} people saved this
+          </p>
+        )}
 
         <p className="text-graphite text-[15px] leading-relaxed">
           {listing.description}

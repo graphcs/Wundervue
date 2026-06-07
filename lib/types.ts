@@ -29,6 +29,9 @@ export interface Listing {
   source: ListingSource;
   sourceUrl?: string;
   tags: LifestyleTag[];
+  // How many users have saved this listing (social proof). Optional: only the
+  // DB-backed reads populate it; fixtures and other mappers omit it (treated 0).
+  saveCount?: number;
   // null when the venue hasn't been geocoded yet. Map renderers must filter
   // before reading; (0,0) is a real point on the globe and not a sentinel.
   lat: number | null;
