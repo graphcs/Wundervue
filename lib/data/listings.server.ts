@@ -85,7 +85,11 @@ export async function getPublishedListings(): Promise<Listing[]> {
           "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
         )
         .not("published_at", "is", null)
-        .gte("date_start", cutoff)
+        // Show anything not yet over: an event whose end is today-or-later (an
+        // ongoing multi-week run that started earlier), or — when there's no
+        // end — whose start is today-or-later. Mirrors expirePastEvents' cutoff
+        // so the feed and the is_past sweep agree.
+        .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`)
         .order("date_start", { ascending: true, nullsFirst: false }),
       client.from("venues").select("id, slug, name"),
     ]);
@@ -290,7 +294,10 @@ export async function getBrowseVenues(): Promise<BrowseVenue[]> {
         .select("venue_id")
         .not("published_at", "is", null)
         .not("venue_id", "is", null)
-        .gte("date_start", cutoff),
+        // Match getPublishedListings exactly: an ongoing run (end today-or-later)
+        // or a future single-date event. Keeps the venue count in step with the
+        // explore feed so a mid-run event isn't shown but uncounted.
+        .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`),
     ]);
 
     const counts = new Map<string, number>();

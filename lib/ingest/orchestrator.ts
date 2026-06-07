@@ -7,6 +7,12 @@ import { fetchVenuePilot } from "./connectors/venuePilot";
 import { fetchWixEvents } from "./connectors/wixEvents";
 import { fetchFullCalendarFeed } from "./connectors/fullCalendarFeed";
 import { fetchMlbSchedule } from "./connectors/mlbSchedule";
+import { fetchNbaSchedule } from "./connectors/nbaSchedule";
+import { fetchNhlSchedule } from "./connectors/nhlSchedule";
+import { fetchNflSchedule } from "./connectors/nflSchedule";
+import { fetchAquariumCalendar } from "./connectors/aquariumCalendar";
+import { fetchWpRestEvents } from "./connectors/wpRestEvents";
+import { fetchComedyWorksCalendar } from "./connectors/comedyWorksCalendar";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
@@ -43,6 +49,18 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchFullCalendarFeed(source);
     case "mlbSchedule":
       return fetchMlbSchedule(source);
+    case "nbaSchedule":
+      return fetchNbaSchedule(source);
+    case "nhlSchedule":
+      return fetchNhlSchedule(source);
+    case "nflSchedule":
+      return fetchNflSchedule(source);
+    case "aquariumCalendar":
+      return fetchAquariumCalendar(source);
+    case "wpRestEvents":
+      return fetchWpRestEvents(source);
+    case "comedyWorksCalendar":
+      return fetchComedyWorksCalendar(source);
   }
 }
 
