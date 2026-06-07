@@ -509,6 +509,38 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
     defaultVenueSlug: "denver-zoo",
   },
+  {
+    // Denver Union Station's /experience/event-calendar/ is JS-rendered with no
+    // events REST collection, but it's a WordPress site whose events-sitemap.xml
+    // lists every server-rendered event detail page (clean OG title/description/
+    // image + the dates in the body). The connector reads the sitemap, scrapes
+    // each page, and emits the soonest upcoming events. Category varies (public
+    // event / family-kids / 21+), so it's left to the normalizer.
+    id: "denver-union-station-web",
+    enabled: true,
+    connector: "denverUnionStation",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denverunionstation.com/events-sitemap.xml",
+    maxItems: 40,
+    defaultVenueSlug: "denver-union-station",
+  },
+  {
+    // Larimer Square (historic LoDo block) runs its calendar on Squarespace,
+    // which serves the whole event collection as JSON at ?format=json with a
+    // pre-filtered `upcoming` array. The generic squarespaceEvents connector
+    // reads it directly. Events span the block's restaurants/bars, so per-event
+    // venue/category is left to the normalizer; all pin to Larimer Square.
+    id: "larimer-square-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.larimersquare.com/events",
+    maxItems: 40,
+    defaultVenueName: "Larimer Square",
+    defaultVenueSlug: "larimer-square",
+  },
   // Comedy Works runs two Denver clubs (Downtown in LoDo, South in Greenwood
   // Village) off one Rails calendar that pages a month per URL and interleaves
   // both clubs plus external "concerts". A custom connector crawls the current

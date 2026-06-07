@@ -16,7 +16,9 @@ export type ConnectorKind =
   | "nflSchedule"
   | "aquariumCalendar"
   | "wpRestEvents"
-  | "comedyWorksCalendar";
+  | "comedyWorksCalendar"
+  | "denverUnionStation"
+  | "squarespaceEvents";
 
 export interface SourceConfig {
   id: string;
@@ -77,6 +79,13 @@ export interface SourceConfig {
   // keeps only events tagged for this club so each source can pin authoritatively
   // via defaultVenueSlug. Omit to collect every club (untagged concerts excluded).
   comedyWorksClub?: "downtown" | "south";
+  // apifyWeb — render JavaScript with a real browser (apify/web-scraper) instead
+  // of the default static cheerio-scraper. Needed for client-rendered widgets
+  // (e.g. Wix Events). Pair with `selectors` + `waitForSelector`.
+  renderJs?: boolean;
+  // apifyWeb (renderJs) — CSS selector to wait for before extracting, so the
+  // dynamically-loaded content has rendered.
+  waitForSelector?: string;
   // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
   // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
   // shows) would otherwise push every future event through LLM normalization
@@ -86,6 +95,10 @@ export interface SourceConfig {
 
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
+  // squarespaceEvents — venue name to label each event with (the Squarespace
+  // feed's per-item location is often the platform's empty default). Used as the
+  // venueName hint in the blob; the normalizer can still refine from the title.
+  defaultVenueName?: string;
   defaultCategory?: string;
 }
 

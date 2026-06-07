@@ -13,6 +13,8 @@ import { fetchNflSchedule } from "./connectors/nflSchedule";
 import { fetchAquariumCalendar } from "./connectors/aquariumCalendar";
 import { fetchWpRestEvents } from "./connectors/wpRestEvents";
 import { fetchComedyWorksCalendar } from "./connectors/comedyWorksCalendar";
+import { fetchDenverUnionStation } from "./connectors/denverUnionStation";
+import { fetchSquarespaceEvents } from "./connectors/squarespaceEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
@@ -61,6 +63,10 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchWpRestEvents(source);
     case "comedyWorksCalendar":
       return fetchComedyWorksCalendar(source);
+    case "denverUnionStation":
+      return fetchDenverUnionStation(source);
+    case "squarespaceEvents":
+      return fetchSquarespaceEvents(source);
   }
 }
 
