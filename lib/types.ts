@@ -75,10 +75,11 @@ export type TypeFilter = "all" | "events" | "deals" | "both";
 
 export type PageSize = 9 | 12 | 15 | 18;
 
-// Listing ordering. "soonest" is the default (events happening first). Price-
-// and popularity-based sorts are planned but need a numeric price column /
-// save-count aggregation before they can be offered.
-export type SortOption = "soonest" | "latest";
+// Listing ordering. "soonest" is the default (events happening first); all
+// others fall back to soonest as a tiebreaker. Price low→high stays deferred
+// (deal_value is free text, no numeric price); popularity ("most-saved") is now
+// enabled by the save_count column.
+export type SortOption = "soonest" | "latest" | "free-first" | "deals-first" | "most-saved";
 
 export type ViewMode = "grid" | "map" | "calendar" | "for-you";
 

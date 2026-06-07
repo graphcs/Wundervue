@@ -7,6 +7,7 @@ import type {
   SortOption,
   ViewMode,
 } from "@/lib/types";
+import { SORT_OPTIONS, PAGE_SIZES, DEFAULT_PAGE_SIZE } from "./types";
 
 const VALID_DATES: DatePreset[] = [
   "any",
@@ -18,9 +19,9 @@ const VALID_DATES: DatePreset[] = [
   "custom",
 ];
 const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
-const VALID_SORTS: SortOption[] = ["soonest", "latest"];
+// Derived from SORT_OPTIONS so the dropdown + validation can't drift.
+const VALID_SORTS: readonly SortOption[] = SORT_OPTIONS.map((o) => o.id);
 const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar", "for-you"];
-const VALID_PAGE_SIZES: PageSize[] = [9, 12, 15, 18];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
   "dog-friendly",
@@ -66,9 +67,9 @@ export function parseSearchParams(
   const view = first(params, "view");
   const perRaw = first(params, "per");
   const perNum = Number(perRaw);
-  const pageSize: PageSize = (VALID_PAGE_SIZES as number[]).includes(perNum)
+  const pageSize: PageSize = (PAGE_SIZES as readonly number[]).includes(perNum)
     ? (perNum as PageSize)
-    : 9;
+    : DEFAULT_PAGE_SIZE;
 
   const neighborhoods = options.neighborhoodFromPath
     ? [options.neighborhoodFromPath, ...hoodsRaw].filter(
