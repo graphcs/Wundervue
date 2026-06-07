@@ -246,9 +246,7 @@ export async function getVenueListingsAllAsync(venueSlug: string): Promise<Listi
 
     const { data: rows } = await client
       .from("listings")
-      .select(
-        "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
-      )
+      .select(LISTING_COLUMNS)
       .eq("venue_id", (venueRow as { id: string }).id)
       .not("published_at", "is", null)
       .order("date_start", { ascending: true, nullsFirst: false });
