@@ -11,6 +11,7 @@ import { DealTag } from "@/components/ui/DealTag";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { canAccessListing, isListingInsiderOnly } from "@/lib/auth/insiderGate";
 import { LifestyleTagChips } from "@/components/ui/LifestyleTagChips";
+import { hasSocialProof, formatSaveCount } from "@/lib/socialProof";
 
 interface Props {
   listing: Listing;
@@ -90,6 +91,12 @@ function CardBody({
           <span className="bg-tag-bg text-graphite rounded-full px-2.5 py-1 text-[11px] font-medium">
             {listing.category}
           </span>
+          {hasSocialProof(listing.saveCount) && (
+            <span className="bg-coral/10 text-coral inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold">
+              <span aria-hidden>♥</span>
+              {formatSaveCount(listing.saveCount!)} saved
+            </span>
+          )}
         </div>
         {listing.tags && listing.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

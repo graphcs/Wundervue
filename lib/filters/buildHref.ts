@@ -1,4 +1,5 @@
 import type { Filters } from "@/lib/types";
+import { DEFAULT_PAGE_SIZE } from "./types";
 
 export interface HrefInput {
   pathNeighborhood?: string;
@@ -43,7 +44,7 @@ export function buildHref({
   if (filters.view && filters.view !== "grid") {
     sp.set("view", filters.view);
   }
-  if (filters.pageSize && filters.pageSize !== 9) {
+  if (filters.pageSize && filters.pageSize !== DEFAULT_PAGE_SIZE) {
     sp.set("per", String(filters.pageSize));
   }
   if (filters.venue) sp.set("venue", filters.venue);
