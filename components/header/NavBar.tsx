@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ProfileIcon } from "./ProfileIcon";
 import { NotificationBell } from "./NotificationBell";
 import { SpotlightsPanel } from "./SpotlightsPanel";
@@ -13,6 +14,19 @@ const PANEL_BG = "#fff8e6";
 // dropdown of links). Hover/click matches the dropdown UX, but the
 // rendered panel is a separate component.
 const SPOTLIGHTS_LABEL = "Spotlights";
+
+// Our own app routes live in code (not the scraped marketing nav JSON, which a
+// re-scrape would clobber). They replace the external "About → Work With Us".
+const ABOUT_LABEL = "About";
+const INTERNAL_ABOUT_LINKS = [
+  { label: "Submit an Event", href: "/submit" },
+  { label: "Work With Us", href: "/work-with-us" },
+];
+const NAV = navData.nav.map((item) =>
+  item.label === ABOUT_LABEL ? { ...item, href: "/work-with-us", children: INTERNAL_ABOUT_LINKS } : item,
+);
+
+const isInternal = (href: string) => href.startsWith("/");
 
 export function NavBar() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -50,7 +64,7 @@ export function NavBar() {
     };
   }, [openIndex]);
 
-  const openLink = openIndex !== null ? navData.nav[openIndex] : null;
+  const openLink = openIndex !== null ? NAV[openIndex] : null;
   const openDropdown =
     openLink && openLink.children.length > 0 && openLink.label !== SPOTLIGHTS_LABEL
       ? openLink
@@ -61,7 +75,7 @@ export function NavBar() {
     <div ref={rootRef} className="relative">
       <nav className="border-border relative flex items-center justify-center border-b px-4 py-3">
         <ul className="flex items-center gap-8">
-          {navData.nav.map((link, i) => {
+          {NAV.map((link, i) => {
             const isSpotlights = link.label === SPOTLIGHTS_LABEL;
             const hasDropdown = link.children.length > 0 && !isSpotlights;
             const isOpen = openIndex === i && (hasDropdown || isSpotlights);
@@ -137,6 +151,13 @@ export function NavBar() {
                       />
                     )}
                   </button>
+                ) : isInternal(link.href) ? (
+                  <Link
+                    href={link.href}
+                    className="text-dark text-[11px] font-bold uppercase tracking-[0.08em] hover:opacity-70"
+                  >
+                    {link.label}
+                  </Link>
                 ) : (
                   <a
                     href={link.href}
@@ -167,19 +188,31 @@ export function NavBar() {
             className="flex flex-wrap items-center justify-center gap-x-12 gap-y-3 px-8 py-5"
             style={{ background: PANEL_BG }}
           >
-            {openDropdown.children.map((c) => (
-              <a
-                key={c.href}
-                role="menuitem"
-                href={c.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setOpenIndex(null)}
-                className="text-dark text-[13px] font-medium hover:opacity-70"
-              >
-                {c.label}
-              </a>
-            ))}
+            {openDropdown.children.map((c) =>
+              isInternal(c.href) ? (
+                <Link
+                  key={c.href}
+                  role="menuitem"
+                  href={c.href}
+                  onClick={() => setOpenIndex(null)}
+                  className="text-dark text-[13px] font-medium hover:opacity-70"
+                >
+                  {c.label}
+                </Link>
+              ) : (
+                <a
+                  key={c.href}
+                  role="menuitem"
+                  href={c.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setOpenIndex(null)}
+                  className="text-dark text-[13px] font-medium hover:opacity-70"
+                >
+                  {c.label}
+                </a>
+              ),
+            )}
           </div>
         </div>
       )}
