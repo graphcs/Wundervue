@@ -81,7 +81,12 @@ export type PageSize = 9 | 12 | 15 | 18;
 // enabled by the save_count column.
 export type SortOption = "soonest" | "latest" | "free-first" | "deals-first" | "most-saved";
 
-export type ViewMode = "grid" | "map" | "calendar" | "for-you";
+// How the listings are rendered. (For-You is a feed tab now, not a view mode.)
+export type ViewMode = "grid" | "map" | "calendar";
+
+// Which feed the homepage shows. "all" = everything; "for-you" = personalized
+// (Insider); "my-events" = the user's saved events.
+export type FeedTab = "all" | "for-you" | "my-events";
 
 export interface Filters {
   type: TypeFilter;
@@ -95,6 +100,7 @@ export interface Filters {
   q?: string;
   sort: SortOption;
   view: ViewMode;
+  tab: FeedTab;
   pageSize: PageSize;
   venue?: string;
 }

@@ -37,6 +37,7 @@ function filters(over: Partial<Filters> = {}): Filters {
     freeOnly: false,
     sort: "soonest",
     view: "grid",
+    tab: "all",
     pageSize: 9,
     ...over,
   };

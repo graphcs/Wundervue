@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { ViewMode } from "@/lib/types";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useFollowedVenues } from "@/lib/hooks/useFollowedVenues";
@@ -16,6 +17,7 @@ import { DEFAULT_PREFS, NOTIFICATION_META, type NotificationPrefs, type Notifica
 import { ListingGrid } from "@/components/explore/ListingGrid";
 import { MapView } from "@/components/explore/MapView";
 import { CalendarView } from "@/components/explore/CalendarView";
+import { SavedViewToggle } from "@/components/explore/SavedViewToggle";
 
 const TABS = [
   { id: "profile", label: "Profile" },
@@ -275,7 +277,6 @@ function PreferencesTab() {
   );
 }
 
-type SavedView = "grid" | "map" | "calendar";
 
 function FolderChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
@@ -297,7 +298,7 @@ function SavedTab() {
   const { folders } = useFolders();
   const { openSavedEvents, profile, openUpgrade } = useAuthContext();
   const isInsider = profile?.plan === "insider";
-  const [view, setView] = useState<SavedView>("grid");
+  const [view, setView] = useState<ViewMode>("grid");
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const { listings: saved, loading } = useSavedListings(Array.from(favorites));
 
@@ -308,20 +309,6 @@ function SavedTab() {
   const validActiveFolder = activeFolder && folders.some((f) => f.id === activeFolder) ? activeFolder : null;
   const visible = validActiveFolder ? saved.filter((l) => membership.get(validActiveFolder)?.has(l.id)) : saved;
 
-  // Free users get grid only (per the tier matrix); map/calendar are Insider.
-  const VIEW_OPTIONS: { id: SavedView; label: string; insider: boolean }[] = [
-    { id: "grid", label: "Grid", insider: false },
-    { id: "map", label: "Map", insider: true },
-    { id: "calendar", label: "Calendar", insider: true },
-  ];
-  function pickView(o: { id: SavedView; insider: boolean }) {
-    if (o.insider && !isInsider) {
-      openUpgrade();
-      return;
-    }
-    setView(o.id);
-  }
-
   return (
     <Card title="Saved events & deals" desc="Organize saves into folders and share them.">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -329,25 +316,7 @@ function SavedTab() {
           Manage saves & folders
         </button>
         {saved.length > 0 && (
-          <div className="border-border flex rounded-pill border p-0.5">
-            {VIEW_OPTIONS.map((o) => {
-              const active = view === o.id;
-              const locked = o.insider && !isInsider;
-              return (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => pickView(o)}
-                  title={locked ? "Map & Calendar views are an Insider feature" : undefined}
-                  className={`rounded-pill px-3 py-1 text-[12px] font-medium transition-colors ${
-                    active ? "bg-dark text-white" : "text-graphite hover:text-dark"
-                  } ${locked ? "opacity-60" : ""}`}
-                >
-                  {o.label}{locked ? " · Insider" : ""}
-                </button>
-              );
-            })}
-          </div>
+          <SavedViewToggle value={view} onChange={setView} isInsider={isInsider} onLocked={openUpgrade} />
         )}
       </div>
       {folders.length > 0 && saved.length > 0 && (

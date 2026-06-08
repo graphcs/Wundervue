@@ -27,10 +27,11 @@ export function ExploreResults({
   forYouLocked = false,
   reasons,
 }: Props) {
+  // For-You tab, gated for free/guests → upgrade prompt (takes precedence).
+  if (forYouLocked) return <ForYouLocked />;
   if (view === "map") return <MapView listings={listings} />;
   if (view === "calendar") return <CalendarView listings={listings} />;
-  if (view === "for-you" && forYouLocked) return <ForYouLocked />;
-  // For You (unlocked) and grid both render the paginated grid below.
+  // Grid (All + unlocked For-You) renders the paginated grid below.
   return (
     <>
       <ListingGrid listings={listings} reasons={reasons} />

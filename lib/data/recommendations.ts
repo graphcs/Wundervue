@@ -13,6 +13,30 @@ export interface ForYouBehavior {
   savedNeighborhoods: Set<string>; // neighborhoods the user tends to save
 }
 
+// Build the behavior object from raw signals + the full listing set: derives the
+// category/neighborhood taste sets from the user's saved listings.
+export function buildForYouBehavior(
+  signals: { savedIds: Set<string>; followedVenues: Set<string> },
+  allListings: readonly Listing[],
+): ForYouBehavior {
+  const byId = new Map(allListings.map((l) => [l.id, l]));
+  const savedCategorySlugs = new Set<string>();
+  const savedNeighborhoods = new Set<string>();
+  for (const id of signals.savedIds) {
+    const saved = byId.get(id);
+    if (!saved) continue;
+    const slug = saved.category ? categorySlug(saved.category) : undefined;
+    if (slug) savedCategorySlugs.add(slug);
+    if (saved.neighborhood) savedNeighborhoods.add(saved.neighborhood);
+  }
+  return {
+    savedIds: signals.savedIds,
+    followedVenues: signals.followedVenues,
+    savedCategorySlugs,
+    savedNeighborhoods,
+  };
+}
+
 function scoreWith(listing: Listing, w: Wanted, behavior?: ForYouBehavior): number {
   let score = scoreFields(listing, w); // stated prefs (category/neighborhood/tags/free)
   if (behavior) {
