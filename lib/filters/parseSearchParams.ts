@@ -6,6 +6,7 @@ import type {
   PageSize,
   SortOption,
   ViewMode,
+  FeedTab,
 } from "@/lib/types";
 import { SORT_OPTIONS, PAGE_SIZES, DEFAULT_PAGE_SIZE } from "./types";
 
@@ -21,7 +22,8 @@ const VALID_DATES: DatePreset[] = [
 const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
 // Derived from SORT_OPTIONS so the dropdown + validation can't drift.
 const VALID_SORTS: readonly SortOption[] = SORT_OPTIONS.map((o) => o.id);
-const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar", "for-you"];
+const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar"];
+const VALID_TABS: FeedTab[] = ["all", "for-you", "my-events"];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
   "dog-friendly",
@@ -65,6 +67,7 @@ export function parseSearchParams(
   const hoodsRaw = csv(first(params, "hoods"));
   const catsRaw = csv(first(params, "cats"));
   const view = first(params, "view");
+  const tab = first(params, "tab");
   const perRaw = first(params, "per");
   const perNum = Number(perRaw);
   const pageSize: PageSize = (PAGE_SIZES as readonly number[]).includes(perNum)
@@ -103,6 +106,7 @@ export function parseSearchParams(
       ? (sort as SortOption)
       : "soonest",
     view: (VALID_VIEWS as string[]).includes(view ?? "") ? (view as ViewMode) : "grid",
+    tab: (VALID_TABS as string[]).includes(tab ?? "") ? (tab as FeedTab) : "all",
     pageSize,
     venue: first(params, "venue"),
   };

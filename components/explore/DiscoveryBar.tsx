@@ -89,25 +89,13 @@ interface ViewToggleProps {
   value: ViewMode;
   onChange: (v: ViewMode) => void;
   mapDisabled?: boolean;
-  forYouLocked?: boolean;
-  onForYou: () => void;
 }
 
-function ViewToggle({ value, onChange, mapDisabled = false, forYouLocked = false, onForYou }: ViewToggleProps) {
+function ViewToggle({ value, onChange, mapDisabled = false }: ViewToggleProps) {
   const base =
     "inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-bold transition-colors whitespace-nowrap";
   return (
     <div className="rounded-pill border-[1.5px] border-[#d0d0d0] bg-white overflow-hidden inline-flex">
-      <button
-        type="button"
-        onClick={onForYou}
-        title={forYouLocked ? "For You — an Insider feature" : undefined}
-        className={`${base} ${
-          value === "for-you" ? "bg-dark text-white" : "text-graphite hover:text-dark"
-        } ${forYouLocked ? "opacity-60" : ""}`}
-      >
-        ✨ For You
-      </button>
       <button
         type="button"
         onClick={() => onChange("grid")}
@@ -144,7 +132,7 @@ function ViewToggle({ value, onChange, mapDisabled = false, forYouLocked = false
   );
 }
 
-export function DiscoveryBar() {
+export function DiscoveryBar({ showSearch = true }: { showSearch?: boolean } = {}) {
   const {
     filters,
     pathNeighborhood,
@@ -169,26 +157,28 @@ export function DiscoveryBar() {
   return (
     <div className="bg-bg border-border border-b">
       <div className="mx-auto max-w-[1100px] px-7 pb-3 pt-4">
-        <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
-          <div className="relative flex-1">
-            <span className="text-chrome pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-              <SearchIcon />
-            </span>
-            <input
-              type="search"
-              placeholder="Search events, deals, and things to do in Denver..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="border-border text-dark placeholder:text-chrome rounded-pill w-full border bg-white py-3 pl-11 pr-4 text-sm focus:border-dark focus:outline-none"
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-dark rounded-pill px-6 py-3 text-xs font-medium uppercase tracking-wider text-white hover:opacity-90"
-          >
-            Search
-          </button>
-        </form>
+        {showSearch && (
+          <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
+            <div className="relative flex-1">
+              <span className="text-chrome pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
+                <SearchIcon />
+              </span>
+              <input
+                type="search"
+                placeholder="Search events, deals, and things to do in Denver..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="border-border text-dark placeholder:text-chrome rounded-pill w-full border bg-white py-3 pl-11 pr-4 text-sm focus:border-dark focus:outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-dark rounded-pill px-6 py-3 text-xs font-medium uppercase tracking-wider text-white hover:opacity-90"
+            >
+              Search
+            </button>
+          </form>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           {TYPE_FILTERS.map((t) => (
@@ -279,8 +269,6 @@ export function DiscoveryBar() {
             <ViewToggle
               value={filters.view}
               onChange={(v) => replaceFilters({ view: v })}
-              forYouLocked={lifestyleGated}
-              onForYou={() => (lifestyleGated ? openUpgrade() : replaceFilters({ view: "for-you" }))}
             />
           </div>
         </div>
