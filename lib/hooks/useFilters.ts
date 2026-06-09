@@ -107,12 +107,13 @@ export function useFilters() {
           freeOnly: false,
           sort: filters.sort,
           view: filters.view,
+          tab: filters.tab,
           pageSize: filters.pageSize,
         },
       }),
       { scroll: false },
     );
-  }, [pathCtx, router, filters.sort, filters.view, filters.pageSize]);
+  }, [pathCtx, router, filters.sort, filters.view, filters.tab, filters.pageSize]);
 
   return {
     filters,

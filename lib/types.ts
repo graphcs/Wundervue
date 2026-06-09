@@ -29,6 +29,9 @@ export interface Listing {
   source: ListingSource;
   sourceUrl?: string;
   tags: LifestyleTag[];
+  // How many users have saved this listing (social proof). Optional: only the
+  // DB-backed reads populate it; fixtures and other mappers omit it (treated 0).
+  saveCount?: number;
   // null when the venue hasn't been geocoded yet. Map renderers must filter
   // before reading; (0,0) is a real point on the globe and not a sentinel.
   lat: number | null;
@@ -72,12 +75,18 @@ export type TypeFilter = "all" | "events" | "deals" | "both";
 
 export type PageSize = 9 | 12 | 15 | 18;
 
-// Listing ordering. "soonest" is the default (events happening first). Price-
-// and popularity-based sorts are planned but need a numeric price column /
-// save-count aggregation before they can be offered.
-export type SortOption = "soonest" | "latest";
+// Listing ordering. "soonest" is the default (events happening first); all
+// others fall back to soonest as a tiebreaker. Price low→high stays deferred
+// (deal_value is free text, no numeric price); popularity ("most-saved") is now
+// enabled by the save_count column.
+export type SortOption = "soonest" | "latest" | "free-first" | "deals-first" | "most-saved";
 
-export type ViewMode = "grid" | "map" | "calendar" | "for-you";
+// How the listings are rendered. (For-You is a feed tab now, not a view mode.)
+export type ViewMode = "grid" | "map" | "calendar";
+
+// Which feed the homepage shows. "all" = everything; "for-you" = personalized
+// (Insider); "my-events" = the user's saved events.
+export type FeedTab = "all" | "for-you" | "my-events";
 
 export interface Filters {
   type: TypeFilter;
@@ -91,6 +100,7 @@ export interface Filters {
   q?: string;
   sort: SortOption;
   view: ViewMode;
+  tab: FeedTab;
   pageSize: PageSize;
   venue?: string;
 }

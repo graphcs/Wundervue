@@ -1,4 +1,4 @@
-export const EXPLORE_PAGE_SIZE = 9;
+import { DEFAULT_PAGE_SIZE } from "./types";
 
 export function readPageParam(
   sp: Record<string, string | string[] | undefined>,
@@ -12,7 +12,7 @@ export function readPageParam(
 export function paginate<T>(
   items: T[],
   sp: Record<string, string | string[] | undefined>,
-  pageSize: number = EXPLORE_PAGE_SIZE,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ): { items: T[]; page: number; totalPages: number } {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const page = Math.min(Math.max(1, readPageParam(sp)), totalPages);

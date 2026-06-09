@@ -5,6 +5,10 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { LISTINGS, getListingBySlug as getFixtureListingBySlug } from "./listings";
 import { getVenueBySlug as getFixtureVenueBySlug } from "./venues";
 
+// Single source for the listing column list — shared by the feed + detail reads.
+const LISTING_COLUMNS =
+  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, save_count, lat, lng";
+
 interface DbListingRow {
   id: string;
   slug: string;
@@ -25,6 +29,7 @@ interface DbListingRow {
   source: string;
   source_url: string | null;
   tags: string[];
+  save_count: number | null;
   lat: number | null;
   lng: number | null;
 }
@@ -63,6 +68,7 @@ function rowToListing(row: DbListingRow, venueBy: Map<string, DbVenueRow>): List
     source: row.source as ListingSource,
     sourceUrl: row.source_url ?? undefined,
     tags: (row.tags ?? []) as LifestyleTag[],
+    saveCount: row.save_count ?? 0,
     lat: row.lat,
     lng: row.lng,
   };
@@ -81,9 +87,7 @@ export async function getPublishedListings(): Promise<Listing[]> {
     const [{ data: rows }, { data: venues }] = await Promise.all([
       client
         .from("listings")
-        .select(
-          "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
-        )
+        .select(LISTING_COLUMNS)
         .not("published_at", "is", null)
         // Show anything not yet over: an event whose end is today-or-later (an
         // ongoing multi-week run that started earlier), or — when there's no
@@ -175,9 +179,7 @@ export async function getListingBySlugAsync(slug: string): Promise<Listing | und
     const [{ data: row }, { data: venues }] = await Promise.all([
       client
         .from("listings")
-        .select(
-          "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
-        )
+        .select(LISTING_COLUMNS)
         .eq("slug", slug)
         .not("published_at", "is", null)
         .maybeSingle(),
@@ -248,9 +250,7 @@ export async function getVenueListingsAllAsync(venueSlug: string): Promise<Listi
 
     const { data: rows } = await client
       .from("listings")
-      .select(
-        "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, lat, lng",
-      )
+      .select(LISTING_COLUMNS)
       .eq("venue_id", (venueRow as { id: string }).id)
       .not("published_at", "is", null)
       .order("date_start", { ascending: true, nullsFirst: false });

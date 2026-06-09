@@ -11,9 +11,12 @@ export type {
 export const SORT_OPTIONS = [
   { id: "soonest", label: "Soonest" },
   { id: "latest", label: "Latest" },
+  { id: "free-first", label: "Free first" },
+  { id: "deals-first", label: "Deals first" },
+  { id: "most-saved", label: "Most saved" },
 ] as const;
 
-// Default is 9 (matches the 3x3 grid). Increments of 3 from there.
+// Default is 18 (densest grid). Other options step down to 9.
 export const PAGE_SIZE_OPTIONS = [
   { id: "9", label: "9" },
   { id: "12", label: "12" },
@@ -22,6 +25,10 @@ export const PAGE_SIZE_OPTIONS = [
 ] as const;
 
 export const PAGE_SIZES = [9, 12, 15, 18] as const;
+
+// Default listings per page (densest grid). Single source — parseSearchParams,
+// buildHref, and paginate all reference it.
+export const DEFAULT_PAGE_SIZE = 18;
 
 export const LIFESTYLE_TAGS = [
   { id: "dog-friendly", label: "Dog-Friendly", emoji: "🐕" },

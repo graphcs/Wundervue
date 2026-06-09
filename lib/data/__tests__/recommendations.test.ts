@@ -58,9 +58,16 @@ describe("rankForYou", () => {
   });
 });
 
-describe("parseSearchParams view", () => {
-  it("accepts for-you and falls back to grid for unknown", () => {
-    expect(parseSearchParams({ view: "for-you" }).view).toBe("for-you");
+describe("parseSearchParams view + tab", () => {
+  it("accepts grid/map/calendar and falls back to grid for unknown (for-you is a tab now)", () => {
+    expect(parseSearchParams({ view: "map" }).view).toBe("map");
+    expect(parseSearchParams({ view: "for-you" }).view).toBe("grid");
     expect(parseSearchParams({ view: "bogus" }).view).toBe("grid");
+  });
+  it("parses the feed tab, defaulting to all", () => {
+    expect(parseSearchParams({ tab: "for-you" }).tab).toBe("for-you");
+    expect(parseSearchParams({ tab: "my-events" }).tab).toBe("my-events");
+    expect(parseSearchParams({}).tab).toBe("all");
+    expect(parseSearchParams({ tab: "bogus" }).tab).toBe("all");
   });
 });

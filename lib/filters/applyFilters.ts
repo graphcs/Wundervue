@@ -65,20 +65,37 @@ function getDateRange(
 
 // Sort a filtered list by the user's chosen ordering. Listings without a
 // start time sort last regardless of direction (they have no place on a
-// soonest/latest timeline).
+// soonest/latest timeline). For the non-date sorts (free/deals/most-saved),
+// "soonest" is the tiebreaker within each group.
 export function sortListings(listings: Listing[], sort: Filters["sort"]): Listing[] {
   const time = (l: Listing) => {
     const t = l.startAt ? Date.parse(l.startAt) : NaN;
     return Number.isNaN(t) ? null : t;
   };
-  return [...listings].sort((a, b) => {
+  // Date comparator; undated listings always sort last, both directions.
+  const byDate = (a: Listing, b: Listing, latest: boolean) => {
     const ta = time(a);
     const tb = time(b);
     if (ta === null && tb === null) return 0;
-    if (ta === null) return 1; // a has no date → after b
+    if (ta === null) return 1;
     if (tb === null) return -1;
-    return sort === "latest" ? tb - ta : ta - tb;
-  });
+    return latest ? tb - ta : ta - tb;
+  };
+  const bySoonest = (a: Listing, b: Listing) => byDate(a, b, false);
+  // Grouping sorts: rank desc (higher first), then soonest as the tiebreaker.
+  const grouped = (rankOf: (l: Listing) => number) => (a: Listing, b: Listing) =>
+    rankOf(b) - rankOf(a) || bySoonest(a, b);
+
+  const comparators: Record<Filters["sort"], (a: Listing, b: Listing) => number> = {
+    soonest: bySoonest,
+    latest: (a, b) => byDate(a, b, true),
+    "free-first": grouped((l) => (l.isFree ? 1 : 0)),
+    // Deal-type listings first (matches the Deals filter + the badges) — an
+    // event that merely carries a deal_value string is NOT a deal.
+    "deals-first": grouped((l) => (l.type === "deal" || l.type === "both" ? 1 : 0)),
+    "most-saved": grouped((l) => l.saveCount ?? 0),
+  };
+  return [...listings].sort(comparators[sort]);
 }
 
 export function applyFilters(

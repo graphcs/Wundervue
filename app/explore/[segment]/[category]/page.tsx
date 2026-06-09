@@ -8,6 +8,7 @@ import {
 import { CATEGORIES, categoryLabel } from "@/lib/data/categories";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
+import { forYouHref } from "@/lib/filters/buildHref";
 import { paginate } from "@/lib/filters/paginate";
 import { ExploreResults } from "@/components/explore/ExploreResults";
 
@@ -51,9 +52,9 @@ export default async function ExploreCombinedPage({
     neighborhoodFromPath: segment,
     categoryFromPath: category,
   });
-  // For You is a global personalized feed (gated + ranked on the main explore
-  // page), not segment-scoped — send it there instead of rendering a plain grid.
-  if (filters.view === "for-you") redirect("/explore?view=for-you");
+  // For You is a global personalized feed (gated + ranked on the homepage), not
+  // segment-scoped — send it there (keeping query filters) instead of a grid.
+  if (filters.tab === "for-you") redirect(forYouHref(sp));
   const all = await getMergedListings();
   const filtered = applyFilters(all, filters);
 
