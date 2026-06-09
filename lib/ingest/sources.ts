@@ -541,6 +541,80 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueName: "Larimer Square",
     defaultVenueSlug: "larimer-square",
   },
+  {
+    // Dairy Block (LoDo micro-district) runs The Events Calendar (Tribe) on
+    // WordPress; its JS calendar is backed by a clean REST API at
+    // /wp-json/tribe/events/v1/events. The generic tribeEvents connector reads
+    // it directly. It's a multi-venue aggregator — events carry their own real
+    // sub-venue (Seven Grand, Kachina Cantina, Denver Milk Market…) with full
+    // addresses — so no defaultVenueSlug: resolveOrCreateVenue() pins each event
+    // to its actual venue (the seeded dairy-block row stays as a district pin).
+    id: "dairy-block-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://dairyblock.com/events/",
+    maxItems: 40,
+  },
+  {
+    // Denver Botanic Gardens runs a Drupal 10 calendar that server-renders event
+    // cards and paginates with ?page=N (no JS/API). The botanicGardensCalendar
+    // connector reads the chronological list, dedupes recurring programs to the
+    // soonest instance, and pulls title/description/image from each program's
+    // detail-page OG tags. Multi-location (York Street + Chatfield Farms), so no
+    // defaultVenueSlug — the card's location badge maps to the right venue.
+    id: "denver-botanic-gardens-web",
+    enabled: true,
+    connector: "botanicGardensCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.botanicgardens.org/calendar",
+    maxItems: 40,
+  },
+  {
+    // Denver Arts & Venues aggregates events across the city's venues (Red Rocks,
+    // Buell/DPAC, Bellco, McNichols, Denver Coliseum…). The /events page is
+    // flaky to scrape (JS-rendered), but it publishes a clean ev:-namespace RSS
+    // feed (350+ events with start/end/location/type). The generic eventRssFeed
+    // connector reads it; dates are UTC → localized to Denver. Multi-venue
+    // aggregator, so no defaultVenueSlug (per-event venue resolves by name).
+    id: "denver-arts-venues-web",
+    enabled: true,
+    connector: "eventRssFeed",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.artsandvenuesdenver.com/events/rss",
+    maxItems: 40,
+  },
+  {
+    // McGregor Square (the plaza beside Coors Field in LoDo) runs The Events
+    // Calendar (Tribe) — concerts, watch parties, markets, movie nights. Every
+    // event is at the one plaza, so pin them via defaultVenueSlug. Reuses the
+    // generic tribeEvents connector (its REST API is at /wp-json/tribe/...).
+    id: "mcgregor-square-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.mcgregorsquare.com/events/",
+    maxItems: 40,
+    defaultVenueSlug: "mcgregor-square",
+  },
+  {
+    // Denver Summit FC (NWSL) server-renders its schedule with Home/Away match
+    // cards. The connector keeps only HOME matches (at DICK'S Sporting Goods
+    // Park, Commerce City) — away games aren't local — and pins them there.
+    id: "denver-summit-fc-web",
+    enabled: true,
+    connector: "denverSummitFcSchedule",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denversummitfc.com/schedule/",
+    maxItems: 30,
+    defaultVenueSlug: "dick-s-sporting-goods-park",
+    defaultCategory: "Sports",
+  },
   // Comedy Works runs two Denver clubs (Downtown in LoDo, South in Greenwood
   // Village) off one Rails calendar that pages a month per URL and interleaves
   // both clubs plus external "concerts". A custom connector crawls the current

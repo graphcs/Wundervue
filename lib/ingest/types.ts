@@ -18,7 +18,11 @@ export type ConnectorKind =
   | "wpRestEvents"
   | "comedyWorksCalendar"
   | "denverUnionStation"
-  | "squarespaceEvents";
+  | "squarespaceEvents"
+  | "tribeEvents"
+  | "botanicGardensCalendar"
+  | "eventRssFeed"
+  | "denverSummitFcSchedule";
 
 export interface SourceConfig {
   id: string;

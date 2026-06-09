@@ -15,6 +15,10 @@ import { fetchWpRestEvents } from "./connectors/wpRestEvents";
 import { fetchComedyWorksCalendar } from "./connectors/comedyWorksCalendar";
 import { fetchDenverUnionStation } from "./connectors/denverUnionStation";
 import { fetchSquarespaceEvents } from "./connectors/squarespaceEvents";
+import { fetchTribeEvents } from "./connectors/tribeEvents";
+import { fetchBotanicGardensCalendar } from "./connectors/botanicGardensCalendar";
+import { fetchEventRssFeed } from "./connectors/eventRssFeed";
+import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
@@ -67,6 +71,14 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchDenverUnionStation(source);
     case "squarespaceEvents":
       return fetchSquarespaceEvents(source);
+    case "tribeEvents":
+      return fetchTribeEvents(source);
+    case "botanicGardensCalendar":
+      return fetchBotanicGardensCalendar(source);
+    case "eventRssFeed":
+      return fetchEventRssFeed(source);
+    case "denverSummitFcSchedule":
+      return fetchDenverSummitFcSchedule(source);
   }
 }
 
