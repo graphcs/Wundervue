@@ -744,6 +744,22 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
+    // Schoolyard Beer Garden (single venue) runs WordPress + The Events Calendar;
+    // tribeEvents reads its /wp-json/tribe/events REST. Real events (Trivia,
+    // Vintage Pop Up, book club, Day Camp Wellness, Dog Days of Summer) mixed with
+    // recurring drink specials (Wine Down Wednesdays, Happy Hour, Tuesday Rita)
+    // the normalizer filters as non-events. Venue already exists (auto-created
+    // from the pottery product); pin to it.
+    id: "schoolyard-beer-garden-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.schoolyardbeergarden.com/events/",
+    maxItems: 30,
+    defaultVenueSlug: "schoolyard-beer-garden-and-cafe",
+  },
+  {
     // Denver Botanic Gardens runs a Drupal 10 calendar that server-renders event
     // cards and paginates with ?page=N (no JS/API). The botanicGardensCalendar
     // connector reads the chronological list, dedupes recurring programs to the
