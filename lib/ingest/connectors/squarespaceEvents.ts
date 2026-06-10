@@ -15,6 +15,8 @@ interface SqsLocation {
   addressLine1?: string;
   addressLine2?: string;
 }
+
+// HTML entities (e.g. "D&#39;art Gallery") show up in titles/location names.
 interface SqsItem {
   id?: string;
   title?: string;
@@ -71,7 +73,6 @@ export async function fetchSquarespaceEvents(source: SourceConfig): Promise<RawI
         .filter((e) => e.startDate && e.startDate >= now)
         .sort((a, b) => (a.startDate ?? 0) - (b.startDate ?? 0));
   const fetchedAt = new Date().toISOString();
-  const venueName = source.defaultVenueName ?? null;
   const out: RawItem[] = [];
 
   for (const e of items) {
@@ -85,6 +86,9 @@ export async function fetchSquarespaceEvents(source: SourceConfig): Promise<RawI
 
     const description = htmlToText(e.excerpt) || htmlToText(e.body);
     const address = addressOf(e.location);
+    // Pin to the configured venue when set; otherwise use the per-event location
+    // name (multi-venue collections like the Art District's galleries).
+    const venueName = source.defaultVenueName ?? (htmlToText(e.location?.addressTitle) || null);
 
     const blob = [
       title,

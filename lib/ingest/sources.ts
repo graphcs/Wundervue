@@ -1056,6 +1056,21 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
+    // Denver's Art District on Santa Fe runs a Squarespace events collection
+    // covering its member galleries — exhibitions, openings, First Friday art
+    // walks, classes. Each event carries its gallery's name + address, so the
+    // squarespaceEvents connector resolves a venue per gallery (CHAC, Rolo, Sync,
+    // D'art, Museo…) — no defaultVenueSlug. All Arts & Culture.
+    id: "denver-art-district-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denversartdistrict.org/events",
+    maxItems: 40,
+    defaultCategory: "Arts & Culture",
+  },
+  {
     // Pottery With A Purpose sells "Sip & Sculpt" pottery workshops at ~24
     // Denver-metro breweries/cafes via Shopify; its products.json carries one
     // product per host venue with each session as a variant. The potteryWithPurpose
