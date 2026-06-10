@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="Wundervue event">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b2b33"/>
+      <stop offset="1" stop-color="#3d3640"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7a5c"/>
+      <stop offset="1" stop-color="#ff5a78"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <!-- subtle map-pin mark -->
+  <g transform="translate(600 300)" fill="none" stroke="url(#accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 -78 C 50 -78 86 -42 86 8 C 86 70 0 150 0 150 C 0 150 -86 70 -86 8 C -86 -42 -50 -78 0 -78 Z"/>
+    <circle cx="0" cy="6" r="28"/>
+  </g>
+  <text x="600" y="560" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="46" fill="#f4efe7" letter-spacing="1">wundervue</text>
+  <text x="600" y="606" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="22" fill="#b9b2aa" letter-spacing="4">DISCOVER LOCAL</text>
+</svg>

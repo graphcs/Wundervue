@@ -30,16 +30,30 @@ export interface PipelineInput {
 
 export interface PipelineResult {
   url: string;
-  source: "existing" | "scraped" | "og-image" | "generated";
+  source: "existing" | "scraped" | "og-image" | "generated" | "placeholder";
   reason?: string; // why we fell back when source !== "scraped"
 }
 
-// Simpleview / Cloudinary CDNs serve a tiny blurred placeholder by default and
-// stash the real asset behind a lazy attr that's often still small or in a
-// format we can't probe (avif). The transform segment after `/image/upload/`
-// is freely rewritable, so request a large, high-quality landscape JPG that
-// clears the probe's quality gate. No-op for any other URL.
+// Static placeholder (served from /public) used as the last resort so an
+// otherwise-valid event is never dropped just because it has no scrapeable image
+// and AI generation flaked (e.g. NeonCRM/JS-only sources like Denver Audubon).
+// Site-relative on purpose: the ingest writes to a shared DB that every
+// environment reads, and the app renders image_url with a plain <img>, so a
+// relative path resolves to whichever origin serves it (local or prod) — an
+// absolute URL would bake in the ingest runtime's host (e.g. localhost).
+const PLACEHOLDER_IMAGE_URL = "/listing-placeholder.svg";
+
+// CDNs that serve a tiny blurred placeholder inline and stash the real asset
+// behind a rewritable transform segment. We rewrite that segment to request a
+// large, probe-readable landscape image so we keep the genuine poster instead of
+// falling through to AI generation. No-op for any other URL.
 function upgradeCdnImage(url: string): string {
+  // Wix renders the inline <img> as a ~150px blurred avif LQIP
+  // (.../v1/fill/w_147,h_94,blur_2,enc_avif/...). Rewrite the fill params to a
+  // large image; enc_auto serves JPEG when the probe sends no Accept header.
+  if (/static\.wixstatic\.com\/.*\/v1\/fill\//.test(url)) {
+    return url.replace(/(\/v1\/fill\/)[^/]+(\/)/, "$1w_1200,h_675,al_c,q_85,enc_auto$2");
+  }
   if (!/(assets\.simpleviewinc\.com|res\.cloudinary\.com)\//.test(url)) return url;
   return url.replace(/(\/image\/upload\/)([^/]+)(\/)/, (m, p1, seg, p3) =>
     /(^|,)(c_|w_|h_|q_|f_|e_|g_|ar_|dpr_)/.test(seg)
@@ -119,7 +133,15 @@ export async function resolveListingImage(input: PipelineInput): Promise<Pipelin
         reason: `ai-gen failed (${genErr instanceof Error ? genErr.message : String(genErr)}); used source image (${lastReason})`,
       };
     }
-    throw genErr;
+    // Step 5: nothing usable and AI generation failed — attach the static
+    // placeholder rather than dropping a valid event (better a generic card than
+    // a missing one). Sources with no scrapeable image rely on this when the
+    // image model flakes.
+    return {
+      url: PLACEHOLDER_IMAGE_URL,
+      source: "placeholder",
+      reason: `ai-gen failed (${genErr instanceof Error ? genErr.message : String(genErr)}); used placeholder (${lastReason})`,
+    };
   }
 }
 

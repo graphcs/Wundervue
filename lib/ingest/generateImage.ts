@@ -1,4 +1,4 @@
-import { withRetry } from "./retry";
+import { withRetry, RetryableError } from "./retry";
 
 // Gemini 3 Pro Image (Preview) via OpenRouter. Picked because: (a) reuses
 // OPENROUTER_API_KEY so no new secret, (b) OpenRouter wraps image gen into
@@ -109,14 +109,19 @@ export async function generateImage(input: GenerateInput): Promise<GeneratedImag
       }),
     });
     if (!res.ok) {
-      throw new Error(`openrouter image gen failed: status ${res.status}`);
+      // Rate limits (429) and 5xx are transient — retry; 4xx config errors aren't.
+      const msg = `openrouter image gen failed: status ${res.status}`;
+      throw res.status === 429 || res.status >= 500 ? new RetryableError(msg) : new Error(msg);
     }
     const json = (await res.json()) as ChatCompletionResponse;
     if (json.error?.message) {
-      throw new Error(`openrouter error: ${json.error.message}`);
+      throw new RetryableError(`openrouter error: ${json.error.message}`);
     }
     const dataUrl = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!dataUrl) throw new Error("openrouter response had no image");
+    // The model intermittently returns a 200 with a text-only reply and no
+    // image; this MUST be a RetryableError or withRetry's shouldRetry rejects it
+    // and the attempts below never fire — it usually succeeds on a retry.
+    if (!dataUrl) throw new RetryableError("openrouter response had no image");
     return decodeDataUrl(dataUrl);
   }, { attempts: 5 }); // the image model is flaky; give it several tries
 }
