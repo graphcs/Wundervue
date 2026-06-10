@@ -1010,6 +1010,26 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Arts & Culture",
   },
   {
+    // The Empourium Brewing (Berkeley) runs on the SpotApps platform, which
+    // server-renders each event as a `.event-calendar-card` (title h2, day, time,
+    // description, image) — but the date + time live in separate elements, so
+    // apifyWeb grabs the whole card's text for the normalizer (plus the real
+    // SpotApps image). Static, so the cheap cheerio-scraper actor (no renderJs).
+    // All at the one taproom — pin via defaultVenueSlug. Live music, comedy, drag
+    // bingo, trivia + food trucks; category left per-event.
+    id: "empourium-brewing-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://theempourium.com/denver-berkeley-the-empourium-brewing-company-events",
+    selectors: {
+      item: ".event-calendar-card",
+    },
+    maxItems: 40,
+    defaultVenueSlug: "the-empourium-brewing-company",
+  },
+  {
     // Denver Audubon's /calendar is a JS-rendered Duda page, but its events live
     // in NeonCRM, whose public eventList.jsp server-renders every program as a
     // static .neoncrm-event-* table row (name, date+time+MT tz, location, a
