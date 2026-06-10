@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
-import { withRetry } from "../retry";
+import { fetchText } from "./feedFetch";
 import { localizeDenver } from "./localize";
 
 // Generic connector for pages that embed schema.org event data as JSON-LD
@@ -60,14 +60,7 @@ export async function fetchJsonLdEvents(source: SourceConfig): Promise<RawItem[]
   }
   const pageUrl = source.url;
 
-  const html = await withRetry(async () => {
-    const res = await fetch(pageUrl, {
-      headers: { "User-Agent": "WundervueBot/1.0 (+https://wundervue.com)" },
-    });
-    if (!res.ok) throw new Error(`fetch ${pageUrl} failed: status ${res.status}`);
-    return res.text();
-  });
-
+  const html = await fetchText(pageUrl);
   const $ = cheerio.load(html);
   const events: LdEvent[] = [];
   $('script[type="application/ld+json"]').each((_i, el) => {
