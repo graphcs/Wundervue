@@ -23,7 +23,8 @@ export type ConnectorKind =
   | "botanicGardensCalendar"
   | "eventRssFeed"
   | "denverSummitFcSchedule"
-  | "ticketmasterVenue";
+  | "ticketmasterVenue"
+  | "jsonLdEvents";
 
 export interface SourceConfig {
   id: string;
