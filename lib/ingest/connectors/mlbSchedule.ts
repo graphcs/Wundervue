@@ -1,5 +1,6 @@
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { localizeDenver } from "./localize";
 
 // MLB team schedule via the public StatsAPI (the same feed mlb.com itself uses).
 // Pulls a rolling forward window from today so it auto-advances each run — no
@@ -25,24 +26,6 @@ interface StatsApiGame {
 }
 interface StatsApiResponse {
   dates?: Array<{ games?: StatsApiGame[] }>;
-}
-
-// MLB StatsAPI returns UTC; a 00:40Z first pitch is the prior evening in Denver.
-// Render venue-local so the normalizer extracts the right calendar day.
-function localize(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      timeZone: "America/Denver",
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 export async function fetchMlbSchedule(source: SourceConfig): Promise<RawItem[]> {
@@ -87,7 +70,7 @@ export async function fetchMlbSchedule(source: SourceConfig): Promise<RawItem[]>
     const venue = g.venue?.name ?? "";
     const text = [
       `${home} vs ${away}`,
-      `Date: ${localize(g.gameDate)}`,
+      `Date: ${localizeDenver(g.gameDate)}`,
       venue && `Venue: ${venue}`,
       `${g.seriesDescription ?? "MLB"} baseball game — ${home} home game.`,
     ]

@@ -22,7 +22,8 @@ export type ConnectorKind =
   | "tribeEvents"
   | "botanicGardensCalendar"
   | "eventRssFeed"
-  | "denverSummitFcSchedule";
+  | "denverSummitFcSchedule"
+  | "ticketmasterVenue";
 
 export interface SourceConfig {
   id: string;

@@ -1,5 +1,6 @@
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { localizeDenver } from "./localize";
 
 // NHL team home schedule via the public api-web.nhle.com club schedule feed —
 // the same data nhl.com/<slug>/schedule renders from (the page is a JS SPA with
@@ -47,21 +48,6 @@ function teamName(t: NhlTeam | undefined, fallback: string): string {
 // startTimeUTC is a real UTC instant; render venue-local so the normalizer
 // extracts the right calendar day (a 01:30Z puck drop is the prior evening in
 // Denver).
-function localize(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      timeZone: "America/Denver",
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 export async function fetchNhlSchedule(source: SourceConfig): Promise<RawItem[]> {
   const abbrev = source.nhlTeamAbbrev;
@@ -108,7 +94,7 @@ export async function fetchNhlSchedule(source: SourceConfig): Promise<RawItem[]>
     const home = teamName(g.homeTeam, "Avalanche");
     const away = teamName(g.awayTeam, "Opponent");
     const venue = g.venue?.default ?? "Ball Arena";
-    const when = g.startTimeUTC ? localize(g.startTimeUTC) : g.gameDate;
+    const when = g.startTimeUTC ? localizeDenver(g.startTimeUTC) : g.gameDate;
     const text = [
       `${home} vs ${away}`,
       `Date: ${when}`,

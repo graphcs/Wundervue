@@ -1,5 +1,6 @@
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { localizeDenver } from "./localize";
 
 // NFL team home schedule via ESPN's public site API — the same data the team's
 // own schedule page renders from (denverbroncos.com is a JS SPA with nothing
@@ -44,24 +45,6 @@ interface EspnScheduleResponse {
 
 function teamName(t: EspnTeamRef | undefined, fallback: string): string {
   return t?.displayName?.trim() || fallback;
-}
-
-// ESPN gives a UTC instant; render venue-local so the normalizer extracts the
-// right calendar day (a late kickoff can roll into the next UTC day).
-function localize(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      timeZone: "America/Denver",
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 export async function fetchNflSchedule(source: SourceConfig): Promise<RawItem[]> {
@@ -121,7 +104,7 @@ export async function fetchNflSchedule(source: SourceConfig): Promise<RawItem[]>
     const venue = venueName || "Empower Field at Mile High";
     const text = [
       `${home} vs ${away}`,
-      `Date: ${localize(e.date)}`,
+      `Date: ${localizeDenver(e.date)}`,
       `Venue: ${venue}`,
       `NFL football game — ${home} home game at ${venue}.`,
     ].join("\n");

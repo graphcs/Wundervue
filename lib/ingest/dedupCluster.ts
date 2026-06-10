@@ -138,20 +138,168 @@ function datesMergeable(a: string | null, b: string | null): boolean {
 interface VenueRow {
   id: string;
   title: string;
+  source: string;
   date_start: string | null;
   created_at: string;
 }
 
-// Canonical preference within a cluster: an upcoming dated row (soonest) wins so
-// the surviving card shows the next occurrence; then undated (ongoing); then a
-// past dated row last (so an ongoing "Now Open" beats a stale dated post that
-// the expire-past job would later hide).
-function canonicalRank(r: VenueRow, now: number): [number, number] {
+// A time_display that is a single clock time, e.g. "7:00 PM" → minutes past
+// midnight. Returns null for ranges ("7:00 PM – 9:00 PM"), "All day", recurring
+// labels, or already-combined strings ("7:00 PM & 9:30 PM"), so we never mangle
+// those.
+const CLOCK_RE = /^\s*(\d{1,2}):(\d{2})\s*([AP]M)\s*$/i;
+function clockMinutes(s: string | null): number | null {
+  if (!s) return null;
+  const m = CLOCK_RE.exec(s);
+  if (!m) return null;
+  const h = parseInt(m[1], 10) % 12;
+  const pm = /pm/i.test(m[3]);
+  return (h + (pm ? 12 : 0)) * 60 + parseInt(m[2], 10);
+}
+
+// When a same-day cluster collapses multiple showtimes of one event into a
+// single card (e.g. a comedian's 7:00 and 9:30 PM shows), surface every distinct
+// clock time on the surviving listing — "7:00 PM & 9:30 PM" — instead of hiding
+// the later show. Returns null (leave time_display as-is) unless every member is
+// dated on the SAME day and carries a parseable single clock time, and there are
+// 2+ distinct times.
+function combinedShowtimes(
+  members: Array<{ date_start: string | null; time_display: string | null }>,
+): string | null {
+  const days = new Set<string>();
+  const byMinute = new Map<number, string>();
+  for (const r of members) {
+    if (!r.date_start) return null;
+    days.add(r.date_start.slice(0, 10));
+    const mins = clockMinutes(r.time_display);
+    if (mins === null) return null;
+    if (!byMinute.has(mins)) byMinute.set(mins, r.time_display!.trim());
+  }
+  if (days.size !== 1 || byMinute.size < 2) return null;
+  return [...byMinute.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, label]) => label)
+    .join(" & ");
+}
+
+// Authoritative-source ranking for choosing which row in a duplicate cluster is
+// the visible one. A ticketing/venue Website (and Meetup) carries the real
+// showtime, ticket link, and event art, so it beats a social repost of the same
+// event. Higher = preferred.
+function sourcePriority(source: string): number {
+  switch (source) {
+    case "Website":
+      return 3;
+    case "Meetup":
+      return 2;
+    case "Instagram":
+      return 1;
+    default:
+      return 2;
+  }
+}
+
+// Canonical preference within a duplicate cluster, best first (sortable
+// ascending): keep the date first (upcoming dated > undated > past dated, so we
+// never trade a dated row for an undated one), THEN the most authoritative
+// source (a venue Website with its showtime + ticket link + art beats a social
+// repost), THEN the soonest dated / earliest created. Used everywhere a cluster
+// picks its survivor.
+type RankInput = { source: string; date_start: string | null; created_at: string };
+function canonicalRank(r: RankInput, now: number): [number, number, number] {
+  let dateTier = 1; // undated
+  let timeVal = Date.parse(r.created_at);
   if (r.date_start) {
     const t = Date.parse(r.date_start);
-    if (!Number.isNaN(t)) return t >= now ? [0, t] : [2, t];
+    if (!Number.isNaN(t)) {
+      dateTier = t >= now ? 0 : 2;
+      timeVal = t;
+    }
   }
-  return [1, Date.parse(r.created_at)];
+  return [dateTier, -sourcePriority(r.source), timeVal];
+}
+
+function byCanonicalRank(now: number): (a: RankInput, b: RankInput) => number {
+  return (a, b) => {
+    const ra = canonicalRank(a, now);
+    const rb = canonicalRank(b, now);
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
+  };
+}
+
+interface ClusterRow {
+  id: string;
+  source: string;
+  date_start: string | null;
+  time_display: string | null;
+  created_at: string;
+  dedup_of: string | null;
+  published_at: string | null;
+}
+
+// Per-venue reconciliation over each EXISTING duplicate cluster (rows that share
+// a dedup_of canonical), in a single pass over the venue's rows. Two jobs:
+//   1. Re-point the cluster so the most authoritative source is the visible
+//      canonical (a venue Website beats an Instagram repost of the same show),
+//      healing clusters an earlier pass canonicalized first-write-wins.
+//   2. Roll same-day duplicate showtimes onto the canonical's time_display
+//      ("7:00 PM & 9:30 PM") so a merged-away showtime isn't lost.
+// It only re-orders WITHIN clusters already formed by dedup_of — it never merges
+// new rows — so it's safe and idempotent across re-ingests (which reset rows the
+// prior passes hid). Driven from the orchestrator per batch venue.
+export async function reconcileVenueDuplicates(venueIds: string[]): Promise<void> {
+  const client = getServiceClient();
+  const rank = byCanonicalRank(Date.now());
+  for (const venueId of venueIds) {
+    const { data, error } = await client
+      .from("listings")
+      .select("id, source, date_start, time_display, created_at, dedup_of, published_at")
+      .eq("venue_id", venueId);
+    if (error) throw new Error(`venue dedup reconcile fetch failed: ${error.message}`);
+    const rows = (data ?? []) as ClusterRow[];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const dupsByCanonical = new Map<string, ClusterRow[]>();
+    for (const r of rows) {
+      if (!r.dedup_of) continue;
+      const arr = dupsByCanonical.get(r.dedup_of) ?? [];
+      arr.push(r);
+      dupsByCanonical.set(r.dedup_of, arr);
+    }
+    for (const [canonId, dups] of dupsByCanonical) {
+      const canon = byId.get(canonId);
+      // Skip a missing or itself-demoted canonical (malformed/chained cluster).
+      if (!canon || canon.dedup_of) continue;
+      const cluster = [canon, ...dups];
+
+      // 1. Re-point to the most authoritative survivor.
+      const best = [...cluster].sort(rank)[0];
+      if (best.id !== canonId) {
+        // Promote `best` (preserve its published_at so we don't fire a false
+        // "new drop"); demote everyone else under it.
+        const { error: upErr } = await client
+          .from("listings")
+          .update({ published_at: best.published_at ?? canon.published_at, dedup_of: null })
+          .eq("id", best.id);
+        if (upErr) throw new Error(`canonical promote failed: ${upErr.message}`);
+        const demoteIds = cluster.filter((r) => r.id !== best.id).map((r) => r.id);
+        const { error: dErr } = await client
+          .from("listings")
+          .update({ published_at: null, dedup_of: best.id })
+          .in("id", demoteIds);
+        if (dErr) throw new Error(`canonical demote failed: ${dErr.message}`);
+      }
+
+      // 2. Roll same-day showtimes onto the (effective) canonical.
+      const combined = combinedShowtimes(cluster);
+      if (combined && combined !== best.time_display) {
+        const { error: tErr } = await client
+          .from("listings")
+          .update({ time_display: combined })
+          .eq("id", best.id);
+        if (tErr) throw new Error(`showtime merge update failed: ${tErr.message}`);
+      }
+    }
+  }
 }
 
 // Merge near-identical-title duplicates within each given venue, regardless of
@@ -169,7 +317,7 @@ export async function mergeVenueTitleDuplicatesForVenues(
   for (const venueId of venueIds) {
     const { data, error } = await client
       .from("listings")
-      .select("id, title, date_start, created_at")
+      .select("id, title, source, date_start, created_at")
       .eq("venue_id", venueId)
       .not("published_at", "is", null)
       .is("dedup_of", null)
@@ -203,11 +351,7 @@ export async function mergeVenueTitleDuplicatesForVenues(
       if (cluster.length < 2) continue;
       comparedGroups++;
 
-      cluster.sort((a, b) => {
-        const [ta, va] = canonicalRank(a, now);
-        const [tb, vb] = canonicalRank(b, now);
-        return ta !== tb ? ta - tb : va - vb;
-      });
+      cluster.sort(byCanonicalRank(now));
       const canonical = cluster[0];
       const dupIds = cluster.slice(1).map((r) => r.id);
       const { error: markErr } = await client

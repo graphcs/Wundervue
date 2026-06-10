@@ -361,6 +361,61 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Arts & Culture",
   },
   {
+    // Disabled: rinobeergarden.com is a WordPress restaurant site (About / Menu /
+    // Brunch / Banquet) with no events page, no event post-type, and no feed —
+    // wp-json is 403-blocked and the Yoast sitemap lists only post/page sitemaps.
+    // The beer garden's events (trivia, live music, brunch) live on Instagram,
+    // covered by rino-beer-garden-ig below. Kept here (disabled) to document the
+    // investigation so the website isn't re-added as a source.
+    id: "rino-beer-garden-web",
+    enabled: false,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rinobeergarden.com/",
+    defaultVenueSlug: "rino-beer-garden",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Disabled: a 30-post inspection ingest surfaced only recurring menu specials
+    // and promos — "Taco Tuesday", "Happy Hour", "Lunch Special Cheese Burger
+    // $10.95", "Bottomless Mimosas Brunch", "Pints & Pies Deal" — not discrete,
+    // discovery-worthy events (the lone real one was a "Playoff Hockey" watch
+    // party). It's a food/lifestyle feed, so it pollutes listings with weekly
+    // specials. Left here (disabled) to document the inspection so it isn't
+    // re-added (cf. lodo-love-ig, colorado-avalanche-ig). The website has no
+    // events either (rino-beer-garden-web above), so this venue has no good
+    // source for now.
+    id: "rino-beer-garden-ig",
+    enabled: false,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "rinobeergarden",
+    defaultVenueSlug: "rino-beer-garden",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Disabled: rinostreetfair.com/schedule (WordPress/Elementor, UAEL post grid
+    // — statically scrapeable) is the program of a single ANNUAL one-day festival
+    // (RiNo Street Fair, May 9). Two problems make it a poor dedicated source:
+    // (1) the schedule is only ever the lineup for that one day, so outside the
+    // event window it's all past-dated and yields zero upcoming listings; and
+    // (2) the items are sub-activities (individual band sets, "Shopping all day",
+    // "Food trucks all day", pop-up pickleball), not standalone discoverable
+    // events — the discoverable thing is the single "RiNo Street Fair" listing.
+    // That fair-as-one-event is already caught when upcoming by the aggregators
+    // (rino-art-district-web, visit-denver-web, the SerpAPI markets/outdoor
+    // queries), same pattern as the Highlands Street Fair via highlands-square-web.
+    id: "rino-street-fair-web",
+    enabled: false,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rinostreetfair.com/schedule/",
+    defaultCategory: "Markets",
+  },
+  {
     id: "denver-museum-nature-science-web",
     // Disabled: dmns.org runs on Blazor Server (UI state over a SignalR
     // websocket) with no scrapeable HTML or public events API; the editorial
@@ -427,6 +482,25 @@ export const SOURCES: SourceConfig[] = [
     sourceLabel: "Instagram",
     handle: "ballarenadenver",
     defaultVenueSlug: "ball-arena",
+  },
+  {
+    // Paramount Theatre (downtown, 1621 Glenarm) — its event-calendar page is a
+    // client-side Ticketmaster widget (TMEventWidget.js) that fetches the KSE
+    // proxy's Discovery API venue feed: alttix.ksehq.com/api/tm/venue/<id> (same
+    // host as ball-arena-web, different endpoint shape). The ticketmasterVenue
+    // connector reads it directly — 70 richly-structured events with real art,
+    // exact showtimes, and TM classifications. Feed is venue-scoped, so pin via
+    // defaultVenueSlug. Mixed Music / Arts & Theatre / Film lineup, so category
+    // is left per-event (the connector passes the TM classification to the
+    // normalizer); no defaultCategory.
+    id: "paramount-theatre-web",
+    enabled: true,
+    connector: "ticketmasterVenue",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://alttix.ksehq.com/api/tm/venue/KovZpZAFa1nA",
+    maxItems: 60,
+    defaultVenueSlug: "paramount-theatre",
   },
   {
     id: "cerebral-brewing-web",
@@ -614,6 +688,47 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 30,
     defaultVenueSlug: "dick-s-sporting-goods-park",
     defaultCategory: "Sports",
+  },
+  {
+    // Denver Art Society (artist collective in the Santa Fe Arts District) runs
+    // a Wix Events widget; the existing wixEvents connector reads its embedded
+    // warmup-data. Single venue, so pin via defaultVenueSlug.
+    id: "denver-art-society-web",
+    enabled: true,
+    connector: "wixEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denverartsociety.org/",
+    maxItems: 40,
+    defaultVenueSlug: "denver-art-society",
+  },
+  {
+    // Colorado Convention Center (Legends/ASM-managed) server-renders its
+    // /events list as static Bootstrap cards — no JS, API, or feed needed, so
+    // in-process cheerio (free) parses them directly. Cards are date-ordered
+    // soonest-first; one page covers the upcoming batch (maxItems caps it). The
+    // date <li> is selected by its calendar icon (`li:has(.fa-calendar-day)`,
+    // distinct from the location <li>). Every event is at the one downtown
+    // venue, so pin via defaultVenueSlug. Note: some CCC shows also arrive via
+    // the Denver Arts & Venues RSS feed (denver-arts-venues-web), which resolves
+    // "Colorado Convention Center" by name to this same seeded venue
+    // (20260609150000_colorado_convention_center_venue.sql) — downstream dedup
+    // handles any overlap.
+    id: "colorado-convention-center-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denverconvention.com/events/",
+    selectors: {
+      item: ".card.border-0.shadow",
+      title: "h5.card-title",
+      date: "li:has(.fa-calendar-day)",
+      link: "a.stretched-link",
+      image: "img.bg-white",
+    },
+    maxItems: 40,
+    defaultVenueSlug: "colorado-convention-center",
   },
   // Comedy Works runs two Denver clubs (Downtown in LoDo, South in Greenwood
   // Village) off one Rails calendar that pages a month per URL and interleaves

@@ -19,9 +19,14 @@ import { fetchTribeEvents } from "./connectors/tribeEvents";
 import { fetchBotanicGardensCalendar } from "./connectors/botanicGardensCalendar";
 import { fetchEventRssFeed } from "./connectors/eventRssFeed";
 import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule";
+import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
-import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
+import {
+  clusterAndMarkDuplicates,
+  mergeVenueTitleDuplicates,
+  reconcileVenueDuplicates,
+} from "./dedupCluster";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -79,6 +84,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchEventRssFeed(source);
     case "denverSummitFcSchedule":
       return fetchDenverSummitFcSchedule(source);
+    case "ticketmasterVenue":
+      return fetchTicketmasterVenue(source);
   }
 }
 
@@ -179,6 +186,24 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
       fuzzyMarked += merged.markedDuplicate;
     } catch (err) {
       console.error(`[ingest:${source.id}] venue-title dedup failed`, err);
+    }
+
+    const batchVenueIds = [
+      ...new Set(
+        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
+      ),
+    ];
+
+    // Reconcile each touched venue's duplicate clusters: prefer the
+    // authoritative source as the visible row (a venue's ticketing Website beats
+    // an Instagram repost of the same show, so the survivor keeps the real
+    // showtime/ticket link/art), and roll same-day duplicate showtimes onto the
+    // canonical ("7:00 PM & 9:30 PM"). Runs for every venue in the batch,
+    // including update-only re-ingests.
+    try {
+      if (batchVenueIds.length > 0) await reconcileVenueDuplicates(batchVenueIds);
+    } catch (err) {
+      console.error(`[ingest:${source.id}] venue dedup reconcile failed`, err);
     }
 
     const result: IngestResult = {
