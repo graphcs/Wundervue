@@ -649,6 +649,22 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "larimer-square",
   },
   {
+    // New Terrain Brewing (Golden) runs a Squarespace events collection in
+    // calendar mode, so ?format=json returns the month's events in `items`
+    // (past + future) rather than the pre-filtered `upcoming` — the connector
+    // falls back to `items`. Event-rich: live music (Music by the Mesa), World
+    // Cup watch parties, Bike Demo Days, yoga, book clubs. Single venue, pinned.
+    id: "new-terrain-brewing-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://newterrainbrewing.com/events",
+    maxItems: 40,
+    defaultVenueName: "New Terrain Brewing Co",
+    defaultVenueSlug: "new-terrain-brewing",
+  },
+  {
     // Disabled: Station 26's Squarespace ?format=json feed is reachable, but a
     // trial ingest surfaced only thin recurring content — the sole survivors were
     // a weekly "Sunset Sessions" live-music series (the Monday cornhole league

@@ -28,6 +28,7 @@ interface SqsItem {
 }
 interface SqsResponse {
   upcoming?: SqsItem[];
+  items?: SqsItem[];
 }
 
 function htmlToText(html: string | undefined): string {
@@ -59,7 +60,16 @@ export async function fetchSquarespaceEvents(source: SourceConfig): Promise<RawI
     return (await res.json()) as SqsResponse;
   });
 
-  const items = json.upcoming ?? []; // Squarespace pre-filters to upcoming
+  // List-mode collections pre-filter into `upcoming`; calendar-mode ones (e.g.
+  // New Terrain) leave it empty and put the month's events in `items` (past +
+  // future), so fall back to those, keeping only upcoming, soonest first.
+  const now = Date.now();
+  const upcoming = json.upcoming ?? [];
+  const items = upcoming.length
+    ? upcoming
+    : (json.items ?? [])
+        .filter((e) => e.startDate && e.startDate >= now)
+        .sort((a, b) => (a.startDate ?? 0) - (b.startDate ?? 0));
   const fetchedAt = new Date().toISOString();
   const venueName = source.defaultVenueName ?? null;
   const out: RawItem[] = [];
