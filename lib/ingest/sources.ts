@@ -877,6 +877,29 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "comedy-works-south",
     defaultCategory: "Comedy",
   },
+  {
+    // Denver Comedy Underground (Five Points) runs on SeatEngine, which
+    // server-renders each show as a `.event-list-item` card. `.event-times-group`
+    // conveniently holds the date AND time together ("Wed, Jun 10, 2026 7:30 PM"),
+    // so in-process cheerio (free) parses it — one listing per show at its soonest
+    // date (recurring shows list multiple). Single venue, pinned; all Comedy.
+    id: "denver-comedy-underground-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denvercomedyunderground.com/events",
+    selectors: {
+      item: ".event-list-item",
+      title: ".el-header",
+      date: ".event-times-group",
+      link: "a[href^='/events/']",
+      image: ".el-image img",
+    },
+    maxItems: 40,
+    defaultVenueSlug: "denver-comedy-underground",
+    defaultCategory: "Comedy",
+  },
 
   // Sports teams — pin to their home venue. Team sites (mlb/nba/nhl/nfl) are
   // JS-heavy SPAs, so the web scrape may yield little; Instagram + the existing
