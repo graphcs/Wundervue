@@ -23,6 +23,7 @@ import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
 import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
+import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import {
@@ -95,6 +96,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchIcsCalendar(source);
     case "libcalEvents":
       return fetchLibCalEvents(source);
+    case "potteryWithPurpose":
+      return fetchPotteryWithPurpose(source);
   }
 }
 

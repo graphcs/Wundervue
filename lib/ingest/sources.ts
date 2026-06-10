@@ -696,6 +696,22 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
+    // Disabled: waldschankeciders.com/events is a GoDaddy Website Builder events
+    // widget rendered inside a sandboxed iframe whose src is
+    // `javascript:…getAttribute("srcdoc")` — the events are JS-populated at
+    // runtime, with no ICS feed, no JSON, and obfuscated classes, so they're
+    // unreachable by fetch or even a normal renderJs pass. Its partner-run events
+    // are captured at the source instead (e.g. the Sip & Sculpt pottery nights via
+    // pottery-with-a-purpose-web); other one-offs arrive via Visit Denver / SerpAPI.
+    id: "waldschanke-ciders-web",
+    enabled: false,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://waldschankeciders.com/events",
+    maxItems: 40,
+  },
+  {
     // Dairy Block (LoDo micro-district) runs The Events Calendar (Tribe) on
     // WordPress; its JS calendar is backed by a clean REST API at
     // /wp-json/tribe/events/v1/events. The generic tribeEvents connector reads
@@ -976,6 +992,22 @@ export const SOURCES: SourceConfig[] = [
     sourceLabel: "Website",
     url: "https://denverlibrary.libcal.com",
     maxItems: 40,
+  },
+  {
+    // Pottery With A Purpose sells "Sip & Sculpt" pottery workshops at ~24
+    // Denver-metro breweries/cafes via Shopify; its products.json carries one
+    // product per host venue with each session as a variant. The potteryWithPurpose
+    // connector reads it, keeps the Denver-metro venues, and emits one workshop
+    // event per session. Multi-venue (Little Machine, Strange Craft, Waldschänke…),
+    // so no defaultVenueSlug. Hands-on creative workshops → Arts & Culture.
+    id: "pottery-with-a-purpose-web",
+    enabled: true,
+    connector: "potteryWithPurpose",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.potterywithapurpose.com",
+    maxItems: 50,
+    defaultCategory: "Arts & Culture",
   },
   {
     // Denver Audubon's /calendar is a JS-rendered Duda page, but its events live

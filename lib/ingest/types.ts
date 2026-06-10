@@ -26,7 +26,8 @@ export type ConnectorKind =
   | "ticketmasterVenue"
   | "jsonLdEvents"
   | "icsCalendar"
-  | "libcalEvents";
+  | "libcalEvents"
+  | "potteryWithPurpose";
 
 export interface SourceConfig {
   id: string;
