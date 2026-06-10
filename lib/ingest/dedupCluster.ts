@@ -105,6 +105,13 @@ function normalizeTitle(t: string): string {
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Drop a trailing parenthetical time-of-day qualifier so two sessions of one
+    // event merge \u2014 "\u2026(Morning)" / "\u2026(Afternoon)" / "\u2026(Evening Cohort)" \u2014 while
+    // leaving real content variants ("(Beginner)", "(21+)") distinct.
+    .replace(
+      /\s*[([{]\s*(morning|afternoon|evening|night|matinee|noon|early|late|am|pm)(\s+(cohort|session|seating|show|set|class))?\s*[)\]}]\s*$/,
+      "",
+    )
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -449,9 +456,11 @@ export async function clusterAndMarkDuplicates(
       rows.sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       );
+      // The same event offered at several branches the same day (e.g. a library
+      // "Open Lab" at every location) collapses to one card — product choice to
+      // keep the grid clean rather than show near-identical per-branch cards.
       const canonical = rows[0];
       const dupIds = rows.slice(1).map((r) => r.id);
-
       const { error: e3 } = await client
         .from("listings")
         .update({ published_at: null, dedup_of: canonical.id })
