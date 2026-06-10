@@ -416,6 +416,22 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Markets",
   },
   {
+    // Disabled: goldfinchdenver.com sits behind a Cloudflare JS challenge (every
+    // page 403s a plain fetch), so the free connectors can't read it — only Apify
+    // with JS rendering could, at cost. And the events calendar is overwhelmingly
+    // recurring bar specials ("Exclusive Bar Takeover" daily, Breakfast Club,
+    // Live Music Wednesday, Movies/Tinis/Tacos, Neighborhood Night, Thursday
+    // Specialty) with only the rare one-off (Signal Surrender, Night Shift Pride)
+    // — same low signal-to-noise as rino-beer-garden. Not worth the Apify spend;
+    // its notable events arrive via Visit Denver / SerpAPI / Arts & Venues.
+    id: "goldfinch-denver-web",
+    enabled: false,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.goldfinchdenver.com/events",
+  },
+  {
     id: "denver-museum-nature-science-web",
     // Disabled: dmns.org runs on Blazor Server (UI state over a SignalR
     // websocket) with no scrapeable HTML or public events API; the editorial
@@ -501,6 +517,23 @@ export const SOURCES: SourceConfig[] = [
     url: "https://alttix.ksehq.com/api/tm/venue/KovZpZAFa1nA",
     maxItems: 60,
     defaultVenueSlug: "paramount-theatre",
+  },
+  {
+    // The Junkyard (Live Nation amphitheatre in Sun Valley) embeds its full show
+    // list as schema.org JSON-LD MusicEvent blocks on /shows — clean tz-aware
+    // startDates, Ticketmaster art, ticket links — so the generic jsonLdEvents
+    // connector reads them directly (no card scraping, no month iteration; the
+    // list page carries every upcoming show). Single venue, pin via
+    // defaultVenueSlug. All-music lineup, so defaultCategory Music.
+    id: "the-junkyard-web",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.thejunkyard.com/shows",
+    maxItems: 60,
+    defaultVenueSlug: "junkyard",
+    defaultCategory: "Music",
   },
   {
     id: "cerebral-brewing-web",
@@ -614,6 +647,39 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
     defaultVenueName: "Larimer Square",
     defaultVenueSlug: "larimer-square",
+  },
+  {
+    // Disabled: Station 26's Squarespace ?format=json feed is reachable, but a
+    // trial ingest surfaced only thin recurring content — the sole survivors were
+    // a weekly "Sunset Sessions" live-music series (the Monday cornhole league
+    // and a "registration deadline" were correctly filtered as non-events). Those
+    // sessions are at the sibling "The Outpost on Platte", whose name varies per
+    // feed item, so multi-venue resolution scatters them across several duplicate
+    // venue pins. Low signal for the noise; its notable events arrive via Visit
+    // Denver / SerpAPI. (Connector: squarespaceEvents, same as larimer-square-web.)
+    id: "station-26-brewing-web",
+    enabled: false,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.station26brewing.co/events",
+    maxItems: 40,
+  },
+  {
+    // Disabled: citymud.com/events is a Squarespace *products* collection
+    // (workshops sold as commerce items), not an events calendar — the
+    // ?format=json `upcoming` events array is empty, so squarespaceEvents finds
+    // nothing. It currently holds a single workshop product with its dates baked
+    // into the title text ("...June 13 & July 11"), not structured fields.
+    // Reading it would need a products connector + LLM date extraction for ~1
+    // item — not worth it. (Apothecary workshops, niche; rare for discovery.)
+    id: "city-mud-web",
+    enabled: false,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.citymud.com/events",
+    maxItems: 40,
   },
   {
     // Dairy Block (LoDo micro-district) runs The Events Calendar (Tribe) on
@@ -883,6 +949,54 @@ export const SOURCES: SourceConfig[] = [
 
   // Aggregators / multi-venue — no defaultVenueSlug; resolveOrCreateVenue()
   // resolves a venue per event from the LLM-extracted name + address.
+  {
+    // Denver Audubon's /calendar is a JS-rendered Duda page, but its events live
+    // in NeonCRM, whose public eventList.jsp server-renders every program as a
+    // static .neoncrm-event-* table row (name, date+time+MT tz, location, a
+    // registration link). In-process cheerio (free) parses it directly. Bird
+    // walks, birding field trips, and nature classes run at many outdoor
+    // locations (Bear Creek Greenbelt, Barr Lake…), so no defaultVenueSlug —
+    // resolveOrCreateVenue pins each from the location (titles also name it, e.g.
+    // "...at Bear Creek Greenbelt"). description = the location field for venue
+    // resolution.
+    id: "denver-audubon-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denveraudubon.app.neoncrm.com/np/clients/denveraudubon/eventList.jsp",
+    selectors: {
+      item: "tr:has(.neoncrm-event-name)",
+      title: ".neoncrm-event-name",
+      date: ".neoncrm-event-date",
+      description: ".neoncrm-event-location",
+      link: "a",
+      image: ".neoncrm-event-thumbnail img",
+    },
+    maxItems: 40,
+  },
+  {
+    // Downtown Denver Partnership is a Wix CMS site whose events are a custom Wix
+    // Data collection — not the Wix Events app (warmup data has no events) and
+    // not cleanly selectable by class (Wix's generated comp-IDs). But Wix
+    // server-renders the list, and each event card is a `[role=listitem]` with an
+    // <h4> title, a real wixstatic image, and an /event/<slug> link. apifyWeb
+    // grabs each card's full text (date/time/venue/title/description all live in
+    // generic richTextElements, so the normalizer parses the blob). Static SSR,
+    // so the cheap cheerio-scraper actor suffices — no renderJs browser needed.
+    // Multi-venue (Sheraton, Civic Center, Sie FilmCenter…), so no defaultVenueSlug.
+    id: "downtown-denver-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.downtowndenver.com/events",
+    selectors: {
+      item: "[role=listitem]:has(h4)",
+      title: "h4",
+    },
+    maxItems: 40,
+  },
   {
     id: "highlands-square-web",
     enabled: true,
