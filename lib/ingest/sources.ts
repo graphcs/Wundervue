@@ -900,6 +900,29 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "denver-comedy-underground",
     defaultCategory: "Comedy",
   },
+  {
+    // Elitch Gardens' Tribe Events calendar (/events/) is empty; its marquee
+    // seasonal events live on the Divi-built /special-events/ page as
+    // `.dsm_card_wrapper` cards (title + date range + a link to the event's own
+    // page). In-process cheerio (free) parses them; the image pipeline pulls each
+    // event's og:image from its detail page (the cards carry no inline image).
+    // Single venue, pinned; category left per-event (Fiesta, Glowtopia, Fright
+    // Fest, Blippi span festival/nightlife/seasonal/family).
+    id: "elitch-gardens-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://elitchgardens.com/special-events/",
+    selectors: {
+      item: ".dsm_card_wrapper",
+      title: ".dsm_card_title",
+      date: ".dsm_card_subtitle",
+      link: "a",
+    },
+    maxItems: 20,
+    defaultVenueSlug: "elitch-gardens",
+  },
 
   // Sports teams — pin to their home venue. Team sites (mlb/nba/nhl/nfl) are
   // JS-heavy SPAs, so the web scrape may yield little; Instagram + the existing
