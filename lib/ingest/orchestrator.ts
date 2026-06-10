@@ -21,6 +21,8 @@ import { fetchEventRssFeed } from "./connectors/eventRssFeed";
 import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule";
 import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
 import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
+import { fetchIcsCalendar } from "./connectors/icsCalendar";
+import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import {
@@ -89,6 +91,10 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchTicketmasterVenue(source);
     case "jsonLdEvents":
       return fetchJsonLdEvents(source);
+    case "icsCalendar":
+      return fetchIcsCalendar(source);
+    case "libcalEvents":
+      return fetchLibCalEvents(source);
   }
 }
 

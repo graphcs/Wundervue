@@ -682,6 +682,20 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
+    // Disabled: junglerumbar.com (Squarespace tiki bar) has no events — /events
+    // 404s, the nav is menus + private-event rentals, and JSON-LD is just
+    // WebSite/LocalBusiness. The only "deal" is a generic everyday happy hour
+    // ("4-6 Everyday & 9-11 Tue+Wed") with no specifics — true of nearly every
+    // bar, not a discoverable dated deal. Nothing structured to ingest.
+    id: "jungle-rum-bar-web",
+    enabled: false,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://junglerumbar.com/events",
+    maxItems: 40,
+  },
+  {
     // Dairy Block (LoDo micro-district) runs The Events Calendar (Tribe) on
     // WordPress; its JS calendar is backed by a clean REST API at
     // /wp-json/tribe/events/v1/events. The generic tribeEvents connector reads
@@ -950,6 +964,20 @@ export const SOURCES: SourceConfig[] = [
   // Aggregators / multi-venue — no defaultVenueSlug; resolveOrCreateVenue()
   // resolves a venue per event from the LLM-extracted name + address.
   {
+    // Denver Public Library runs Springshare LibCal. Its calendar renders from a
+    // clean JSON endpoint (/ajax/calendar/list?c=-1&m=list&date=…), read by the
+    // generic libcalEvents connector — mostly free family/community programming
+    // (storytimes, MakerCamp, classes, book clubs) across ~26 branches, so no
+    // defaultVenueSlug; each event resolves to its branch.
+    id: "denver-public-library-web",
+    enabled: true,
+    connector: "libcalEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denverlibrary.libcal.com",
+    maxItems: 40,
+  },
+  {
     // Denver Audubon's /calendar is a JS-rendered Duda page, but its events live
     // in NeonCRM, whose public eventList.jsp server-renders every program as a
     // static .neoncrm-event-* table row (name, date+time+MT tz, location, a
@@ -996,6 +1024,57 @@ export const SOURCES: SourceConfig[] = [
       title: "h4",
     },
     maxItems: 40,
+  },
+  {
+    // MCA Denver (Museum of Contemporary Art) runs a Craft CMS site that
+    // server-renders its events; each card is a `.block-featured` div wrapping an
+    // /events/<slug> anchor with a real Eventbrite poster. Titles/dates/venues
+    // live in Tailwind utility divs (no stable per-field selectors), so apifyWeb
+    // grabs each card's full text for the normalizer. Static SSR — cheap
+    // cheerio-scraper actor, no renderJs. Events split between the MCA building
+    // and its Holiday Theater, so no defaultVenueSlug.
+    id: "mca-denver-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://mcadenver.org/events",
+    selectors: {
+      item: ".block-featured",
+    },
+    maxItems: 40,
+  },
+  {
+    // Denver Bike Fest is a single annual festival on a one-page React promo site
+    // (denverbikefest.app) — no events list. The event details are in the static
+    // HTML, so apifyWeb with no item selector falls back to the whole-page text
+    // and the normalizer extracts the one event (Denver Bike Fest at York Street
+    // Yards). Single venue resolves from the text (no seed). Static — cheap
+    // cheerio-scraper actor. Re-captures the next edition when the page updates.
+    id: "denver-bike-fest-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://denverbikefest.app/",
+    defaultCategory: "Outdoor",
+    maxItems: 5,
+  },
+  {
+    // Lady Justice Brewing (queer-community brewery in Englewood) publishes its
+    // events as an embedded public Google Calendar. The generic icsCalendar
+    // connector reads the .ics feed directly — drag/queer nights, live music,
+    // trivia, bingo, paint night — skipping recurring masters and "Closed …"
+    // entries (food trucks still come through as Food & Drink). All at the one
+    // taproom, so pin via defaultVenueSlug.
+    id: "lady-justice-brewing-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://calendar.google.com/calendar/ical/c_d08c98b40bd04ce35c8222d49209732d8851b1b493f0a722b0704a463b3db75b%40group.calendar.google.com/public/basic.ics",
+    maxItems: 40,
+    defaultVenueSlug: "lady-justice-brewing",
   },
   {
     id: "highlands-square-web",

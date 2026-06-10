@@ -24,7 +24,9 @@ export type ConnectorKind =
   | "eventRssFeed"
   | "denverSummitFcSchedule"
   | "ticketmasterVenue"
-  | "jsonLdEvents";
+  | "jsonLdEvents"
+  | "icsCalendar"
+  | "libcalEvents";
 
 export interface SourceConfig {
   id: string;
