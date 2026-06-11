@@ -1,5 +1,6 @@
 import type { RawItem, SourceConfig } from "../types";
 import { fetchJson } from "./feedFetch";
+import { htmlToText } from "./htmlText";
 
 // Pottery With A Purpose runs "Sip & Sculpt"-style pottery workshops at dozens of
 // breweries/cafes nationwide, sold through Shopify. Its products.json exposes one
@@ -25,14 +26,6 @@ interface ShopifyProduct {
 }
 interface ProductsResponse {
   products?: ShopifyProduct[];
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&[a-z]+;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 export async function fetchPotteryWithPurpose(source: SourceConfig): Promise<RawItem[]> {

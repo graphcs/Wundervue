@@ -1,6 +1,6 @@
-import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { htmlToText } from "./htmlText";
 
 // Generic Squarespace Events connector. Squarespace exposes any event collection
 // as clean JSON at `<collection-url>?format=json`, with an `upcoming` array of
@@ -31,11 +31,6 @@ interface SqsItem {
 interface SqsResponse {
   upcoming?: SqsItem[];
   items?: SqsItem[];
-}
-
-function htmlToText(html: string | undefined): string {
-  if (!html) return "";
-  return cheerio.load(`<div>${html}</div>`).text().replace(/\s+/g, " ").trim();
 }
 
 function denver(ms: number, opts: Intl.DateTimeFormatOptions): string {

@@ -1,6 +1,6 @@
-import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { htmlToText } from "./htmlText";
 
 // Generic connector for "The Events Calendar" (Tribe) WordPress plugin, which
 // powers many venue sites (e.g. Dairy Block). The calendar page is JS-rendered,
@@ -37,11 +37,6 @@ interface TribeEvent {
 interface TribeResponse {
   events?: TribeEvent[];
   next_rest_url?: string;
-}
-
-function htmlToText(html: string | undefined): string {
-  if (!html) return "";
-  return cheerio.load(`<div>${html}</div>`).text().replace(/\s+/g, " ").trim();
 }
 
 // Tribe dates are "YYYY-MM-DD HH:MM:SS" already in the venue's local time — read

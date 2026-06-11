@@ -1,6 +1,6 @@
-import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { htmlToText } from "./htmlText";
 
 // Generic WordPress REST events connector. The page itself is a JS-heavy WP
 // theme, but the wp-json REST API exposes clean structured records, so we hit a
@@ -40,11 +40,6 @@ const RANGE_RE = new RegExp(
   "i",
 );
 
-// Strip tags AND decode HTML entities (titles carry &#8217;, &amp;, &nbsp;).
-function htmlToText(html: string | undefined): string {
-  if (!html) return "";
-  return cheerio.load(`<div>${html}</div>`).text().replace(/\s+/g, " ").trim();
-}
 
 function iso(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { fetchText } from "./feedFetch";
+import { htmlToText } from "./htmlText";
 
 // Avery Brewing's taproom-events page is a Next.js (pages-router) site whose
 // events live only in the __NEXT_DATA__ payload — a Strapi "page-components.
@@ -17,11 +18,6 @@ interface NextEvent {
   dateTimeText?: string;
   description?: string;
   image?: { url?: string; data?: { attributes?: { url?: string } } };
-}
-
-function htmlToText(html: string | undefined): string {
-  if (!html) return "";
-  return cheerio.load(`<div>${html}</div>`).text().replace(/\s+/g, " ").trim();
 }
 
 function imageUrl(img: NextEvent["image"]): string | undefined {
