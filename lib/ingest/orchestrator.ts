@@ -31,6 +31,7 @@ import {
   mergeVenueTitleDuplicates,
   reconcileVenueDuplicates,
 } from "./dedupCluster";
+import { mergeDuplicateVenues } from "./venueMerge";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -178,6 +179,29 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     const actions = await classifyForUpsert(withImages);
     const counts = await applyBatch(actions);
 
+    let batchVenueIds = [
+      ...new Set(
+        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
+      ),
+    ];
+
+    // Consolidate duplicate venue rows touched by this batch BEFORE deduping
+    // events: the same show pinned to fragmented venue rows ("The Outpost on
+    // Platte" vs "Station 26 Brewing - The Outpost on Platte") otherwise escapes
+    // the same-venue dedup passes below. Merging onto one canonical row lets them
+    // collapse it. Failures never fail the run.
+    try {
+      const vm = await mergeDuplicateVenues({ onlyVenueIds: batchVenueIds });
+      if (vm.venuesRemoved > 0) {
+        console.log(
+          `[ingest:${source.id}] merged ${vm.venuesRemoved} duplicate venue(s) across ${vm.merges.length} group(s)`,
+        );
+        batchVenueIds = [...new Set([...batchVenueIds, ...vm.canonicalIds])];
+      }
+    } catch (err) {
+      console.error(`[ingest:${source.id}] venue merge failed`, err);
+    }
+
     // LLM fuzzy-cluster pass: catches paraphrased duplicates the hash misses.
     // Failures here don't fail the whole run — the deterministic dedup already
     // handled exact matches and bad clusters can be cleaned up reactively.
@@ -199,12 +223,6 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     } catch (err) {
       console.error(`[ingest:${source.id}] venue-title dedup failed`, err);
     }
-
-    const batchVenueIds = [
-      ...new Set(
-        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
-      ),
-    ];
 
     // Reconcile each touched venue's duplicate clusters: prefer the
     // authoritative source as the visible row (a venue's ticketing Website beats
