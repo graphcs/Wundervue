@@ -1,4 +1,4 @@
-import { getServiceClient } from "./persist";
+import { getServiceClient, invalidateVenueCache } from "./persist";
 import { canonicalKey, significantTokens } from "./venueCanonical";
 
 // Venue de-duplication. The same physical place can end up as several venue rows
@@ -178,17 +178,23 @@ export async function mergeDuplicateVenues(
     canonicalIds: [],
     merges: [],
   };
+  if (groups.length === 0) return result;
+
+  // Listing counts for every candidate venue in ONE query (vs a COUNT per venue
+  // in a loop). Used only to pick the canonical row and report the move size —
+  // the repoint below runs unconditionally, so an undercount can't orphan rows.
+  const counts = new Map<string, number>();
+  const candidateIds = [...new Set(groups.flatMap((g) => g.map((v) => v.id)))];
+  const { data: lrows, error: cErr } = await client
+    .from("listings")
+    .select("venue_id")
+    .in("venue_id", candidateIds);
+  if (cErr) throw new Error(`venue-merge listing count failed: ${cErr.message}`);
+  for (const r of (lrows ?? []) as Array<{ venue_id: string }>) {
+    counts.set(r.venue_id, (counts.get(r.venue_id) ?? 0) + 1);
+  }
 
   for (const group of groups) {
-    // Listing counts per member to pick the canonical and to repoint.
-    const counts = new Map<string, number>();
-    for (const v of group) {
-      const { count } = await client
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("venue_id", v.id);
-      counts.set(v.id, count ?? 0);
-    }
     const canonical = [...group].sort((a, b) => {
       const ar = Number(isRealAddress(a.address));
       const br = Number(isRealAddress(b.address));
@@ -214,19 +220,24 @@ export async function mergeDuplicateVenues(
 
     result.canonicalIds.push(canonical.id);
     for (const v of absorbed) {
-      if ((counts.get(v.id) ?? 0) > 0) {
-        const { error: upErr } = await client
-          .from("listings")
-          .update({ venue_id: canonical.id })
-          .eq("venue_id", v.id);
-        if (upErr) throw new Error(`repoint listings ${v.slug}->${canonical.slug} failed: ${upErr.message}`);
-      }
+      // Repoint unconditionally — a no-op when v has no listings, and correct even
+      // if the batched count above undercounted (so we never delete a venue while
+      // listings still point at it).
+      const { error: upErr } = await client
+        .from("listings")
+        .update({ venue_id: canonical.id })
+        .eq("venue_id", v.id);
+      if (upErr) throw new Error(`repoint listings ${v.slug}->${canonical.slug} failed: ${upErr.message}`);
       const { error: delErr } = await client.from("venues").delete().eq("id", v.id);
       if (delErr) throw new Error(`delete venue ${v.slug} failed: ${delErr.message}`);
     }
     result.venuesRemoved += absorbed.length;
     result.listingsRepointed += listings;
   }
+
+  // Venue rows were deleted out from under persist.ts's in-process cache; drop it
+  // so later sources in this run don't canonicalize against (or re-create) them.
+  if (result.venuesRemoved > 0) invalidateVenueCache();
 
   return result;
 }

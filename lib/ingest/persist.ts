@@ -64,6 +64,14 @@ async function refreshAllVenuesLite(): Promise<Array<{ slug: string; name: strin
   return getAllVenuesLite();
 }
 
+// Drop the cached venue list so the next resolveOrCreateVenue reloads it. Call
+// after anything that deletes/renames venue rows out from under the cache (e.g.
+// the venue-merge pass) so later sources in the same process don't canonicalize
+// against — or re-create — a row that no longer exists.
+export function invalidateVenueCache(): void {
+  venueListCache = null;
+}
+
 export async function resolveVenue(slug: string | undefined): Promise<VenueRow | null> {
   if (!slug) return null;
   const client = getServiceClient();
