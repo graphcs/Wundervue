@@ -665,6 +665,21 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "new-terrain-brewing",
   },
   {
+    // The Jasmine Bar (downtown Louisville) runs a Squarespace events collection —
+    // its courtyard "Summer Concert Series" lists ~23 named live-music nights.
+    // squarespaceEvents reads the ?format=json upcoming feed; single venue, pinned.
+    id: "jasmine-bar-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.thejasminebar.com/events",
+    maxItems: 40,
+    defaultVenueName: "The Jasmine Bar",
+    defaultVenueSlug: "the-jasmine-bar",
+    defaultCategory: "Music",
+  },
+  {
     // Avery Brewing (Gunbarrel, Boulder) is a Next.js site whose taproom events
     // live only in __NEXT_DATA__ (a Strapi taproom-events component), read by the
     // averyTaproomEvents connector. Recurring weekly series (trivia, yoga, Magic,
