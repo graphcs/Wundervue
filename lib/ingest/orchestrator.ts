@@ -7,9 +7,32 @@ import { fetchVenuePilot } from "./connectors/venuePilot";
 import { fetchWixEvents } from "./connectors/wixEvents";
 import { fetchFullCalendarFeed } from "./connectors/fullCalendarFeed";
 import { fetchMlbSchedule } from "./connectors/mlbSchedule";
+import { fetchNbaSchedule } from "./connectors/nbaSchedule";
+import { fetchNhlSchedule } from "./connectors/nhlSchedule";
+import { fetchNflSchedule } from "./connectors/nflSchedule";
+import { fetchAquariumCalendar } from "./connectors/aquariumCalendar";
+import { fetchWpRestEvents } from "./connectors/wpRestEvents";
+import { fetchComedyWorksCalendar } from "./connectors/comedyWorksCalendar";
+import { fetchDenverUnionStation } from "./connectors/denverUnionStation";
+import { fetchSquarespaceEvents } from "./connectors/squarespaceEvents";
+import { fetchTribeEvents } from "./connectors/tribeEvents";
+import { fetchBotanicGardensCalendar } from "./connectors/botanicGardensCalendar";
+import { fetchEventRssFeed } from "./connectors/eventRssFeed";
+import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule";
+import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
+import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
+import { fetchIcsCalendar } from "./connectors/icsCalendar";
+import { fetchLibCalEvents } from "./connectors/libcalEvents";
+import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
+import { fetchAveryTaproomEvents } from "./connectors/averyTaproomEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
-import { clusterAndMarkDuplicates, mergeVenueTitleDuplicates } from "./dedupCluster";
+import {
+  clusterAndMarkDuplicates,
+  mergeVenueTitleDuplicates,
+  reconcileVenueDuplicates,
+} from "./dedupCluster";
+import { mergeDuplicateVenues } from "./venueMerge";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -43,6 +66,42 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchFullCalendarFeed(source);
     case "mlbSchedule":
       return fetchMlbSchedule(source);
+    case "nbaSchedule":
+      return fetchNbaSchedule(source);
+    case "nhlSchedule":
+      return fetchNhlSchedule(source);
+    case "nflSchedule":
+      return fetchNflSchedule(source);
+    case "aquariumCalendar":
+      return fetchAquariumCalendar(source);
+    case "wpRestEvents":
+      return fetchWpRestEvents(source);
+    case "comedyWorksCalendar":
+      return fetchComedyWorksCalendar(source);
+    case "denverUnionStation":
+      return fetchDenverUnionStation(source);
+    case "squarespaceEvents":
+      return fetchSquarespaceEvents(source);
+    case "tribeEvents":
+      return fetchTribeEvents(source);
+    case "botanicGardensCalendar":
+      return fetchBotanicGardensCalendar(source);
+    case "eventRssFeed":
+      return fetchEventRssFeed(source);
+    case "denverSummitFcSchedule":
+      return fetchDenverSummitFcSchedule(source);
+    case "ticketmasterVenue":
+      return fetchTicketmasterVenue(source);
+    case "jsonLdEvents":
+      return fetchJsonLdEvents(source);
+    case "icsCalendar":
+      return fetchIcsCalendar(source);
+    case "libcalEvents":
+      return fetchLibCalEvents(source);
+    case "potteryWithPurpose":
+      return fetchPotteryWithPurpose(source);
+    case "averyTaproomEvents":
+      return fetchAveryTaproomEvents(source);
   }
 }
 
@@ -123,6 +182,29 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     const actions = await classifyForUpsert(withImages);
     const counts = await applyBatch(actions);
 
+    let batchVenueIds = [
+      ...new Set(
+        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
+      ),
+    ];
+
+    // Consolidate duplicate venue rows touched by this batch BEFORE deduping
+    // events: the same show pinned to fragmented venue rows ("The Outpost on
+    // Platte" vs "Station 26 Brewing - The Outpost on Platte") otherwise escapes
+    // the same-venue dedup passes below. Merging onto one canonical row lets them
+    // collapse it. Failures never fail the run.
+    try {
+      const vm = await mergeDuplicateVenues({ onlyVenueIds: batchVenueIds });
+      if (vm.venuesRemoved > 0) {
+        console.log(
+          `[ingest:${source.id}] merged ${vm.venuesRemoved} duplicate venue(s) across ${vm.merges.length} group(s)`,
+        );
+        batchVenueIds = [...new Set([...batchVenueIds, ...vm.canonicalIds])];
+      }
+    } catch (err) {
+      console.error(`[ingest:${source.id}] venue merge failed`, err);
+    }
+
     // LLM fuzzy-cluster pass: catches paraphrased duplicates the hash misses.
     // Failures here don't fail the whole run — the deterministic dedup already
     // handled exact matches and bad clusters can be cleaned up reactively.
@@ -143,6 +225,18 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
       fuzzyMarked += merged.markedDuplicate;
     } catch (err) {
       console.error(`[ingest:${source.id}] venue-title dedup failed`, err);
+    }
+
+    // Reconcile each touched venue's duplicate clusters: prefer the
+    // authoritative source as the visible row (a venue's ticketing Website beats
+    // an Instagram repost of the same show, so the survivor keeps the real
+    // showtime/ticket link/art), and roll same-day duplicate showtimes onto the
+    // canonical ("7:00 PM & 9:30 PM"). Runs for every venue in the batch,
+    // including update-only re-ingests.
+    try {
+      if (batchVenueIds.length > 0) await reconcileVenueDuplicates(batchVenueIds);
+    } catch (err) {
+      console.error(`[ingest:${source.id}] venue dedup reconcile failed`, err);
     }
 
     const result: IngestResult = {

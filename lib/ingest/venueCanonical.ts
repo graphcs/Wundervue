@@ -9,7 +9,9 @@
 // Connective stopwords dropped anywhere in the name.
 const STOPWORDS = new Set(["of", "and", "at", "a", "an", "the", "in", "on"]);
 // Filler dropped from the END of a name (legal/descriptive suffixes that vary
-// between sources but don't change the identity of the place).
+// between sources but don't change the identity of the place). Includes street
+// suffixes so "The Outpost on Platte St." keys the same as "The Outpost on
+// Platte" \u2014 a trailing street type is never what distinguishes two venues.
 const TRAILING_FILLER = new Set([
   "books",
   "book",
@@ -20,23 +22,37 @@ const TRAILING_FILLER = new Set([
   "llc",
   "inc",
   "presents",
+  "st",
+  "street",
+  "ave",
+  "avenue",
+  "blvd",
+  "boulevard",
+  "rd",
+  "road",
 ]);
+
+// Significant tokens of a venue name: lowercased, accent- and punctuation-
+// stripped, connective stopwords removed. Shared by canonicalKey and the
+// venue-merge subset check so both tokenize identically.
+export function significantTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((t) => !STOPWORDS.has(t));
+}
 
 // A normalized identity key for a venue name. Two names with the same non-empty
 // key are treated as the same venue. Returns "" for names that are too generic
 // to match safely (fewer than 2 significant tokens), so single-word venues
 // ("Lounge", "Studio") never collapse together.
 export function canonicalKey(name: string): string {
-  const cleaned = name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/&/g, " and ");
-  const tokens = cleaned
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((t) => !STOPWORDS.has(t));
+  const tokens = significantTokens(name);
   while (tokens.length > 1 && TRAILING_FILLER.has(tokens[tokens.length - 1])) {
     tokens.pop();
   }

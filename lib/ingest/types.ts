@@ -10,7 +10,25 @@ export type ConnectorKind =
   | "venuePilot"
   | "wixEvents"
   | "fullCalendarFeed"
-  | "mlbSchedule";
+  | "mlbSchedule"
+  | "nbaSchedule"
+  | "nhlSchedule"
+  | "nflSchedule"
+  | "aquariumCalendar"
+  | "wpRestEvents"
+  | "comedyWorksCalendar"
+  | "denverUnionStation"
+  | "squarespaceEvents"
+  | "tribeEvents"
+  | "botanicGardensCalendar"
+  | "eventRssFeed"
+  | "denverSummitFcSchedule"
+  | "ticketmasterVenue"
+  | "jsonLdEvents"
+  | "icsCalendar"
+  | "libcalEvents"
+  | "potteryWithPurpose"
+  | "averyTaproomEvents";
 
 export interface SourceConfig {
   id: string;
@@ -32,6 +50,22 @@ export interface SourceConfig {
   venuePilotAccountIds?: number[];
   // mlbSchedule — MLB StatsAPI team id (Colorado Rockies = 115).
   mlbTeamId?: number;
+  // nbaSchedule — NBA franchise id for the home-game filter (Denver Nuggets =
+  // 1610612743) plus the team slug used in the data.nba.com feed path and the
+  // public schedule URL (nba.com/<slug>/schedule, e.g. "nuggets").
+  nbaTeamId?: number;
+  nbaTeamSlug?: string;
+  // nhlSchedule — NHL team abbreviation for the home-game filter (Colorado
+  // Avalanche = "COL") plus the team slug used in the public schedule URL
+  // (nhl.com/<slug>/schedule, e.g. "avalanche"). The season is resolved
+  // automatically via the API's /now endpoint, so no year is configured.
+  nhlTeamAbbrev?: string;
+  nhlTeamSlug?: string;
+  // nflSchedule — ESPN team abbreviation for the schedule feed + home-game
+  // filter (Denver Broncos = "DEN"). The human-facing schedule link comes from
+  // `url` (e.g. denverbroncos.com/schedule). The season is resolved by ESPN's
+  // default team-schedule endpoint, so no year is configured.
+  nflTeamAbbrev?: string;
   query?: string;              // serpEvents — Google Events search query
   serpHtichips?: string;       // serpEvents — optional Google date/type filter (e.g. "date:week")
   // apifyWeb / cheerioWeb. A single page URL, or an array to scrape several
@@ -47,6 +81,24 @@ export interface SourceConfig {
     image?: string;
     link?: string;
   };
+  // comedyWorksCalendar — how many months past the current one to crawl (the
+  // calendar pages one month per URL). Default 3 (current + next 3 = 4 months).
+  monthsAhead?: number;
+  // comedyWorksCalendar — which physical club this source covers. The calendar
+  // interleaves both Comedy Works clubs (and external "concerts"); the connector
+  // keeps only events tagged for this club so each source can pin authoritatively
+  // via defaultVenueSlug. Omit to collect every club (untagged concerts excluded).
+  comedyWorksClub?: "downtown" | "south";
+  // apifyWeb — render JavaScript with a real browser (apify/web-scraper) instead
+  // of the default static cheerio-scraper. Needed for client-rendered widgets
+  // (e.g. Wix Events). Pair with `selectors` + `waitForSelector`.
+  renderJs?: boolean;
+  // apifyWeb (renderJs) — CSS selector to wait for before extracting, so the
+  // dynamically-loaded content has rendered.
+  waitForSelector?: string;
+  // apifyWeb (renderJs) — how long to wait for waitForSelector (ms, default
+  // 20000). Bump it for slow widgets (e.g. the AEG/AXS calendar takes ~30-50s).
+  waitForTimeoutMs?: number;
   // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
   // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
   // shows) would otherwise push every future event through LLM normalization
@@ -56,6 +108,10 @@ export interface SourceConfig {
 
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
+  // squarespaceEvents — venue name to label each event with (the Squarespace
+  // feed's per-item location is often the platform's empty default). Used as the
+  // venueName hint in the blob; the normalizer can still refine from the title.
+  defaultVenueName?: string;
   defaultCategory?: string;
 }
 
@@ -116,7 +172,7 @@ export interface DbListing {
   is_free: boolean;
   deal_value: string | null;
   image_url: string | null;
-  image_source: "existing" | "scraped" | "og-image" | "generated" | null;
+  image_source: "existing" | "scraped" | "og-image" | "generated" | "placeholder" | null;
   source: string;
   source_url: string | null;
   source_id: string;

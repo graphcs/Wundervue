@@ -13,10 +13,11 @@ interface ApifyWebItem {
   loadedTime?: string;
 }
 
-// cheerio-scraper exposes `$` natively in the pageFunction context and runs ~5x
-// faster than web-scraper. Use web-scraper only for JS-heavy sites that need a
-// real browser.
-const ACTOR_ID = "apify/cheerio-scraper";
+// Static cheerio-scraper (exposes `$`, ~5x faster) by default; web-scraper (a
+// real browser exposing `context.jQuery` + waitFor) when a source sets
+// `renderJs` for client-rendered widgets (e.g. Wix Events).
+const CHEERIO_ACTOR = "apify/cheerio-scraper";
+const BROWSER_ACTOR = "apify/web-scraper";
 
 function getClient(): ApifyClient {
   const token = process.env.APIFY_TOKEN;
@@ -33,61 +34,73 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
   }
   const client = getClient();
 
+  // `$` is cheerio-scraper's native binding or web-scraper's injected jQuery;
+  // waitFor only exists in the browser actor (guarded for the static one).
+  const pageFunction = `
+    async function pageFunction(context) {
+      const { request } = context;
+      const $ = context.$ || context.jQuery;
+      const waitSel = ${JSON.stringify(source.waitForSelector ?? "")};
+      const waitMs = ${JSON.stringify(source.waitForTimeoutMs ?? 20000)};
+      if (waitSel && typeof context.waitFor === "function") {
+        try { await context.waitFor(waitSel, { timeoutMillis: waitMs }); } catch (e) {}
+      }
+      const items = [];
+      const itemSel = ${JSON.stringify(source.selectors?.item ?? "")};
+      const titleSel = ${JSON.stringify(source.selectors?.title ?? "h1, h2, h3")};
+      const descSel = ${JSON.stringify(source.selectors?.description ?? "p")};
+
+      ${IMAGE_PICKER_SOURCE}
+
+      if (itemSel) {
+        $(itemSel).each((_, el) => {
+          items.push({
+            url: $(el).find('a').first().attr('href') || request.url,
+            title: $(el).find(titleSel).first().text().trim(),
+            description: $(el).find(descSel).first().text().trim(),
+            text: $(el).text().trim(),
+            image: pickImageAttr($(el).find('img').first()) || null,
+            loadedTime: new Date().toISOString(),
+          });
+        });
+      }
+      // Fallback: with NO item selector, return the visible page text as a
+      // single chunk and let the LLM extract. When an item selector IS set but
+      // matched nothing (e.g. a JS widget that didn't finish rendering this run),
+      // return empty rather than dumping the whole page as one junk listing.
+      if (items.length === 0 && !itemSel) {
+        $('script, style, nav, footer, header, noscript').remove();
+        const root = $('main').length ? $('main') : $('body');
+        const text = root.text().replace(/\\s+/g, ' ').trim().slice(0, 8000);
+        if (text) {
+          items.push({
+            url: request.url,
+            title: $('h1').first().text().trim() || $('title').text().trim(),
+            description: '',
+            text,
+            image: $('meta[property="og:image"]').attr('content') || null,
+            loadedTime: new Date().toISOString(),
+          });
+        }
+      }
+      return items;
+    }
+  `;
+
+  const baseInput: Record<string, unknown> = {
+    startUrls: urls.map((url) => ({ url })),
+    pageFunction,
+    maxRequestsPerCrawl: urls.length,
+  };
+  // web-scraper needs jQuery injected for `$` and runs a full browser.
+  const input = source.renderJs
+    ? { ...baseInput, runMode: "PRODUCTION", injectJQuery: true }
+    : baseInput;
+
   const run = await withRetry(() =>
-    client.actor(ACTOR_ID).call(
-      {
-        startUrls: urls.map((url) => ({ url })),
-        // Default page-function returns title/description/url/image per page.
-        // For source-specific extraction, override via Apify console for that actor.
-        // Image-picking helpers (isUsableUrl / pickFromSrcset / pickImageAttr)
-        // are injected verbatim from ./imagePicker via Function.prototype.toString
-        // so this worker can't drift from the in-process cheerio scraper.
-        pageFunction: `
-          async function pageFunction(context) {
-            const { request, $ } = context;
-            const items = [];
-            const itemSel = ${JSON.stringify(source.selectors?.item ?? "")};
-            const titleSel = ${JSON.stringify(source.selectors?.title ?? "h1, h2, h3")};
-            const descSel = ${JSON.stringify(source.selectors?.description ?? "p")};
-
-            ${IMAGE_PICKER_SOURCE}
-
-            if (itemSel) {
-              $(itemSel).each((_, el) => {
-                items.push({
-                  url: $(el).find('a').first().attr('href') || request.url,
-                  title: $(el).find(titleSel).first().text().trim(),
-                  description: $(el).find(descSel).first().text().trim(),
-                  text: $(el).text().trim(),
-                  image: pickImageAttr($(el).find('img').first()) || null,
-                  loadedTime: new Date().toISOString(),
-                });
-              });
-            }
-            // Fallback: when the item selector matches nothing, return the
-            // visible page text as a single chunk and let the LLM extract.
-            if (items.length === 0) {
-              $('script, style, nav, footer, header, noscript').remove();
-              const root = $('main').length ? $('main') : $('body');
-              const text = root.text().replace(/\\s+/g, ' ').trim().slice(0, 8000);
-              if (text) {
-                items.push({
-                  url: request.url,
-                  title: $('h1').first().text().trim() || $('title').text().trim(),
-                  description: '',
-                  text,
-                  image: $('meta[property="og:image"]').attr('content') || null,
-                  loadedTime: new Date().toISOString(),
-                });
-              }
-            }
-            return items;
-          }
-        `,
-        maxRequestsPerCrawl: urls.length,
-      },
-      { timeout: 300 },
-    ),
+    client.actor(source.renderJs ? BROWSER_ACTOR : CHEERIO_ACTOR).call(input, {
+      timeout: source.renderJs ? 600 : 300,
+    }),
   );
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();

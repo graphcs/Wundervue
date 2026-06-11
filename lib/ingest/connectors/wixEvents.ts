@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
+import { localizeDenver } from "./localize";
 
 // Wix Events powers many small-venue sites (e.g. Little Blue Pigeon Books). The
 // events page is a JS app, but Wix server-embeds the data in a
@@ -35,25 +36,6 @@ function eventStart(e: WixEvent): string | undefined {
   return e.scheduling?.config?.startDate ?? e.start ?? e.startDate;
 }
 
-// Wix stores start times in UTC. An evening Denver event (e.g. 6:30pm) is
-// "T00:30:00Z" the NEXT day, so handing the raw UTC ISO to the normalizer reads
-// the wrong calendar day. Render it in venue-local (Denver-metro) time so the
-// LLM extracts the correct date. Falls back to the raw value if formatting fails.
-function localizeStart(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      timeZone: "America/Denver",
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 function eventImage(e: WixEvent): string | undefined {
   const id = typeof e.mainImage === "string" ? e.mainImage : e.mainImage?.id;
@@ -104,7 +86,7 @@ export async function fetchWixEvents(source: SourceConfig): Promise<RawItem[]> {
     const loc = e.location?.name || e.location?.address || "";
     const text = [
       e.title.trim(),
-      start && `Date: ${localizeStart(start)}`,
+      start && `Date: ${localizeDenver(start)}`,
       loc && `Location: ${loc}`,
       desc,
     ]

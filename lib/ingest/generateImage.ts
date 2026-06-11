@@ -1,4 +1,4 @@
-import { withRetry } from "./retry";
+import { withRetry, RetryableError } from "./retry";
 
 // Gemini 3 Pro Image (Preview) via OpenRouter. Picked because: (a) reuses
 // OPENROUTER_API_KEY so no new secret, (b) OpenRouter wraps image gen into
@@ -54,7 +54,15 @@ export function buildPrompt(input: GenerateInput): string {
   const title = sanitize(input.title, 120);
   const venueName = input.venueName ? sanitize(input.venueName, 60) : "";
   const neighborhood = input.neighborhood ? sanitize(input.neighborhood, 60) : "";
-  const subject = input.type === "deal" ? `${title} promotion` : title;
+  // Image models refuse to depict real sports matchups by name (team
+  // names/likenesses → no image), which would drop every game. Use a generic
+  // stadium scene for Sports; the venue + "no logos" rule keep it on-brand.
+  const subject =
+    input.category?.toLowerCase() === "sports"
+      ? "an energetic crowd at a live professional sports game"
+      : input.type === "deal"
+        ? `${title} promotion`
+        : title;
   const venue = venueName ? ` at ${venueName}` : "";
   const place = neighborhood ? ` in ${neighborhood}, Denver` : " in Denver";
   // Category comes from a fixed enum (lib/data/categories.ts) so it can't
@@ -83,7 +91,11 @@ export async function generateImage(input: GenerateInput): Promise<GeneratedImag
   const model = resolveModel();
   const prompt = buildPrompt(input);
 
-  const json = await withRetry(async () => {
+  // Validate the response (including the "no image" case) INSIDE withRetry:
+  // gemini-2.5-flash-image intermittently returns a 200 with a text-only reply
+  // and no image, which usually succeeds on a retry. Otherwise a burst of
+  // generations (e.g. a sports schedule, where every row needs one) drops most.
+  return withRetry(async () => {
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
@@ -97,18 +109,21 @@ export async function generateImage(input: GenerateInput): Promise<GeneratedImag
       }),
     });
     if (!res.ok) {
-      throw new Error(`openrouter image gen failed: status ${res.status}`);
+      // Rate limits (429) and 5xx are transient — retry; 4xx config errors aren't.
+      const msg = `openrouter image gen failed: status ${res.status}`;
+      throw res.status === 429 || res.status >= 500 ? new RetryableError(msg) : new Error(msg);
     }
-    return (await res.json()) as ChatCompletionResponse;
-  });
-
-  if (json.error?.message) {
-    throw new Error(`openrouter error: ${json.error.message}`);
-  }
-  const dataUrl = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!dataUrl) throw new Error("openrouter response had no image");
-
-  return decodeDataUrl(dataUrl);
+    const json = (await res.json()) as ChatCompletionResponse;
+    if (json.error?.message) {
+      throw new RetryableError(`openrouter error: ${json.error.message}`);
+    }
+    const dataUrl = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    // The model intermittently returns a 200 with a text-only reply and no
+    // image; this MUST be a RetryableError or withRetry's shouldRetry rejects it
+    // and the attempts below never fire — it usually succeeds on a retry.
+    if (!dataUrl) throw new RetryableError("openrouter response had no image");
+    return decodeDataUrl(dataUrl);
+  }, { attempts: 5 }); // the image model is flaky; give it several tries
 }
 
 function decodeDataUrl(dataUrl: string): GeneratedImage {
