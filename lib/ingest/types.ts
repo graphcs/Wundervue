@@ -96,6 +96,9 @@ export interface SourceConfig {
   // apifyWeb (renderJs) — CSS selector to wait for before extracting, so the
   // dynamically-loaded content has rendered.
   waitForSelector?: string;
+  // apifyWeb (renderJs) — how long to wait for waitForSelector (ms, default
+  // 20000). Bump it for slow widgets (e.g. the AEG/AXS calendar takes ~30-50s).
+  waitForTimeoutMs?: number;
   // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
   // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
   // shows) would otherwise push every future event through LLM normalization

@@ -680,6 +680,30 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "avery-brewing",
   },
   {
+    // Gothic Theatre (Englewood, AEG venue 14001) renders its calendar with an
+    // AEG/AXS JavaScript widget — no fetchable feed, and the events load slowly
+    // (~30-50s, well past the default 20s wait). apifyWeb renderJs waits for the
+    // titles, then scrapes each `a.c-axs-event-card__header` card (all ~58 upcoming
+    // shows across every month are in the DOM at once); full card text carries the
+    // date, showtime, and support acts to the normalizer. Single venue, pinned.
+    id: "gothic-theatre-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://gothictheatre.com/calendar/",
+    renderJs: true,
+    waitForSelector: ".c-axs-event-card__title",
+    waitForTimeoutMs: 55000,
+    selectors: {
+      item: ".c-axs-event-card__header",
+      title: ".c-axs-event-card__title",
+    },
+    maxItems: 50,
+    defaultVenueSlug: "gothic-theatre",
+    defaultCategory: "Music",
+  },
+  {
     // Disabled: Station 26's Squarespace ?format=json feed is reachable, but a
     // trial ingest surfaced only thin recurring content — the sole survivors were
     // a weekly "Sunset Sessions" live-music series (the Monday cornhole league

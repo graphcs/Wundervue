@@ -41,8 +41,9 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
       const { request } = context;
       const $ = context.$ || context.jQuery;
       const waitSel = ${JSON.stringify(source.waitForSelector ?? "")};
+      const waitMs = ${JSON.stringify(source.waitForTimeoutMs ?? 20000)};
       if (waitSel && typeof context.waitFor === "function") {
-        try { await context.waitFor(waitSel, { timeoutMillis: 20000 }); } catch (e) {}
+        try { await context.waitFor(waitSel, { timeoutMillis: waitMs }); } catch (e) {}
       }
       const items = [];
       const itemSel = ${JSON.stringify(source.selectors?.item ?? "")};
@@ -63,9 +64,11 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
           });
         });
       }
-      // Fallback: when the item selector matches nothing, return the visible
-      // page text as a single chunk and let the LLM extract.
-      if (items.length === 0) {
+      // Fallback: with NO item selector, return the visible page text as a
+      // single chunk and let the LLM extract. When an item selector IS set but
+      // matched nothing (e.g. a JS widget that didn't finish rendering this run),
+      // return empty rather than dumping the whole page as one junk listing.
+      if (items.length === 0 && !itemSel) {
         $('script, style, nav, footer, header, noscript').remove();
         const root = $('main').length ? $('main') : $('body');
         const text = root.text().replace(/\\s+/g, ' ').trim().slice(0, 8000);
