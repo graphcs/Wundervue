@@ -665,6 +665,21 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "new-terrain-brewing",
   },
   {
+    // Avery Brewing (Gunbarrel, Boulder) is a Next.js site whose taproom events
+    // live only in __NEXT_DATA__ (a Strapi taproom-events component), read by the
+    // averyTaproomEvents connector. Recurring weekly series (trivia, yoga, Magic,
+    // board games) plus one-offs (World Cup watch parties, the 4K on 4th race);
+    // dates are recurrence strings the normalizer resolves. Single venue, pinned.
+    id: "avery-brewing-web",
+    enabled: true,
+    connector: "averyTaproomEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.averybrewing.com/taproom-events",
+    maxItems: 20,
+    defaultVenueSlug: "avery-brewing",
+  },
+  {
     // Disabled: Station 26's Squarespace ?format=json feed is reachable, but a
     // trial ingest surfaced only thin recurring content — the sole survivors were
     // a weekly "Sunset Sessions" live-music series (the Monday cornhole league

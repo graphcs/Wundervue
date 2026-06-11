@@ -24,6 +24,7 @@ import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
+import { fetchAveryTaproomEvents } from "./connectors/averyTaproomEvents";
 import { normalize } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import {
@@ -99,6 +100,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchLibCalEvents(source);
     case "potteryWithPurpose":
       return fetchPotteryWithPurpose(source);
+    case "averyTaproomEvents":
+      return fetchAveryTaproomEvents(source);
   }
 }
 

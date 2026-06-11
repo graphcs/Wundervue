@@ -27,7 +27,8 @@ export type ConnectorKind =
   | "jsonLdEvents"
   | "icsCalendar"
   | "libcalEvents"
-  | "potteryWithPurpose";
+  | "potteryWithPurpose"
+  | "averyTaproomEvents";
 
 export interface SourceConfig {
   id: string;
