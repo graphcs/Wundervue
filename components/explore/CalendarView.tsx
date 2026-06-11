@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
-import { TIME_BUCKETS, groupByTimeBucket } from "@/lib/calendar/timeBuckets";
+import { TIME_BUCKETS, groupByTimeBucket, type TimeBucket } from "@/lib/calendar/timeBuckets";
 
 interface Props {
   listings: Listing[];
@@ -20,6 +20,13 @@ const FULL_WEEKDAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 ];
 const MAX_PREVIEW = 3;
+
+// Local start-of-today, for clamping past/ongoing events.
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 function detailHref(l: Listing): string {
   return l.type === "deal" ? `/deals/${l.slug}` : `/events/${l.slug}`;
@@ -80,36 +87,62 @@ function EventRow({ l }: { l: Listing }) {
   );
 }
 
-export function CalendarView({ listings }: Props) {
-  // Map each day → its listings. Multi-day events appear on each day they span.
-  const byDay = useMemo(() => {
-    const map = new Map<string, Listing[]>();
-    for (const l of listings) {
-      if (!l.startAt) continue;
-      const start = new Date(l.startAt);
-      if (Number.isNaN(start.getTime())) continue;
-      const end = l.endAt && !Number.isNaN(Date.parse(l.endAt)) ? new Date(l.endAt) : start;
-      const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-      let guard = 0;
-      while (cursor <= last && guard < 366) {
-        const key = dayKey(cursor);
-        const arr = map.get(key);
-        if (arr) arr.push(l);
-        else map.set(key, [l]);
-        cursor.setDate(cursor.getDate() + 1);
-        guard++;
-      }
-    }
-    return map;
-  }, [listings]);
+// A day's events as time-of-day tabs (Morning / Afternoon / Evening / All day) —
+// click a tab to see just that section instead of scrolling one long list. Only
+// non-empty buckets get a tab; the soonest one is selected first. Mount with a
+// `key` per day so the selection resets when the day changes.
+function DayAgenda({ items }: { items: Listing[] }) {
+  const groups = groupByTimeBucket(items);
+  const buckets = TIME_BUCKETS.filter((b) => groups[b.id].length > 0);
+  const [active, setActive] = useState<TimeBucket>(buckets[0]?.id ?? "morning");
+  if (buckets.length === 0) {
+    return <p className="text-gray py-10 text-center text-[13px]">No events on this day.</p>;
+  }
+  const current = buckets.some((b) => b.id === active) ? active : buckets[0].id;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="border-border flex flex-wrap gap-0.5 rounded-pill border p-0.5">
+        {buckets.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => setActive(b.id)}
+            className={`rounded-pill px-3 py-1 text-[12px] font-medium transition-colors ${
+              current === b.id ? "bg-dark text-white" : "text-graphite hover:text-dark"
+            }`}
+          >
+            {b.label}
+            <span className={`ml-1.5 ${current === b.id ? "text-white/70" : "text-gray"}`}>
+              {groups[b.id].length}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
+        {groups[current].map((l) => (
+          <EventRow key={l.id} l={l} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  // Soonest day that actually has events — drives the initial month + selection.
+export function CalendarView({ listings }: Props) {
+  // Soonest day with a visible event — drives the initial month + selection.
+  // Events ending before today are skipped (past); an ongoing event that started
+  // earlier counts from today (so it opens the calendar on the current month,
+  // not its past start month).
   const soonestKey = useMemo(() => {
+    const todayMs = startOfToday().getTime();
     let min = Infinity;
     for (const l of listings) {
-      const t = l.startAt ? Date.parse(l.startAt) : NaN;
-      if (!Number.isNaN(t) && t < min) min = t;
+      const startT = l.startAt ? Date.parse(l.startAt) : NaN;
+      if (Number.isNaN(startT)) continue;
+      const parsedEnd = l.endAt ? Date.parse(l.endAt) : NaN;
+      const endT = Number.isNaN(parsedEnd) ? startT : parsedEnd;
+      if (endT < todayMs) continue; // entirely past
+      const relevant = startT < todayMs ? todayMs : startT; // ongoing → from today
+      if (relevant < min) min = relevant;
     }
     return Number.isFinite(min) ? dayKey(new Date(min)) : null;
   }, [listings]);
@@ -126,6 +159,38 @@ export function CalendarView({ listings }: Props) {
 
   // Anchor day for week/day views (selection, else soonest, else today).
   const anchor = selected ?? soonestKey ?? todayKey;
+
+  // Map each day → its listings. A multi-day event appears on each day it spans,
+  // but never in the past: an event ending before today is dropped, and an
+  // ongoing event that started earlier counts from today through its end date
+  // (e.g. an Apr 17 → Jun 20 run shows from today, Jun 11, through Jun 20).
+  const byDay = useMemo(() => {
+    const map = new Map<string, Listing[]>();
+    const push = (key: string, l: Listing) => {
+      const arr = map.get(key);
+      if (arr) arr.push(l);
+      else map.set(key, [l]);
+    };
+    const today = startOfToday();
+    for (const l of listings) {
+      if (!l.startAt) continue;
+      const start = new Date(l.startAt);
+      if (Number.isNaN(start.getTime())) continue;
+      const endMs = l.endAt ? Date.parse(l.endAt) : NaN;
+      const end = Number.isNaN(endMs) ? start : new Date(endMs);
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      if (endDay < today) continue; // entirely past — don't show
+      const cursor = new Date(startDay < today ? today : startDay); // clamp to today
+      let guard = 0;
+      while (cursor <= endDay && guard < 366) {
+        push(dayKey(cursor), l);
+        cursor.setDate(cursor.getDate() + 1);
+        guard++;
+      }
+    }
+    return map;
+  }, [listings]);
 
   function changeMode(m: ViewMode) {
     if (m !== "month" && !selected) setSelected(soonestKey ?? todayKey);
@@ -184,7 +249,6 @@ export function CalendarView({ listings }: Props) {
   }, [anchor]);
 
   const dayItems = sortByStart(byDay.get(anchor) ?? []);
-  const dayGroups = groupByTimeBucket(dayItems);
 
   return (
     <div>
@@ -347,24 +411,7 @@ export function CalendarView({ listings }: Props) {
 
         {viewMode === "day" && (
           <div className="p-4">
-            {dayItems.length === 0 ? (
-              <p className="text-gray py-10 text-center text-[13px]">No events on this day.</p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {TIME_BUCKETS.filter((b) => dayGroups[b.id].length > 0).map((b) => (
-                  <div key={b.id}>
-                    <h3 className="text-graphite mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
-                      {b.label}
-                    </h3>
-                    <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
-                      {dayGroups[b.id].map((l) => (
-                        <EventRow key={l.id} l={l} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <DayAgenda key={anchor} items={dayItems} />
           </div>
         )}
       </div>
@@ -388,24 +435,9 @@ export function CalendarView({ listings }: Props) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
-          {dayItems.length === 0 ? (
-            <p className="text-gray px-5 py-8 text-center text-[13px]">No events on this day.</p>
-          ) : (
-            <div className="flex flex-col gap-4 p-4">
-              {TIME_BUCKETS.filter((b) => dayGroups[b.id].length > 0).map((b) => (
-                <div key={b.id}>
-                  <h4 className="text-graphite mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
-                    {b.label}
-                  </h4>
-                  <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
-                    {dayGroups[b.id].map((l) => (
-                      <EventRow key={l.id} l={l} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="p-4">
+            <DayAgenda key={selected} items={dayItems} />
+          </div>
         </div>
       )}
     </div>
