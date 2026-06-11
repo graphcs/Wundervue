@@ -21,6 +21,13 @@ const FULL_WEEKDAYS = [
 ];
 const MAX_PREVIEW = 3;
 
+// Local start-of-today, for clamping past/ongoing events.
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function detailHref(l: Listing): string {
   return l.type === "deal" ? `/deals/${l.slug}` : `/events/${l.slug}`;
 }
@@ -81,35 +88,21 @@ function EventRow({ l }: { l: Listing }) {
 }
 
 export function CalendarView({ listings }: Props) {
-  // Map each day → its listings. Multi-day events appear on each day they span.
-  const byDay = useMemo(() => {
-    const map = new Map<string, Listing[]>();
-    for (const l of listings) {
-      if (!l.startAt) continue;
-      const start = new Date(l.startAt);
-      if (Number.isNaN(start.getTime())) continue;
-      const end = l.endAt && !Number.isNaN(Date.parse(l.endAt)) ? new Date(l.endAt) : start;
-      const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-      let guard = 0;
-      while (cursor <= last && guard < 366) {
-        const key = dayKey(cursor);
-        const arr = map.get(key);
-        if (arr) arr.push(l);
-        else map.set(key, [l]);
-        cursor.setDate(cursor.getDate() + 1);
-        guard++;
-      }
-    }
-    return map;
-  }, [listings]);
-
-  // Soonest day that actually has events — drives the initial month + selection.
+  // Soonest day with a visible event — drives the initial month + selection.
+  // Events ending before today are skipped (past); an ongoing event that started
+  // earlier counts from today (so it opens the calendar on the current month,
+  // not its past start month).
   const soonestKey = useMemo(() => {
+    const todayMs = startOfToday().getTime();
     let min = Infinity;
     for (const l of listings) {
-      const t = l.startAt ? Date.parse(l.startAt) : NaN;
-      if (!Number.isNaN(t) && t < min) min = t;
+      const startT = l.startAt ? Date.parse(l.startAt) : NaN;
+      if (Number.isNaN(startT)) continue;
+      const endT =
+        l.endAt && !Number.isNaN(Date.parse(l.endAt)) ? Date.parse(l.endAt) : startT;
+      if (endT < todayMs) continue; // entirely past
+      const relevant = startT < todayMs ? todayMs : startT; // ongoing → from today
+      if (relevant < min) min = relevant;
     }
     return Number.isFinite(min) ? dayKey(new Date(min)) : null;
   }, [listings]);
@@ -126,6 +119,37 @@ export function CalendarView({ listings }: Props) {
 
   // Anchor day for week/day views (selection, else soonest, else today).
   const anchor = selected ?? soonestKey ?? todayKey;
+
+  // Map each day → its listings. A multi-day event appears on each day it spans,
+  // but never in the past: an event ending before today is dropped, and an
+  // ongoing event that started earlier counts from today through its end date
+  // (e.g. an Apr 17 → Jun 20 run shows from today, Jun 11, through Jun 20).
+  const byDay = useMemo(() => {
+    const map = new Map<string, Listing[]>();
+    const push = (key: string, l: Listing) => {
+      const arr = map.get(key);
+      if (arr) arr.push(l);
+      else map.set(key, [l]);
+    };
+    const today = startOfToday();
+    for (const l of listings) {
+      if (!l.startAt) continue;
+      const start = new Date(l.startAt);
+      if (Number.isNaN(start.getTime())) continue;
+      const end = l.endAt && !Number.isNaN(Date.parse(l.endAt)) ? new Date(l.endAt) : start;
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      if (endDay < today) continue; // entirely past — don't show
+      const cursor = new Date(startDay < today ? today : startDay); // clamp to today
+      let guard = 0;
+      while (cursor <= endDay && guard < 366) {
+        push(dayKey(cursor), l);
+        cursor.setDate(cursor.getDate() + 1);
+        guard++;
+      }
+    }
+    return map;
+  }, [listings]);
 
   function changeMode(m: ViewMode) {
     if (m !== "month" && !selected) setSelected(soonestKey ?? todayKey);
