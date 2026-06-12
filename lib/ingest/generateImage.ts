@@ -71,7 +71,11 @@ export function buildPrompt(input: GenerateInput): string {
   return [
     `Editorial photograph of ${subject}${venue}${place}.`,
     `${category} natural lighting, vibrant but realistic colors, shallow depth of field.`,
-    `${ASPECT_HINT}. No text overlays, no logos, no watermarks, no people facing the camera directly.`,
+    // Avoid the words "logos"/"watermarks": Gemini's image model reads "no
+    // watermarks" as a request to REMOVE watermarks (a copyright-policy trigger)
+    // and refuses with a text-only reply for some prompts — which the retry loop
+    // burns through, then falls back to the placeholder. Same intent, safe wording.
+    `${ASPECT_HINT}. Clean composition with no overlaid text and no one looking directly at the camera.`,
   ].join(" ");
 }
 
