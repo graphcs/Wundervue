@@ -84,7 +84,7 @@ export async function resolveVenue(slug: string | undefined): Promise<VenueRow |
   return (data as VenueRow | null) ?? null;
 }
 
-interface ResolvedLocation {
+export interface ResolvedLocation {
   neighborhood: string | null;
   region_slug: string | null;
   city_slug: string | null;
@@ -94,7 +94,8 @@ interface ResolvedLocation {
 // Resolve a free-text neighborhood label (and, as a fallback, coordinates) onto
 // canonical taxonomy slugs. When the label doesn't resolve but we have a pin,
 // reverse-geocode the coords and try the returned suburb/neighbourhood/city.
-async function resolveLocationSlugs(args: {
+// Exported so the location-backfill can re-resolve existing rows the same way.
+export async function resolveLocationSlugs(args: {
   neighborhood: string | null;
   lat: number | null;
   lng: number | null;

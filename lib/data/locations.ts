@@ -120,6 +120,7 @@ export const LOCATIONS: AreaNode[] = [
               nb("west-highland", "West Highland"),
               nb("jefferson-park", "Jefferson Park"),
               nb("highland", "Highland"),
+              nb("sun-valley", "Sun Valley"), // Platte-side area by Mile High/Elitch
             ],
           },
           {
@@ -279,17 +280,62 @@ export const REGIONS: ReadonlyArray<LocationRef> = REGION_REFS;
 export const CITIES: ReadonlyArray<LocationRef> = CITY_REFS;
 export const NEIGHBORHOODS_ALL: ReadonlyArray<LocationRef> = NEIGHBORHOOD_REFS;
 
-// The set of place labels the ingest LLM may pick from: every Central Denver
-// neighborhood plus every suburb city (cities with no neighborhood breakdown).
-// Excludes the Central Denver city-group labels ("Five Points Area", etc.) —
-// those are organizational, not places a listing sits in.
+// A "city group" (Central Denver's "downtown", "five-points-area", …) is an
+// organizational layer that holds neighborhoods — a listing sits in one of the
+// neighborhoods, not the group. Suburb towns (Boulder, Golden, …) carry no
+// neighborhood breakdown and are themselves places.
+const CITY_GROUP_SLUGS = new Set(
+  LOCATIONS.flatMap((a) => a.regions)
+    .flatMap((r) => r.cities)
+    .filter((c) => c.neighborhoods.length > 0)
+    .map((c) => c.slug),
+);
+const SUBURB_CITY_REFS = CITY_REFS.filter((c) => !CITY_GROUP_SLUGS.has(c.slug));
+
+// A few city-groups are also well-known browse destinations in their own right
+// (a real place name, not just an organizational label) and get an aggregate
+// /explore page spanning their neighborhoods. "Downtown" is the canonical one:
+// its listings resolve to child neighborhoods (LoDo, CBD, …) that the
+// hierarchical filter rolls back up under the group.
+const AGGREGATE_PLACE_SLUGS = new Set(["downtown"]);
+const AGGREGATE_CITY_REFS = CITY_REFS.filter((c) =>
+  AGGREGATE_PLACE_SLUGS.has(c.slug),
+);
+
+// Every browsable "place": Central Denver neighborhoods + suburb towns + the
+// aggregate city-groups above. Backs the /explore/[place] pages and their slug
+// validation. The remaining city-groups ("Five Points Area", …) are excluded —
+// they're organizational, not destinations.
+export const ALL_PLACES: ReadonlyArray<LocationRef> = [
+  ...NEIGHBORHOOD_REFS,
+  ...SUBURB_CITY_REFS,
+  ...AGGREGATE_CITY_REFS,
+];
+const PLACE_SLUG_SET = new Set(ALL_PLACES.map((p) => p.slug));
+
+/** True when `slug` names a browsable place (neighborhood, suburb, or aggregate). */
+export function isPlaceSlug(slug: string): boolean {
+  return PLACE_SLUG_SET.has(slug);
+}
+
+// Old flat-taxonomy slugs (lib/data/neighborhoods.ts) that no longer name a
+// browsable place after the migration. Redirect them to their closest successor
+// so indexed/bookmarked /explore/<slug> URLs keep working instead of 404ing.
+const LEGACY_PLACE_REDIRECTS: Record<string, string> = {
+  highlands: "lohi", // old aggregate "Highlands" → its flagship neighborhood
+};
+
+/** The successor place slug a legacy /explore slug should redirect to, if any. */
+export function legacyPlaceRedirect(slug: string): string | undefined {
+  return LEGACY_PLACE_REDIRECTS[slug];
+}
+
+// The set of place labels the ingest LLM may pick from — the same browsable
+// places, by label. Excludes the Central Denver city-group labels ("Five Points
+// Area", etc.): those are organizational, not places a listing sits in.
 export const LLM_LOCATION_LABELS: string[] = [
   ...NEIGHBORHOOD_REFS.map((n) => n.label),
-  ...CITY_REFS.filter((c) => {
-    const region = LOCATIONS[0].regions.find((r) => r.slug === c.regionSlug);
-    const city = region?.cities.find((cc) => cc.slug === c.slug);
-    return (city?.neighborhoods.length ?? 0) === 0;
-  }).map((c) => c.label),
+  ...SUBURB_CITY_REFS.map((c) => c.label),
 ];
 
 /** Look up any location (area/region/city/neighborhood) by its slug. */
@@ -353,6 +399,13 @@ const LEGACY_ALIASES: Record<string, string> = {
   "red rocks": "morrison", // Red Rocks Amphitheatre sits in Morrison
   "santa fe arts district": "baker", // Art District on Santa Fe → Baker area
   "santa fe art district": "baker",
+  "santa fe": "baker", // bare "Santa Fe" in our data is the Art District on Santa Fe
+  "downtown louisville": "louisville", // a "Downtown <town>" prefix shouldn't unmatch the town
+  "downtown denver": "downtown",
+  "north park hill": "park-hill",
+  "golden triangle": "cbd", // museum district, borders the CBD
+  "montbello": "far-northeast",
+  "lincoln park": "baker", // La Alma–Lincoln Park, west of downtown
 };
 for (const [alias, slug] of Object.entries(LEGACY_ALIASES)) {
   LABEL_TO_SLUG.set(norm(alias), slug);
