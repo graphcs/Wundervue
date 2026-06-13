@@ -62,6 +62,21 @@ export function buildHref({
   return qs ? `${base}?${qs}` : base;
 }
 
+// Swap to a new path while preserving the incoming query string — used to 301 a
+// legacy /explore slug onto its taxonomy successor without dropping filters.
+export function withQuery(
+  path: string,
+  sp: Record<string, string | string[] | undefined>,
+): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
+    else if (v) qs.set(k, v);
+  }
+  const s = qs.toString();
+  return s ? `${path}?${s}` : path;
+}
+
 // Homepage For-You URL that preserves the query filters (q/sort/date/…). The
 // path segment is intentionally dropped — For-You is a global, not segment-
 // scoped, feed. Used by the segment pages to forward a `tab=for-you` request.
