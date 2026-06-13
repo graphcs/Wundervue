@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { getMergedListings } from "@/lib/data/listings.server";
 import {
-  NEIGHBORHOODS,
-  neighborhoodLabel,
-} from "@/lib/data/neighborhoods";
+  NEIGHBORHOODS_ALL,
+  isPlaceSlug,
+  legacyPlaceRedirect,
+  locationBySlug,
+} from "@/lib/data/locations";
 import { CATEGORIES, categoryLabel } from "@/lib/data/categories";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
-import { forYouHref } from "@/lib/filters/buildHref";
+import { forYouHref, withQuery } from "@/lib/filters/buildHref";
 import { paginate } from "@/lib/filters/paginate";
 import { ExploreResults } from "@/components/explore/ExploreResults";
 
@@ -17,11 +19,13 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const HOOD_SLUGS = new Set(NEIGHBORHOODS.map((n) => n.slug));
+// Any neighborhood or city is a valid place segment (isPlaceSlug); city × category
+// combos render on-demand (dynamicParams). Pre-build the Central Denver
+// neighborhood × category pages — the highest-value SEO set — to bound the build.
 const CAT_SLUGS = new Set(CATEGORIES.map((c) => c.slug));
 
 export async function generateStaticParams() {
-  return NEIGHBORHOODS.flatMap((n) =>
+  return NEIGHBORHOODS_ALL.flatMap((n) =>
     CATEGORIES.map((c) => ({ segment: n.slug, category: c.slug })),
   );
 }
@@ -30,12 +34,14 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { segment, category } = await params;
-  const hood = neighborhoodLabel(segment);
+  // Gate on isPlaceSlug so region/area/city-group slugs (which the page 404s)
+  // don't get real metadata from locationBySlug's broader lookup.
+  const place = isPlaceSlug(segment) ? locationBySlug(segment)?.label : undefined;
   const cat = categoryLabel(category);
-  if (!hood || !cat) return { title: "Explore Denver" };
+  if (!place || !cat) return { title: "Explore Denver" };
   return {
-    title: `${cat} in ${hood}`,
-    description: `Find ${cat.toLowerCase()} events and deals in ${hood}, Denver.`,
+    title: `${cat} in ${place}`,
+    description: `Find ${cat.toLowerCase()} events and deals in ${place}.`,
   };
 }
 
@@ -46,7 +52,14 @@ export default async function ExploreCombinedPage({
   const { segment, category } = await params;
   const sp = await searchParams;
 
-  if (!HOOD_SLUGS.has(segment) || !CAT_SLUGS.has(category)) notFound();
+  if (!isPlaceSlug(segment) || !CAT_SLUGS.has(category)) {
+    // Permanently forward legacy /explore/<old-slug>/<category> URLs (308).
+    const successor = legacyPlaceRedirect(segment);
+    if (successor && CAT_SLUGS.has(category)) {
+      permanentRedirect(withQuery(`/explore/${successor}/${category}`, sp));
+    }
+    notFound();
+  }
 
   const filters = parseSearchParams(sp, {
     neighborhoodFromPath: segment,
