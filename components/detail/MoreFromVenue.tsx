@@ -1,18 +1,23 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
-import { getListingsByVenueId } from "@/lib/data/listings";
+import { getListingsByVenueSlugAsync } from "@/lib/data/listings.server";
 import { Badge } from "@/components/ui/Badge";
 
 interface Props {
   listing: Listing;
 }
 
-export function MoreFromVenue({ listing }: Props) {
-  const related = getListingsByVenueId(listing.venueId).filter(
+// Server component: only rendered for accessible listings, so it fetches the
+// venue's other listings itself — no wasted query on the gated/locked path.
+// Upcoming-only (a discovery rail, not the venue page's archive), so it uses
+// the merged-feed reader rather than getVenueListingsAllAsync (includes past).
+export async function MoreFromVenue({ listing }: Props) {
+  if (!listing.venueId) return null;
+  const others = (await getListingsByVenueSlugAsync(listing.venueId)).filter(
     (l) => l.id !== listing.id,
   );
 
-  if (related.length === 0) return null;
+  if (others.length === 0) return null;
 
   return (
     <section className="mt-12">
@@ -20,7 +25,7 @@ export function MoreFromVenue({ listing }: Props) {
         More from {listing.venueName}
       </h2>
       <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2">
-        {related.map((r) => {
+        {others.map((r) => {
           const href = r.type === "deal" ? `/deals/${r.slug}` : `/events/${r.slug}`;
           return (
             <Link

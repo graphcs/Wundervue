@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
-import { getVenue } from "@/lib/data/venues";
 import { Badge } from "@/components/ui/Badge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { DealTag } from "@/components/ui/DealTag";
@@ -28,7 +27,13 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function ListingDetailView({ listing, variant, onClose }: Props) {
-  const venue = getVenue(listing.venueId);
+  // The listing already carries its venue: venueId is the venue slug (resolved
+  // in rowToListing), plus venueName/address. No fixture lookup needed — that
+  // only knew ~13 venues and hid the link for ~99% of real (DB) events.
+  const venue =
+    listing.venueId && listing.venueName
+      ? { slug: listing.venueId, name: listing.venueName, address: listing.address }
+      : null;
   const heroHeight = variant === "page" ? "h-[360px]" : "h-[240px]";
   const fullPageHref =
     listing.type === "deal"
@@ -112,19 +117,23 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
               <HouseIcon size={13} />
               {venue.name}
             </Link>
-            <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
-              <PinIcon size={13} className="text-gray" />
-              {venue.address}
-            </div>
-            <a
-              href={buildDirectionsUrl(venue.address)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
-            >
-              <CompassIcon size={13} />
-              Get Directions
-            </a>
+            {venue.address && (
+              <>
+                <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
+                  <PinIcon size={13} className="text-gray" />
+                  {venue.address}
+                </div>
+                <a
+                  href={buildDirectionsUrl(venue.address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
+                >
+                  <CompassIcon size={13} />
+                  Get Directions
+                </a>
+              </>
+            )}
           </div>
         )}
 
@@ -143,12 +152,14 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
               </div>
             </div>
           </div>
-          <div>
-            <InfoLabel>Venue</InfoLabel>
-            <div className="text-dark text-sm font-medium">
-              {listing.venueName}
+          {listing.venueName && (
+            <div>
+              <InfoLabel>Venue</InfoLabel>
+              <div className="text-dark text-sm font-medium">
+                {listing.venueName}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="flex items-stretch gap-2.5">
