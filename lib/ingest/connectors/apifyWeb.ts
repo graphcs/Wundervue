@@ -49,20 +49,73 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
       const itemSel = ${JSON.stringify(source.selectors?.item ?? "")};
       const titleSel = ${JSON.stringify(source.selectors?.title ?? "h1, h2, h3")};
       const descSel = ${JSON.stringify(source.selectors?.description ?? "p")};
+      const nextSel = ${JSON.stringify(source.paginateNextSelector ?? "")};
+      const cap = ${JSON.stringify(source.maxItems ?? 9999)};
 
       ${IMAGE_PICKER_SOURCE}
 
-      if (itemSel) {
+      // jQuery here runs against the LIVE document, so re-querying after an AJAX
+      // "next page" sees the new DOM. Dedupe across pages by href + leading text.
+      const seen = new Set();
+      const perProgram = new Map();
+      const PER_PROGRAM = nextSel ? 3 : Infinity;
+      function collect() {
         $(itemSel).each((_, el) => {
+          const $el = $(el);
+          const href = $el.find('a').first().attr('href') || request.url;
+          const body = $el.text().trim();
+          const key = href + '|' + body.slice(0, 120);
+          if (seen.has(key)) return;
+          seen.add(key);
+          // Cap a recurring series (one event posted as many occurrences) to the
+          // soonest few so it can't flood the window. Group by a normalized URL
+          // stem — strip a trailing slash, a /YYYY-MM-DD occurrence date, and
+          // WordPress's "-2/-3" duplicate-slug suffix — so distinct events that
+          // merely share a title are NOT merged. Fall back to title, then text,
+          // only when the item has no per-event link of its own.
+          const ownHref = $el.find('a').first().attr('href') || '';
+          const stem = ownHref
+            .replace(/\\/+$/, '')
+            .replace(/\\/\\d{4}-\\d{2}-\\d{2}$/, '')
+            .replace(/-\\d+$/, '');
+          const prog = stem || $el.find(titleSel).first().text().trim().toLowerCase() || body.slice(0, 60);
+          const n = perProgram.get(prog) || 0;
+          if (n >= PER_PROGRAM) return;
+          perProgram.set(prog, n + 1);
           items.push({
-            url: $(el).find('a').first().attr('href') || request.url,
-            title: $(el).find(titleSel).first().text().trim(),
-            description: $(el).find(descSel).first().text().trim(),
-            text: $(el).text().trim(),
-            image: pickImageAttr($(el).find('img').first()) || null,
+            url: href,
+            title: $el.find(titleSel).first().text().trim(),
+            description: $el.find(descSel).first().text().trim(),
+            text: body,
+            image: pickImageAttr($el.find('img').first()) || null,
             loadedTime: new Date().toISOString(),
           });
         });
+      }
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      if (itemSel && nextSel) {
+        // AJAX-paginated list (e.g. The Events Calendar's "Next Events" nav):
+        // collect the visible page, click next, wait for the list to change,
+        // repeat until we have enough items or the control is gone/disabled.
+        for (let page = 0; page < 15 && items.length < cap; page++) {
+          collect();
+          const nextEl = document.querySelector(nextSel);
+          if (!nextEl || nextEl.disabled || nextEl.getAttribute('aria-disabled') === 'true') break;
+          const firstBefore = (document.querySelector(itemSel) || {}).textContent;
+          nextEl.click();
+          let changed = false;
+          for (let w = 0; w < 50; w++) {
+            await sleep(300);
+            const f = (document.querySelector(itemSel) || {}).textContent;
+            if (f && f !== firstBefore) { changed = true; break; }
+          }
+          if (!changed) break;
+          await sleep(400);
+        }
+        collect();
+      } else if (itemSel) {
+        collect();
       }
       // Fallback: with NO item selector, return the visible page text as a
       // single chunk and let the LLM extract. When an item selector IS set but
@@ -83,7 +136,7 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
           });
         }
       }
-      return items;
+      return items.slice(0, cap);
     }
   `;
 
