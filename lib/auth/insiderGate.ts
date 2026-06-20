@@ -13,9 +13,16 @@ const INSIDER_TAGS: readonly LifestyleTag[] = [
   "outdoor",
 ];
 
+// Insider early-access gating is OFF for the pre-launch testing period, so every
+// curated event/deal is free-viewable (no Insider badge, no locked detail pages,
+// no feed demotion). Flip back to true to restore the lifestyle-tag gating, or
+// replace with a real early_access flag when Insider early-access returns.
+const INSIDER_GATING_ENABLED = false;
+
 export function isListingInsiderOnly(
   listing: Pick<Listing, "tags">,
 ): boolean {
+  if (!INSIDER_GATING_ENABLED) return false;
   if (!listing.tags || listing.tags.length === 0) return false;
   return listing.tags.some((t) => INSIDER_TAGS.includes(t));
 }
