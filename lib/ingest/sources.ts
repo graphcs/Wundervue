@@ -1,145 +1,11 @@
 import type { SourceConfig } from "./types";
 
-// Hybrid scraping strategy:
-// - SerpAPI (Google Events) for broad, multi-category, multi-venue coverage at low cost.
-// - Apify Instagram for deep coverage of specific venues / hashtags Google misses.
-// - Apify Web (cheerio-scraper) for JS-heavy or niche sites Google Events doesn't index.
+// Curated-source scraping strategy — every source maps to a venue/organizer in
+// the curated source sheet; there are no broad discovery queries.
+// - Structured feeds (Squarespace/Wix/Tribe/ICS/JSON-LD/REST) parsed directly where a venue exposes one.
+// - Apify Instagram for venues that post events to a handle.
+// - cheerio / Apify Web for venues whose events live in server-rendered or JS-heavy HTML.
 export const SOURCES: SourceConfig[] = [
-  // ── SerpAPI: broad coverage by category. Cheap (~$0.01/query), so daily is fine.
-  {
-    id: "denver-events-search",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "daily",
-    sourceLabel: "Website",
-    query: "events in Denver this week",
-    serpHtichips: "date:week",
-  },
-  {
-    id: "denver-food-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "food festivals and tastings Denver",
-    defaultCategory: "Food & Drink",
-  },
-  {
-    id: "denver-comedy-shows",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "comedy shows Denver",
-    defaultCategory: "Comedy",
-  },
-  {
-    id: "denver-arts-culture",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "art shows and gallery openings Denver",
-    defaultCategory: "Arts & Culture",
-  },
-  {
-    id: "denver-outdoor-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "outdoor events and farmers markets Denver",
-    defaultCategory: "Outdoor",
-  },
-  {
-    id: "denver-music-shows",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "live music and concerts Denver",
-    defaultCategory: "Music",
-  },
-  {
-    id: "denver-sports-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "sports events Denver",
-    defaultCategory: "Sports",
-  },
-  {
-    id: "denver-wellness-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "yoga and wellness classes Denver",
-    defaultCategory: "Wellness",
-  },
-  {
-    // Google Events returned no results for "markets and pop-ups Denver" — overlap
-    // with denver-outdoor-events (farmers markets) is heavy. Disabled until we
-    // find a query that surfaces non-redundant content.
-    id: "denver-markets-popups",
-    enabled: false,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "weekend markets Denver",
-    defaultCategory: "Markets",
-  },
-  {
-    id: "denver-this-weekend",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "daily",
-    sourceLabel: "Website",
-    query: "things to do in Denver this weekend",
-    serpHtichips: "date:weekend",
-  },
-  {
-    id: "denver-free-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "free events Denver",
-  },
-  {
-    id: "denver-family-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "family-friendly events Denver",
-  },
-  {
-    // Denver has a strong dog-park / brewery-patio scene; explicit query gets
-    // us non-overlapping coverage that "events in Denver this week" misses.
-    // Google Events is finicky with the phrase "dog-friendly" — concrete
-    // event types ("yappy hour", "dog meetup") return more results than
-    // adjective queries.
-    id: "denver-dog-friendly-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "dog events Denver",
-  },
-  {
-    // Date-night results were under-tagged because no source explicitly
-    // queries for them. Bars, jazz, and cocktail spots get surfaced here so
-    // the AI has more candidates to apply the date-night tag.
-    id: "denver-date-night-events",
-    enabled: true,
-    connector: "serpEvents",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    query: "date night spots and live jazz Denver",
-  },
-
   // ── Apify Instagram: per-account deep dives for venues we follow closely.
   {
     id: "mission-ballroom-ig",
@@ -150,83 +16,6 @@ export const SOURCES: SourceConfig[] = [
     handle: "missionballroom",
     defaultVenueSlug: "mission-ballroom",
     defaultCategory: "Music",
-  },
-  {
-    // Denver music venues — single source fans out across multiple handles
-    // in one Apify run. Add more handles here as we discover venues that
-    // post events on Instagram.
-    id: "denver-music-venues-ig",
-    enabled: true,
-    connector: "instagram",
-    cadence: "weekly",
-    sourceLabel: "Instagram",
-    handle: [
-      "ogdentheatre",
-      "fillmoredenver",
-      "redrocksco",
-      "blubirdtheater",
-      "hidiveofficial",
-      "thelionslairlounge",
-    ],
-    defaultCategory: "Music",
-  },
-
-  // ── Apify Instagram: hashtag scrapes for lifestyle coverage. Hashtags
-  // surface community-organized events (yappy hours, dog meetups, brewery
-  // patios) that Google Events doesn't index. Multi-hashtag fans out in a
-  // single Apify run; per-URL cap is MAX_POSTS in the connector.
-  {
-    id: "denver-dogs-ig",
-    enabled: true,
-    connector: "instagram",
-    cadence: "weekly",
-    sourceLabel: "Instagram",
-    hashtag: [
-      "denverdogs",
-      "denverdogfriendly",
-      "yappyhourdenver",
-      "milehighdogs",
-      "denverdogevents",
-    ],
-  },
-  {
-    id: "denver-family-ig",
-    enabled: true,
-    connector: "instagram",
-    cadence: "weekly",
-    sourceLabel: "Instagram",
-    hashtag: [
-      "denverfamily",
-      "denverkids",
-      "denvermom",
-      "milehighmama",
-    ],
-  },
-  {
-    id: "denver-outdoor-ig",
-    enabled: true,
-    connector: "instagram",
-    cadence: "weekly",
-    sourceLabel: "Instagram",
-    hashtag: [
-      "denveroutdoors",
-      "denverhiking",
-      "denverparks",
-      "milehighoutdoors",
-    ],
-  },
-  {
-    id: "denver-datenight-ig",
-    enabled: true,
-    connector: "instagram",
-    cadence: "weekly",
-    sourceLabel: "Instagram",
-    hashtag: [
-      "denverdatenight",
-      "denvercocktails",
-      "denverwine",
-      "denverjazz",
-    ],
   },
 
   // ── Denver venue + aggregator scrapes — web + Instagram. Each data source
@@ -405,8 +194,8 @@ export const SOURCES: SourceConfig[] = [
     // "Food trucks all day", pop-up pickleball), not standalone discoverable
     // events — the discoverable thing is the single "RiNo Street Fair" listing.
     // That fair-as-one-event is already caught when upcoming by the aggregators
-    // (rino-art-district-web, visit-denver-web, the SerpAPI markets/outdoor
-    // queries), same pattern as the Highlands Street Fair via highlands-square-web.
+    // (rino-art-district-web, visit-denver-web, denver-arts-venues-web), same
+    // pattern as the Highlands Street Fair via highlands-square-web.
     id: "rino-street-fair-web",
     enabled: false,
     connector: "cheerioWeb",
@@ -423,7 +212,7 @@ export const SOURCES: SourceConfig[] = [
     // Live Music Wednesday, Movies/Tinis/Tacos, Neighborhood Night, Thursday
     // Specialty) with only the rare one-off (Signal Surrender, Night Shift Pride)
     // — same low signal-to-noise as rino-beer-garden. Not worth the Apify spend;
-    // its notable events arrive via Visit Denver / SerpAPI / Arts & Venues.
+    // its notable events arrive via Visit Denver / Arts & Venues.
     id: "goldfinch-denver-web",
     enabled: false,
     connector: "apifyWeb",
@@ -726,7 +515,7 @@ export const SOURCES: SourceConfig[] = [
     // sessions are at the sibling "The Outpost on Platte", whose name varies per
     // feed item, so multi-venue resolution scatters them across several duplicate
     // venue pins. Low signal for the noise; its notable events arrive via Visit
-    // Denver / SerpAPI. (Connector: squarespaceEvents, same as larimer-square-web.)
+    // Denver. (Connector: squarespaceEvents, same as larimer-square-web.)
     id: "station-26-brewing-web",
     enabled: false,
     connector: "squarespaceEvents",
@@ -771,8 +560,7 @@ export const SOURCES: SourceConfig[] = [
     // `javascript:…getAttribute("srcdoc")` — the events are JS-populated at
     // runtime, with no ICS feed, no JSON, and obfuscated classes, so they're
     // unreachable by fetch or even a normal renderJs pass. Its partner-run events
-    // are captured at the source instead (e.g. the Sip & Sculpt pottery nights via
-    // pottery-with-a-purpose-web); other one-offs arrive via Visit Denver / SerpAPI.
+    // are captured by their own organizers; other one-offs arrive via Visit Denver.
     id: "waldschanke-ciders-web",
     enabled: false,
     connector: "icsCalendar",
@@ -884,34 +672,6 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
     defaultVenueSlug: "denver-art-society",
   },
-  {
-    // Colorado Convention Center (Legends/ASM-managed) server-renders its
-    // /events list as static Bootstrap cards — no JS, API, or feed needed, so
-    // in-process cheerio (free) parses them directly. Cards are date-ordered
-    // soonest-first; one page covers the upcoming batch (maxItems caps it). The
-    // date <li> is selected by its calendar icon (`li:has(.fa-calendar-day)`,
-    // distinct from the location <li>). Every event is at the one downtown
-    // venue, so pin via defaultVenueSlug. Note: some CCC shows also arrive via
-    // the Denver Arts & Venues RSS feed (denver-arts-venues-web), which resolves
-    // "Colorado Convention Center" by name to this same seeded venue
-    // (20260609150000_colorado_convention_center_venue.sql) — downstream dedup
-    // handles any overlap.
-    id: "colorado-convention-center-web",
-    enabled: true,
-    connector: "cheerioWeb",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    url: "https://denverconvention.com/events/",
-    selectors: {
-      item: ".card.border-0.shadow",
-      title: "h5.card-title",
-      date: "li:has(.fa-calendar-day)",
-      link: "a.stretched-link",
-      image: "img.bg-white",
-    },
-    maxItems: 40,
-    defaultVenueSlug: "colorado-convention-center",
-  },
   // Comedy Works runs two Denver clubs (Downtown in LoDo, South in Greenwood
   // Village) off one Rails calendar that pages a month per URL and interleaves
   // both clubs plus external "concerts". A custom connector crawls the current
@@ -995,9 +755,8 @@ export const SOURCES: SourceConfig[] = [
   },
 
   // Sports teams — pin to their home venue. Team sites (mlb/nba/nhl/nfl) are
-  // JS-heavy SPAs, so the web scrape may yield little; Instagram + the existing
-  // denver-sports-events SerpAPI source carry the real coverage. Web kept on
-  // (cheap) in case the static fallback surfaces schedule/promo pages.
+  // JS-heavy SPAs, so each "web" source pulls from its league schedule API
+  // (mlb/nba/nhl/nfl) instead; the Instagram companion adds promo/theme nights.
   {
     id: "colorado-rockies-web",
     enabled: true,
@@ -1098,8 +857,7 @@ export const SOURCES: SourceConfig[] = [
     // connector: "nhlSchedule"). Keeping this on would only risk duplicate game
     // listings (IG games carry sourceLabel "Instagram", so the per-label dedup
     // passes wouldn't match them against the API's "Website" rows) for ~0
-    // net-new events. Theme nights still arrive via denver-sports-events
-    // (SerpAPI) and ball-arena-web.
+    // net-new events. Theme nights still arrive via ball-arena-web.
     enabled: false,
     connector: "instagram",
     cadence: "weekly",
@@ -1138,22 +896,6 @@ export const SOURCES: SourceConfig[] = [
     sourceLabel: "Website",
     url: "https://denversartdistrict.org/events",
     maxItems: 40,
-    defaultCategory: "Arts & Culture",
-  },
-  {
-    // Pottery With A Purpose sells "Sip & Sculpt" pottery workshops at ~24
-    // Denver-metro breweries/cafes via Shopify; its products.json carries one
-    // product per host venue with each session as a variant. The potteryWithPurpose
-    // connector reads it, keeps the Denver-metro venues, and emits one workshop
-    // event per session. Multi-venue (Little Machine, Strange Craft, Waldschänke…),
-    // so no defaultVenueSlug. Hands-on creative workshops → Arts & Culture.
-    id: "pottery-with-a-purpose-web",
-    enabled: true,
-    connector: "potteryWithPurpose",
-    cadence: "weekly",
-    sourceLabel: "Website",
-    url: "https://www.potterywithapurpose.com",
-    maxItems: 50,
     defaultCategory: "Arts & Culture",
   },
   {
@@ -1357,7 +1099,7 @@ export const SOURCES: SourceConfig[] = [
     // daily Sie FilmCenter showtimes) — too granular/noisy for a discovery app,
     // and the clean events endpoint needs a secret API key. Denver Film's
     // notable events (festival, Film on the Rocks, premieres) arrive via Visit
-    // Denver / Mile High / SerpAPI; curated highlights come from Instagram below.
+    // Denver / Mile High; curated highlights come from Instagram below.
     enabled: false,
     connector: "apifyWeb",
     cadence: "weekly",
@@ -1402,6 +1144,123 @@ export const SOURCES: SourceConfig[] = [
     sourceLabel: "Instagram",
     handle: "lodolovedenver",
   },
+
+  // ── Additional curated source-sheet venues (reconcile-sources-to-sheet).
+  // Each maps to a row in the curated Data Source sheet. Sources whose sites
+  // expose a real datable event feed are enabled below; the rest are kept
+  // disabled with a one-line note (menu/hours only, season-off, bot-walled,
+  // private-bookings, or image-only Instagram) so the sheet↔code mapping is
+  // complete and nobody re-investigates them blindly.
+  {
+    // Disabled: thefamilyjones.co runs WordPress + The Events Calendar, but its
+    // /wp-json/tribe REST sits behind intermittent Cloudflare bot protection
+    // (often returns an HTML challenge instead of JSON → the fetch throws). Its
+    // feed is also mostly partnered/offsite events (festivals, farmers markets)
+    // rather than the distillery's own — low signal for the noise. Revisit via
+    // Apify (JS render) if its in-house events become worth the spend.
+    id: "family-jones-web",
+    enabled: false,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://thefamilyjones.co/events/",
+    maxItems: 40,
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Stem Ciders (RiNo taproom + The Outpost on Platte) runs WordPress + The
+    // Events Calendar; tribeEvents reads its /wp-json/tribe REST (Sunset Sessions
+    // live music, slush weeks, markets). Events span the taproom and the Outpost,
+    // each carrying its own venue, so no defaultVenueSlug.
+    id: "stem-ciders-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://stemciders.com/events/",
+    maxItems: 40,
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Acreage (Stem Ciders' cidery + farm kitchen, Lafayette) runs WordPress +
+    // The Events Calendar; tribeEvents reads its /wp-json/tribe REST (sunset
+    // yoga, tasting events). The feed carries the venue, so resolveOrCreateVenue
+    // pins them — no seed needed.
+    id: "acreage-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://acreageco.com/events/",
+    maxItems: 30,
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Disabled: coloradowinewalk.com is a Wix site but does NOT use the Wix
+    // Events app — a trial ingest returned 0 items (the events are static
+    // marketing content, not in warmup-data). Revisit with apifyWeb whole-page
+    // extraction if its event list is ever worth the spend.
+    id: "colorado-wine-walk-web",
+    enabled: false,
+    connector: "wixEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.coloradowinewalk.com/events",
+    maxItems: 30,
+    defaultCategory: "Food & Drink",
+  },
+
+  // Disabled — sheet venues whose sites currently expose no datable public event
+  // feed. Notes record the inspection so they aren't re-investigated blindly.
+  // Squarespace "schedule" collection holds only private-event bookings, no public events.
+  { id: "outside-pizza-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.outsidepizza.com/events", maxItems: 40 },
+  // /events-releases has no dated event feed (beer releases); only a recurring "Sunset Sessions".
+  { id: "great-divide-web", enabled: false, connector: "apifyWeb", cadence: "weekly", sourceLabel: "Website", url: "https://greatdivide.com/events-releases/", maxItems: 40 },
+  // Site blocks automated fetch (403/timeout) even with a browser UA; revisit via Apify renderJs.
+  { id: "westbound-down-web", enabled: false, connector: "apifyWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.westboundanddown.com/", maxItems: 40 },
+  // Events run through an Eventbrite/Wix widget with no fetchable feed (distillery tours, live music).
+  { id: "spirit-hound-web", enabled: false, connector: "wixEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.spirithounds.com/", maxItems: 40 },
+  // Squarespace events collection is empty (no upcoming events); cafe is menu/hours only.
+  { id: "hello-darling-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://hellodarling.cafe/events", maxItems: 40 },
+  // /taproom-events is an empty/embedded Squarespace block — no dated event data exposed.
+  { id: "crooked-stave-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.crookedstave.com/taproom-events", maxItems: 40 },
+  // Restaurant site (menus/hours), no events calendar or feed.
+  { id: "cherry-cricket-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cherrycricket.com/", maxItems: 40 },
+  // Sandwich-shop chain site, no events.
+  { id: "snarfs-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.eatsnarfs.com/", maxItems: 40 },
+  // Pizza-restaurant site (menus/locations), no events calendar.
+  { id: "blue-pan-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/", maxItems: 40 },
+  // Weekly food-truck location schedule, not discrete datable events.
+  { id: "blue-pan-food-truck-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/food-truck/", maxItems: 40 },
+  // Shopify coffee-retail site, no events.
+  { id: "queen-city-coffee-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://queencitycollectivecoffee.com/", maxItems: 40 },
+  // Square/Shopify coffee-retail site, no events.
+  { id: "huckleberry-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.huckleberryroasters.com/", maxItems: 40 },
+  // Food-hall site, no events page/feed (Wix marketing site).
+  { id: "denver-central-market-web", enabled: false, connector: "wixEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.denvercentralmarket.com/", maxItems: 40 },
+  // Square.site brewery page, no visible events listing.
+  { id: "cellar-west-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cellarwest.square.site/", maxItems: 40 },
+  // Squarespace tattoo-shop site, no events page (flash drops only on Instagram).
+  { id: "love-you-tattoo-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.loveyoutattooboulder.com/", maxItems: 40 },
+  // Only feed is the city-wide bouldercolorado.gov/events calendar (council meetings etc.) —
+  // too noisy and not arts-scoped; Boulder arts events arrive via aggregators instead.
+  { id: "boulder-arts-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bouldercolorado.gov/events", maxItems: 40 },
+  // denvergov agency page has no events feed; shelter events are sporadic gov postings.
+  { id: "denver-animal-shelter-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.denvergov.org/", maxItems: 40 },
+  // Shopify lifestyle brand/blog + merch, not an event source.
+  { id: "yocolorado-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.yocolorado.com/", maxItems: 40 },
+
+  // Disabled Instagram-only sheet rows — brand/image accounts (event details, if
+  // any, are in flyer images, not captions; OCR is intentionally out of scope),
+  // or redundant with a web source above.
+  // Redundant with mcgregor-square-web (same plaza); F+D account posts menus/specials.
+  { id: "mcgregor-square-foodanddrink-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "mcgregorsquare_foodanddrink" },
+  // Brewery-location brand account; any events covered by westbound-down-web. Image-heavy.
+  { id: "westbound-denver-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "westbound_denver" },
+  // Covered by stem-ciders-web; account posts brand/image content, not caption events.
+  { id: "stem-ciders-rino-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "stemcidersrino" },
+  // Brand/image account, no caption-level event data (OCR out of scope).
+  { id: "courtyard-303-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "thecourtyard303" },
 ];
 
 const BY_ID = new Map(SOURCES.map((s) => [s.id, s]));
