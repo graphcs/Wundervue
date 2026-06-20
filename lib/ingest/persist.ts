@@ -11,7 +11,20 @@ import type {
 } from "./types";
 import { eventKey, makeSlug } from "./dedup";
 import { geocode, reverseGeocode } from "./geocode";
-import { ancestrySlugs, resolveLocationLabel } from "@/lib/data/locations";
+import {
+  ancestrySlugs,
+  extractAddressCity,
+  getRegisteredDynamicCities,
+  isCentralDenver,
+  isCuratedSlug,
+  registerDynamicCities,
+  resolveCityFromAddress,
+  resolveLocationLabel,
+  resolveVenueNameAlias,
+  type DynamicCity,
+  type LocationRef,
+} from "@/lib/data/locations";
+import { regionSlugForPoint } from "@/lib/data/denverRegions";
 import { findCanonicalSlug } from "./venueCanonical";
 
 let cachedClient: SupabaseClient | null = null;
@@ -91,36 +104,199 @@ export interface ResolvedLocation {
   neighborhood_slug: string | null;
 }
 
-// Resolve a free-text neighborhood label (and, as a fallback, coordinates) onto
-// canonical taxonomy slugs. When the label doesn't resolve but we have a pin,
-// reverse-geocode the coords and try the returned suburb/neighbourhood/city.
+// Synchronous slug resolution from a row's text signals (no network). The city
+// is taken from the ADDRESS — the authoritative signal — rather than the
+// free-text neighborhood label, which is an unreliable catch-all (e.g. "Golden"
+// stamped on Boulder/Littleton/Morrison venues). Precedence, first match wins:
+//   1. venue-name alias (Red Rocks → Morrison, beats its misleading address)
+//   2. a Central-Denver neighborhood label (RiNo/LoDo — more specific than the
+//      bare "Denver" the address would give)
+//   3. the city parsed from the address
+//   4. any other label match (a suburb city / region) when there's no address city
 // Exported so the location-backfill can re-resolve existing rows the same way.
-export async function resolveLocationSlugs(args: {
+export function resolveLocationSlugsSync(args: {
   neighborhood: string | null;
-  lat: number | null;
-  lng: number | null;
-}): Promise<ResolvedLocation> {
-  let ref = resolveLocationLabel(args.neighborhood);
-  let label = ref?.label ?? args.neighborhood ?? null;
+  address: string | null;
+  venueName?: string | null;
+}): ResolvedLocation {
+  const labelRef = resolveLocationLabel(args.neighborhood);
+  const addrRef = resolveCityFromAddress(args.address);
+  // Check the venue name and the address's leading place name ("Red Rocks Park,
+  // …") against the alias, so a venue-less listing at Red Rocks still → Morrison.
+  const addrPlace = args.address?.split(",")[0] ?? null;
+  const aliasRef =
+    resolveVenueNameAlias(args.venueName) ?? resolveVenueNameAlias(addrPlace);
 
-  if (!ref && args.lat != null && args.lng != null) {
-    const rev = await reverseGeocode(args.lat, args.lng);
-    if (rev) {
-      ref =
-        resolveLocationLabel(rev.neighbourhood) ??
-        resolveLocationLabel(rev.suburb) ??
-        resolveLocationLabel(rev.city);
-      if (ref) label = ref.label;
-    }
+  let ref: LocationRef | undefined;
+  if (aliasRef) {
+    // 1. Known venue whose address misnames its city (Red Rocks → Morrison).
+    ref = aliasRef;
+  } else if (labelRef && labelRef.level === "neighborhood") {
+    // 2. A real neighborhood label is the most specific signal (RiNo, LoDo).
+    ref = labelRef;
+  } else if (addrRef && addrRef.level === "city") {
+    // 3. A suburb city parsed from the address is authoritative — overrides the
+    //    unreliable neighborhood label (the "Golden" catch-all).
+    ref = addrRef;
+  } else if (isCentralDenver(labelRef)) {
+    // 4. A Denver address only yields the region; keep a more-specific
+    //    Central-Denver label (e.g. the "Downtown" city-group).
+    ref = labelRef;
+  } else {
+    // 5. Fall back to the address region (central-denver for a bare "Denver"),
+    //    else any remaining label match.
+    ref = addrRef ?? labelRef;
   }
 
+  return toResolved(ref, args.neighborhood);
+}
+
+// Build a ResolvedLocation from a node. Never overwrites the text label with a
+// region name ("Central Denver") — keeps the fallback when we only resolved to a
+// region, so specificity is never lost.
+function toResolved(ref: LocationRef | undefined, fallbackLabel: string | null): ResolvedLocation {
   const a = ancestrySlugs(ref);
   return {
-    neighborhood: label,
+    neighborhood:
+      ref && ref.level !== "region" ? ref.label : (fallbackLabel ?? ref?.label ?? null),
     region_slug: a.regionSlug,
     city_slug: a.citySlug,
     neighborhood_slug: a.neighborhoodSlug,
   };
+}
+
+// Async resolution: the sync core first, then — only if no specific place
+// resolved — a reverse-geocode of the pin to the containing municipality.
+export async function resolveLocationSlugs(args: {
+  neighborhood: string | null;
+  address?: string | null;
+  venueName?: string | null;
+  lat: number | null;
+  lng: number | null;
+}): Promise<ResolvedLocation> {
+  const sync = resolveLocationSlugsSync({
+    neighborhood: args.neighborhood,
+    address: args.address ?? null,
+    venueName: args.venueName ?? null,
+  });
+  // A specific place (city or neighborhood) is trustworthy. A region-only result
+  // (a bare "Denver" address) or nothing — refine from the pin below.
+  if (sync.city_slug || sync.neighborhood_slug) return sync;
+
+  if (args.lat != null && args.lng != null) {
+    // Auto-add: the address names a real city the curated taxonomy doesn't know
+    // and the pin sits inside a metro region polygon → register it as a dynamic
+    // metro city and tag the row with it. Out-of-metro pins (no containing
+    // polygon, e.g. Aspen) fall through to the reverse-geocode / null path and
+    // stay untagged, exactly as before.
+    const candidate = extractAddressCity(args.address ?? null);
+    // Only auto-add a candidate that looks like a real city name. extractAddressCity's
+    // fallback can return a street/suite segment for malformed addresses ("…, Stout
+    // Street", "123 Main St CO 80202"); minting a "stout-street" city would be junk.
+    if (candidate && !looksLikeStreet(candidate) && !resolveLocationLabel(candidate)) {
+      const regionSlug = regionSlugForPoint(args.lat, args.lng);
+      if (regionSlug) {
+        const added = await ensureMetroCity({
+          label: candidate,
+          regionSlug,
+          lat: args.lat,
+          lng: args.lng,
+        });
+        if (added) {
+          return {
+            neighborhood: added.label,
+            region_slug: added.regionSlug,
+            city_slug: added.slug,
+            neighborhood_slug: null,
+          };
+        }
+      }
+    }
+
+    const rev = await reverseGeocode(args.lat, args.lng);
+    if (rev) {
+      const ref =
+        resolveLocationLabel(rev.neighbourhood) ??
+        resolveLocationLabel(rev.suburb) ??
+        resolveLocationLabel(rev.city);
+      if (ref) return toResolved(ref, ref.label);
+    }
+  }
+  return sync; // all-null slugs, but keeps the original neighborhood label
+}
+
+// Shared kebab-case core: lowercase, non-alphanumerics → "-", trim dashes.
+function kebab(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// kebab-case slug for an auto-discovered city label ("Castle Pines" →
+// "castle-pines"). Strips apostrophes first so "O'Brien's" → "obriens"; venue
+// slugs (venueSlug) deliberately keep apostrophe punctuation as a dash, so the
+// two conventions differ only there.
+function slugifyCity(label: string): string {
+  return kebab(label.replace(/['’]/g, ""));
+}
+
+// True when a parsed "city" segment is really a street/suite/PO-box fragment, so
+// the auto-add path can reject it instead of minting a junk metro city.
+function looksLikeStreet(s: string): boolean {
+  const t = s.trim();
+  if (/^\d/.test(t)) return true; // "123 Main St", "1700 Lincoln"
+  return /\b(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|ct|court|cir|circle|way|pkwy|parkway|hwy|highway|ste|suite|unit|apt|fl|floor|pmb|p\.?o\.?)\b/i.test(
+    t,
+  );
+}
+
+/**
+ * Insert (or no-op on conflict) a dynamic metro city discovered from an address
+ * and register it in-process so the rest of this ingest run resolves it without
+ * re-inserting. Returns the city, or null on failure / unslugifiable label.
+ */
+export async function ensureMetroCity(args: {
+  label: string;
+  regionSlug: string;
+  lat: number;
+  lng: number;
+}): Promise<DynamicCity | null> {
+  const slug = slugifyCity(args.label);
+  // Bail if the label is unslugifiable, or if its slug collides with a curated
+  // node (e.g. a label that strips to "highland"): registerDynamicCities would
+  // drop it anyway, so we'd otherwise write a junk row and mis-tag the listing.
+  if (!slug || isCuratedSlug(slug)) return null;
+  const client = getServiceClient();
+  const { data, error } = await client
+    .from("metro_cities")
+    .upsert(
+      {
+        slug,
+        label: args.label,
+        region_slug: args.regionSlug,
+        lat: args.lat,
+        lng: args.lng,
+        source: "auto",
+      },
+      { onConflict: "slug" },
+    )
+    .select("slug, label, region_slug")
+    .single();
+  if (error || !data) {
+    console.error(`[metro_cities] upsert failed for ${slug}:`, error?.message);
+    return null;
+  }
+  const city: DynamicCity = {
+    slug: data.slug,
+    label: data.label,
+    regionSlug: data.region_slug,
+  };
+  // Visible to the rest of THIS ingest run (later listings in the same city
+  // resolve via resolveLocationLabel instead of re-inserting). Site-wide
+  // visibility comes from the 5-min cache TTL in dynamicCities.server.ts.
+  registerDynamicCities([...getRegisteredDynamicCities(), city]);
+  return city;
 }
 
 // Human-readable slug for an extracted venue name. Stays stable across re-ingest
@@ -132,11 +308,7 @@ export async function resolveLocationSlugs(args: {
 // and passes undefined → existing rows keep their unsalted slugs. Pass a hint
 // from day one when a non-Denver source comes online.
 export function venueSlug(name: string, cityHint?: string): string {
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+  const slugify = kebab;
   const base = slugify(name).slice(0, 60) || "venue";
   if (!cityHint) return base;
   const citySlug = slugify(cityHint);
@@ -213,10 +385,12 @@ export async function resolveOrCreateVenue(args: {
   if (args.address) coords = await geocode(args.address);
   if (!coords) coords = await geocode(`${args.venueName}, ${cityHint}`);
 
-  // Resolve canonical location slugs, reverse-geocoding from the pin when the
-  // LLM-supplied neighborhood label doesn't map to the taxonomy.
+  // Resolve canonical location slugs from the address (authoritative city),
+  // falling back to a reverse-geocode of the pin when text doesn't resolve.
   const loc = await resolveLocationSlugs({
     neighborhood: args.neighborhood,
+    address: args.address,
+    venueName: args.venueName,
     lat: coords?.lat ?? null,
     lng: coords?.lng ?? null,
   });
@@ -264,26 +438,35 @@ export function buildListingInsert(args: {
     venueId: venue?.id ?? null,
     dateStart: normalized.dateStart,
   });
-  // For venue-bound sources, the venue's neighborhood is authoritative — the
-  // LLM tends to default to "Downtown" when the caption doesn't say.
-  const neighborhood = venue?.neighborhood || normalized.neighborhood || null;
-  // Prefer the venue's pre-resolved slugs (it already reverse-geocoded if
-  // needed); otherwise resolve the chosen neighborhood label synchronously.
-  const ancestry =
+  // Prefer the venue's pre-resolved slugs (it already parsed its address /
+  // reverse-geocoded). For a venue-less listing, resolve from its own address
+  // (authoritative city) + label, not the catch-all neighborhood label alone.
+  const resolved: ResolvedLocation =
     venue && (venue.region_slug || venue.city_slug || venue.neighborhood_slug)
       ? {
-          regionSlug: venue.region_slug,
-          citySlug: venue.city_slug,
-          neighborhoodSlug: venue.neighborhood_slug,
+          neighborhood: venue.neighborhood || normalized.neighborhood || null,
+          region_slug: venue.region_slug,
+          city_slug: venue.city_slug,
+          neighborhood_slug: venue.neighborhood_slug,
         }
-      : ancestrySlugs(resolveLocationLabel(neighborhood));
+      : resolveLocationSlugsSync({
+          neighborhood: venue?.neighborhood || normalized.neighborhood || null,
+          address: venue?.address ?? normalized.address ?? null,
+          venueName: normalized.venueName ?? null,
+        });
+  const neighborhood = resolved.neighborhood;
+  const ancestry = {
+    regionSlug: resolved.region_slug,
+    citySlug: resolved.city_slug,
+    neighborhoodSlug: resolved.neighborhood_slug,
+  };
   return {
     slug: makeSlug(normalized.title, `${source.sourceLabel}:${item.sourceId}`),
     type: normalized.type,
     title: normalized.title,
     description: normalized.description,
     venue_id: venue?.id ?? null,
-    address: venue?.address ?? null,
+    address: venue?.address ?? normalized.address ?? null,
     neighborhood,
     region_slug: ancestry.regionSlug,
     city_slug: ancestry.citySlug,

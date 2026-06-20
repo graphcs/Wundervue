@@ -181,6 +181,7 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "lakewood", label: "Lakewood", neighborhoods: [] },
           { slug: "morrison", label: "Morrison", neighborhoods: [] },
           { slug: "edgewater", label: "Edgewater", neighborhoods: [] },
+          { slug: "evergreen", label: "Evergreen", neighborhoods: [] },
         ],
       },
       {
@@ -203,6 +204,8 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "parker", label: "Parker", neighborhoods: [] },
           { slug: "dtc", label: "Denver Tech Center (DTC)", neighborhoods: [] },
           { slug: "aurora", label: "Aurora", neighborhoods: [] },
+          { slug: "cherry-hills-village", label: "Cherry Hills Village", neighborhoods: [] },
+          { slug: "castle-rock", label: "Castle Rock", neighborhoods: [] },
         ],
       },
       {
@@ -212,6 +215,7 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "commerce-city", label: "Commerce City", neighborhoods: [] },
           { slug: "thornton", label: "Thornton", neighborhoods: [] },
           { slug: "northglenn", label: "Northglenn", neighborhoods: [] },
+          { slug: "brighton", label: "Brighton", neighborhoods: [] },
           { slug: "far-northeast", label: "Far Northeast", neighborhoods: [] },
         ],
       },
@@ -280,6 +284,38 @@ export const REGIONS: ReadonlyArray<LocationRef> = REGION_REFS;
 export const CITIES: ReadonlyArray<LocationRef> = CITY_REFS;
 export const NEIGHBORHOODS_ALL: ReadonlyArray<LocationRef> = NEIGHBORHOOD_REFS;
 
+// ---------------------------------------------------------------------------
+// Dynamic cities — metro cities auto-discovered at ingest and stored in the
+// `metro_cities` DB table (read by lib/data/dynamicCities.server.ts). The static
+// tree above stays the curated source of truth; this registry is purely additive
+// and hydrated at runtime (server: per request; client: from a bootstrap prop).
+// Every resolver below checks the curated maps FIRST and falls back to these, so
+// with an empty registry (tests, build time) behavior is identical to before.
+// ---------------------------------------------------------------------------
+
+export interface DynamicCity {
+  slug: string;
+  label: string;
+  /** A curated region slug from the static tree (assigned by point-in-polygon). */
+  regionSlug: string;
+}
+
+const DYNAMIC_BY_SLUG = new Map<string, LocationRef>();
+const DYNAMIC_LABEL_TO_SLUG = new Map<string, string>();
+const DYNAMIC_PLACE_SLUGS = new Set<string>();
+let DYNAMIC_CITIES: DynamicCity[] = [];
+// Signature of the last-registered set; an identical re-register is a no-op so
+// the per-request / per-render call doesn't needlessly clear()+rebuild the maps.
+let DYNAMIC_SIGNATURE: string | null = null;
+
+/** Dynamic cities that roll up under a region/area selection (none for a city or
+ *  neighborhood — they're leaves). Shared by descendantSlugs/descendantLabels. */
+function dynamicCitiesUnder(ref: LocationRef): DynamicCity[] {
+  if (ref.level === "region") return DYNAMIC_CITIES.filter((c) => c.regionSlug === ref.slug);
+  if (ref.level === "area") return DYNAMIC_CITIES.slice();
+  return [];
+}
+
 // A "city group" (Central Denver's "downtown", "five-points-area", …) is an
 // organizational layer that holds neighborhoods — a listing sits in one of the
 // neighborhoods, not the group. Suburb towns (Boulder, Golden, …) carry no
@@ -313,9 +349,10 @@ export const ALL_PLACES: ReadonlyArray<LocationRef> = [
 ];
 const PLACE_SLUG_SET = new Set(ALL_PLACES.map((p) => p.slug));
 
-/** True when `slug` names a browsable place (neighborhood, suburb, or aggregate). */
+/** True when `slug` names a browsable place (neighborhood, suburb, aggregate, or
+ *  an auto-discovered dynamic city). */
 export function isPlaceSlug(slug: string): boolean {
-  return PLACE_SLUG_SET.has(slug);
+  return PLACE_SLUG_SET.has(slug) || DYNAMIC_PLACE_SLUGS.has(slug);
 }
 
 // Old flat-taxonomy slugs (lib/data/neighborhoods.ts) that no longer name a
@@ -338,9 +375,17 @@ export const LLM_LOCATION_LABELS: string[] = [
   ...SUBURB_CITY_REFS.map((c) => c.label),
 ];
 
-/** Look up any location (area/region/city/neighborhood) by its slug. */
+/** Look up any location (area/region/city/neighborhood) by its slug, including
+ *  auto-discovered dynamic cities (curated entries take precedence). */
 export function locationBySlug(slug: string): LocationRef | undefined {
-  return BY_SLUG.get(slug);
+  return BY_SLUG.get(slug) ?? DYNAMIC_BY_SLUG.get(slug);
+}
+
+/** True when `slug` is a curated taxonomy node (not a dynamic city). Used by the
+ *  auto-add path to avoid minting a dynamic city whose slug collides with a
+ *  curated neighborhood/region (which registerDynamicCities would then drop). */
+export function isCuratedSlug(slug: string): boolean {
+  return BY_SLUG.has(slug);
 }
 
 export interface Ancestry {
@@ -355,7 +400,7 @@ export interface Ancestry {
  * fills all three. Accepts a slug or a resolved LocationRef.
  */
 export function ancestrySlugs(slugOrRef: string | LocationRef | undefined): Ancestry {
-  const ref = typeof slugOrRef === "string" ? BY_SLUG.get(slugOrRef) : slugOrRef;
+  const ref = typeof slugOrRef === "string" ? locationBySlug(slugOrRef) : slugOrRef;
   const empty: Ancestry = { regionSlug: null, citySlug: null, neighborhoodSlug: null };
   if (!ref) return empty;
   switch (ref.level) {
@@ -402,6 +447,7 @@ const LEGACY_ALIASES: Record<string, string> = {
   "santa fe": "baker", // bare "Santa Fe" in our data is the Art District on Santa Fe
   "downtown louisville": "louisville", // a "Downtown <town>" prefix shouldn't unmatch the town
   "downtown denver": "downtown",
+  "denver": "central-denver", // bare "Denver" → the central-denver region (no single city node)
   "north park hill": "park-hill",
   "golden triangle": "cbd", // museum district, borders the CBD
   "montbello": "far-northeast",
@@ -417,8 +463,114 @@ for (const [alias, slug] of Object.entries(LEGACY_ALIASES)) {
  */
 export function resolveLocationLabel(label: string | null | undefined): LocationRef | undefined {
   if (!label) return undefined;
-  const slug = LABEL_TO_SLUG.get(norm(label));
-  return slug ? BY_SLUG.get(slug) : undefined;
+  const n = norm(label);
+  const slug = LABEL_TO_SLUG.get(n) ?? DYNAMIC_LABEL_TO_SLUG.get(n);
+  return slug ? locationBySlug(slug) : undefined;
+}
+
+/**
+ * Replace the dynamic-city set. Idempotent — the server loader calls it once per
+ * request and the client bootstrap once per render. Cities whose slug is already
+ * curated (in BY_SLUG) are skipped so the static tree always wins.
+ */
+export function registerDynamicCities(cities: readonly DynamicCity[]): void {
+  // No-op when the set is unchanged: avoids churn on every render/request and
+  // shrinks the window where the maps are mid-rebuild. (Synchronous, so there's
+  // no yield point inside the rebuild itself.)
+  const sig = cities
+    .map((c) => `${c.slug} ${c.regionSlug} ${c.label}`)
+    .sort()
+    .join("|");
+  if (sig === DYNAMIC_SIGNATURE) return;
+  DYNAMIC_SIGNATURE = sig;
+  DYNAMIC_BY_SLUG.clear();
+  DYNAMIC_LABEL_TO_SLUG.clear();
+  DYNAMIC_PLACE_SLUGS.clear();
+  DYNAMIC_CITIES = [];
+  for (const c of cities) {
+    if (BY_SLUG.has(c.slug)) continue; // never shadow a curated node
+    const areaSlug =
+      REGION_REFS.find((r) => r.slug === c.regionSlug)?.areaSlug ?? "denver-metro";
+    DYNAMIC_BY_SLUG.set(c.slug, {
+      level: "city",
+      slug: c.slug,
+      label: c.label,
+      regionSlug: c.regionSlug,
+      areaSlug,
+    });
+    DYNAMIC_LABEL_TO_SLUG.set(norm(c.label), c.slug);
+    DYNAMIC_PLACE_SLUGS.add(c.slug);
+    DYNAMIC_CITIES.push(c);
+  }
+}
+
+/** The dynamic cities currently registered (for client bootstrap / merge). */
+export function getRegisteredDynamicCities(): readonly DynamicCity[] {
+  return DYNAMIC_CITIES;
+}
+
+// Curated venue-name → city overrides for venues whose street address names the
+// wrong municipality. Red Rocks is in Morrison, but Google/USGS list it as
+// "Golden, CO" — so the address alone would mistag it. Matched as a substring
+// of the normalized venue name.
+const VENUE_NAME_CITY_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["red rocks", "morrison"],
+];
+
+/** City ref for a known venue whose address misnames its city, else undefined. */
+export function resolveVenueNameAlias(name: string | null | undefined): LocationRef | undefined {
+  if (!name) return undefined;
+  const n = norm(name);
+  for (const [needle, slug] of VENUE_NAME_CITY_ALIASES) {
+    // Prefix-match only: "Red Rocks Amphitheatre" matches, but a catch-all like
+    // "Multiple venues (…, Red Rocks)" must not be dragged to Morrison.
+    if (n === needle || n.startsWith(`${needle} `)) return BY_SLUG.get(slug);
+  }
+  return undefined;
+}
+
+/** True when a ref sits in Denver proper (the central-denver region, its
+ *  city-groups, or its neighborhoods) — more specific than a bare "Denver". */
+export function isCentralDenver(ref: LocationRef | undefined): boolean {
+  return !!ref && (ref.regionSlug === "central-denver" || ref.slug === "central-denver");
+}
+
+/**
+ * The raw city segment of a US street address ("123 Main St, Boulder, CO 80302"
+ * → "Boulder"), or undefined when there's no city segment (a bare trailhead).
+ * Shared by resolveCityFromAddress and the location backfill's diagnostics so
+ * they parse identically.
+ */
+export function extractAddressCity(address: string | null | undefined): string | undefined {
+  if (!address) return undefined;
+  const cleaned = address.replace(/,?\s*(USA|United States)\s*\.?\s*$/i, "").trim();
+  const parts = cleaned.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return undefined; // need at least "<street>, <city>"
+
+  // The city is the segment just before the state token (CO / Colorado, maybe
+  // with a trailing ZIP). Scan from the end so a "City, ST ZIP" tail wins.
+  for (let i = parts.length - 1; i >= 1; i--) {
+    if (/^(co|colorado)\b/i.test(parts[i])) return parts[i - 1];
+    // "...Boulder CO 80302" with no comma before the state.
+    const m = parts[i].match(/^(.*?)\s+(?:co|colorado)\s+\d{5}(?:-\d{4})?$/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  // No explicit state token — assume the last segment is the city (drop a ZIP).
+  return parts[parts.length - 1].replace(/\s+\d{5}(?:-\d{4})?$/, "").trim() || undefined;
+}
+
+/**
+ * Resolve the city named in a US address to a taxonomy city (or the
+ * central-denver region for a bare "Denver", via LEGACY_ALIASES). The address
+ * is the authoritative city signal — the free-text neighborhood label is an
+ * unreliable catch-all. Returns undefined for city-less addresses or
+ * out-of-metro cities not in the taxonomy (Aspen, Idaho Springs).
+ */
+export function resolveCityFromAddress(address: string | null | undefined): LocationRef | undefined {
+  const candidate = extractAddressCity(address);
+  if (!candidate) return undefined;
+  const ref = resolveLocationLabel(candidate);
+  return ref && (ref.level === "city" || ref.level === "region") ? ref : undefined;
 }
 
 /**
@@ -428,9 +580,11 @@ export function resolveLocationLabel(label: string | null | undefined): Location
  * neighborhood/city string before *_id columns are populated everywhere.
  */
 export function descendantLabels(slug: string): string[] {
-  const ref = BY_SLUG.get(slug);
+  const ref = locationBySlug(slug);
   if (!ref) return [];
   if (ref.level === "neighborhood") return [ref.label];
+  const dyn = DYNAMIC_BY_SLUG.get(slug);
+  if (dyn) return [dyn.label]; // a dynamic city is itself the leaf
 
   const labels: string[] = [];
   for (const area of LOCATIONS) {
@@ -444,6 +598,8 @@ export function descendantLabels(slug: string): string[] {
       }
     }
   }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region/area.
+  for (const c of dynamicCitiesUnder(ref)) labels.push(c.label);
   return labels;
 }
 
@@ -471,9 +627,10 @@ export function locationMatchesSelection(
 
 /** Slugs of all descendant nodes (cities + neighborhoods) under a selection. */
 export function descendantSlugs(slug: string): string[] {
-  const ref = BY_SLUG.get(slug);
+  const ref = locationBySlug(slug);
   if (!ref) return [];
   if (ref.level === "neighborhood") return [ref.slug];
+  if (DYNAMIC_BY_SLUG.has(slug)) return [slug]; // a dynamic city is itself the leaf
 
   const slugs: string[] = [];
   for (const area of LOCATIONS) {
@@ -487,5 +644,7 @@ export function descendantSlugs(slug: string): string[] {
       }
     }
   }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region/area.
+  for (const c of dynamicCitiesUnder(ref)) slugs.push(c.slug);
   return slugs;
 }

@@ -10,6 +10,7 @@ import { useFilters } from "@/lib/hooks/useFilters";
 import { useAuthContext } from "@/components/auth/AuthProvider";
 import { CATEGORIES } from "@/lib/data/categories";
 import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
+import { registerDynamicCities, type DynamicCity } from "@/lib/data/locations";
 import type { LifestyleTag, TypeFilter, ViewMode } from "@/lib/types";
 
 function SearchIcon() {
@@ -132,7 +133,17 @@ function ViewToggle({ value, onChange, mapDisabled = false }: ViewToggleProps) {
   );
 }
 
-export function DiscoveryBar({ showSearch = true }: { showSearch?: boolean } = {}) {
+export function DiscoveryBar({
+  showSearch = true,
+  dynamicCities = [],
+}: {
+  showSearch?: boolean;
+  dynamicCities?: readonly DynamicCity[];
+} = {}) {
+  // Hydrate the client-side taxonomy registry from the server-provided list so
+  // useFilters' path resolution and the dropdown both see dynamic cities. Cheap
+  // and idempotent — safe to run on every render.
+  registerDynamicCities(dynamicCities);
   const {
     filters,
     pathNeighborhood,
@@ -222,6 +233,7 @@ export function DiscoveryBar({ showSearch = true }: { showSearch?: boolean } = {
                 neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
               })
             }
+            dynamicCities={dynamicCities}
           />
 
           <MultiDropdownPill

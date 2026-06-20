@@ -7,6 +7,7 @@ import {
   legacyPlaceRedirect,
   locationBySlug,
 } from "@/lib/data/locations";
+import { ensureDynamicCities } from "@/lib/data/dynamicCities.server";
 import { CATEGORIES, categoryLabel } from "@/lib/data/categories";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
@@ -34,6 +35,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { segment, category } = await params;
+  await ensureDynamicCities(); // recognize auto-added city slugs
   // Gate on isPlaceSlug so region/area/city-group slugs (which the page 404s)
   // don't get real metadata from locationBySlug's broader lookup.
   const place = isPlaceSlug(segment) ? locationBySlug(segment)?.label : undefined;
@@ -51,6 +53,7 @@ export default async function ExploreCombinedPage({
 }: PageProps) {
   const { segment, category } = await params;
   const sp = await searchParams;
+  await ensureDynamicCities(); // recognize auto-added city slugs
 
   if (!isPlaceSlug(segment) || !CAT_SLUGS.has(category)) {
     // Permanently forward legacy /explore/<old-slug>/<category> URLs (308).

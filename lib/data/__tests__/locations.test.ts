@@ -1,15 +1,76 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   CITIES,
   LOCATIONS,
   NEIGHBORHOODS_ALL,
   REGIONS,
+  ancestrySlugs,
   descendantLabels,
   descendantSlugs,
+  getRegisteredDynamicCities,
+  isCuratedSlug,
+  isPlaceSlug,
   locationBySlug,
   locationMatchesSelection,
+  registerDynamicCities,
+  resolveCityFromAddress,
   resolveLocationLabel,
+  resolveVenueNameAlias,
 } from "../locations";
+
+describe("dynamic cities (auto-added metro cities)", () => {
+  const castlePines = {
+    slug: "castle-pines",
+    label: "Castle Pines",
+    regionSlug: "southeast-denver",
+  };
+  afterEach(() => registerDynamicCities([])); // never leak into other tests
+
+  it("isCuratedSlug distinguishes curated nodes from dynamic cities", () => {
+    expect(isCuratedSlug("boulder")).toBe(true); // curated suburb city
+    expect(isCuratedSlug("central-denver")).toBe(true); // curated region
+    expect(isCuratedSlug("rino")).toBe(true); // curated neighborhood
+    registerDynamicCities([castlePines]);
+    expect(isCuratedSlug("castle-pines")).toBe(false); // dynamic, not curated
+  });
+
+  it("makes an auto-added city resolvable across the taxonomy functions", () => {
+    registerDynamicCities([castlePines]);
+    expect(isPlaceSlug("castle-pines")).toBe(true);
+    expect(locationBySlug("castle-pines")?.label).toBe("Castle Pines");
+    expect(resolveLocationLabel("Castle Pines")?.slug).toBe("castle-pines");
+    expect(ancestrySlugs("castle-pines")).toEqual({
+      regionSlug: "southeast-denver",
+      citySlug: "castle-pines",
+      neighborhoodSlug: null,
+    });
+    expect(descendantSlugs("castle-pines")).toEqual(["castle-pines"]);
+    expect(descendantLabels("castle-pines")).toEqual(["Castle Pines"]);
+  });
+
+  it("rolls a dynamic city up under its region", () => {
+    registerDynamicCities([castlePines]);
+    expect(descendantSlugs("southeast-denver")).toContain("castle-pines");
+    expect(locationMatchesSelection("Castle Pines", new Set(["castle-pines"]))).toBe(true);
+    expect(locationMatchesSelection("Castle Pines", new Set(["southeast-denver"]))).toBe(true);
+    expect(locationMatchesSelection("Castle Pines", new Set(["northwest-denver"]))).toBe(false);
+  });
+
+  it("never shadows a curated slug", () => {
+    registerDynamicCities([
+      { slug: "boulder", label: "Not Boulder", regionSlug: "southeast-denver" },
+    ]);
+    expect(locationBySlug("boulder")?.label).toBe("Boulder"); // curated wins
+    expect(getRegisteredDynamicCities()).toHaveLength(0);
+  });
+
+  it("leaves resolution unchanged when the registry is empty", () => {
+    registerDynamicCities([]);
+    expect(isPlaceSlug("castle-pines")).toBe(false);
+    expect(locationBySlug("castle-pines")).toBeUndefined();
+    expect(resolveLocationLabel("Castle Pines")).toBeUndefined();
+  });
+});
 
 describe("location taxonomy", () => {
   it("has unique slugs across every level", () => {
@@ -67,6 +128,51 @@ describe("location taxonomy", () => {
 
   it("indexes ~60 cities", () => {
     expect(CITIES.length).toBeGreaterThanOrEqual(40);
+  });
+});
+
+describe("resolveCityFromAddress", () => {
+  it("pulls the city out of a full street address", () => {
+    expect(resolveCityFromAddress("2205 Broadway, Boulder, CO")?.slug).toBe("boulder");
+    expect(resolveCityFromAddress("199 E Littleton Blvd, Littleton, CO 80121")?.slug).toBe(
+      "littleton",
+    );
+    expect(resolveCityFromAddress("8485 Kipling St, Arvada, CO")?.slug).toBe("arvada");
+    expect(resolveCityFromAddress("9910 Wadsworth Pkwy, Westminster, CO")?.slug).toBe(
+      "westminster",
+    );
+  });
+
+  it("resolves the cities newly added to the taxonomy", () => {
+    expect(resolveCityFromAddress("300 2nd St, Castle Rock, CO")?.slug).toBe("castle-rock");
+    expect(resolveCityFromAddress("Main St, Brighton, CO 80601")?.slug).toBe("brighton");
+    expect(resolveCityFromAddress("123 Bear Creek, Evergreen, CO")?.slug).toBe("evergreen");
+  });
+
+  it("maps a bare Denver address to the central-denver region", () => {
+    const ref = resolveCityFromAddress("1700 Lincoln St, Denver, CO 80203");
+    expect(ref?.slug).toBe("central-denver");
+    expect(ref?.level).toBe("region");
+  });
+
+  it("returns undefined for out-of-metro or city-less addresses", () => {
+    expect(resolveCityFromAddress("Aspen, CO")).toBeUndefined();
+    expect(resolveCityFromAddress("Idaho Springs, CO")).toBeUndefined();
+    expect(resolveCityFromAddress("North Table Mountain Trailhead")).toBeUndefined();
+    expect(resolveCityFromAddress(null)).toBeUndefined();
+  });
+});
+
+describe("resolveVenueNameAlias", () => {
+  it("maps Red Rocks to Morrison regardless of its misleading address", () => {
+    expect(resolveVenueNameAlias("Red Rocks Amphitheatre")?.slug).toBe("morrison");
+    expect(resolveVenueNameAlias("Red Rocks Park & Amphitheatre")?.slug).toBe("morrison");
+    expect(resolveVenueNameAlias("Ogden Theatre")).toBeUndefined();
+    // A catch-all venue that merely mentions Red Rocks must NOT be dragged to Morrison.
+    expect(
+      resolveVenueNameAlias("Multiple venues (Bluebird Theater, Ogden Theatre, Red Rocks)"),
+    ).toBeUndefined();
+    expect(resolveVenueNameAlias(null)).toBeUndefined();
   });
 });
 
