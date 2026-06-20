@@ -8,7 +8,9 @@ import {
   descendantSlugs,
   locationBySlug,
   locationMatchesSelection,
+  resolveCityFromAddress,
   resolveLocationLabel,
+  resolveVenueNameAlias,
 } from "../locations";
 
 describe("location taxonomy", () => {
@@ -67,6 +69,51 @@ describe("location taxonomy", () => {
 
   it("indexes ~60 cities", () => {
     expect(CITIES.length).toBeGreaterThanOrEqual(40);
+  });
+});
+
+describe("resolveCityFromAddress", () => {
+  it("pulls the city out of a full street address", () => {
+    expect(resolveCityFromAddress("2205 Broadway, Boulder, CO")?.slug).toBe("boulder");
+    expect(resolveCityFromAddress("199 E Littleton Blvd, Littleton, CO 80121")?.slug).toBe(
+      "littleton",
+    );
+    expect(resolveCityFromAddress("8485 Kipling St, Arvada, CO")?.slug).toBe("arvada");
+    expect(resolveCityFromAddress("9910 Wadsworth Pkwy, Westminster, CO")?.slug).toBe(
+      "westminster",
+    );
+  });
+
+  it("resolves the cities newly added to the taxonomy", () => {
+    expect(resolveCityFromAddress("300 2nd St, Castle Rock, CO")?.slug).toBe("castle-rock");
+    expect(resolveCityFromAddress("Main St, Brighton, CO 80601")?.slug).toBe("brighton");
+    expect(resolveCityFromAddress("123 Bear Creek, Evergreen, CO")?.slug).toBe("evergreen");
+  });
+
+  it("maps a bare Denver address to the central-denver region", () => {
+    const ref = resolveCityFromAddress("1700 Lincoln St, Denver, CO 80203");
+    expect(ref?.slug).toBe("central-denver");
+    expect(ref?.level).toBe("region");
+  });
+
+  it("returns undefined for out-of-metro or city-less addresses", () => {
+    expect(resolveCityFromAddress("Aspen, CO")).toBeUndefined();
+    expect(resolveCityFromAddress("Idaho Springs, CO")).toBeUndefined();
+    expect(resolveCityFromAddress("North Table Mountain Trailhead")).toBeUndefined();
+    expect(resolveCityFromAddress(null)).toBeUndefined();
+  });
+});
+
+describe("resolveVenueNameAlias", () => {
+  it("maps Red Rocks to Morrison regardless of its misleading address", () => {
+    expect(resolveVenueNameAlias("Red Rocks Amphitheatre")?.slug).toBe("morrison");
+    expect(resolveVenueNameAlias("Red Rocks Park & Amphitheatre")?.slug).toBe("morrison");
+    expect(resolveVenueNameAlias("Ogden Theatre")).toBeUndefined();
+    // A catch-all venue that merely mentions Red Rocks must NOT be dragged to Morrison.
+    expect(
+      resolveVenueNameAlias("Multiple venues (Bluebird Theater, Ogden Theatre, Red Rocks)"),
+    ).toBeUndefined();
+    expect(resolveVenueNameAlias(null)).toBeUndefined();
   });
 });
 

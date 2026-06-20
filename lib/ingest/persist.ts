@@ -11,7 +11,14 @@ import type {
 } from "./types";
 import { eventKey, makeSlug } from "./dedup";
 import { geocode, reverseGeocode } from "./geocode";
-import { ancestrySlugs, resolveLocationLabel } from "@/lib/data/locations";
+import {
+  ancestrySlugs,
+  isCentralDenver,
+  resolveCityFromAddress,
+  resolveLocationLabel,
+  resolveVenueNameAlias,
+  type LocationRef,
+} from "@/lib/data/locations";
 import { findCanonicalSlug } from "./venueCanonical";
 
 let cachedClient: SupabaseClient | null = null;
@@ -91,36 +98,96 @@ export interface ResolvedLocation {
   neighborhood_slug: string | null;
 }
 
-// Resolve a free-text neighborhood label (and, as a fallback, coordinates) onto
-// canonical taxonomy slugs. When the label doesn't resolve but we have a pin,
-// reverse-geocode the coords and try the returned suburb/neighbourhood/city.
+// Synchronous slug resolution from a row's text signals (no network). The city
+// is taken from the ADDRESS — the authoritative signal — rather than the
+// free-text neighborhood label, which is an unreliable catch-all (e.g. "Golden"
+// stamped on Boulder/Littleton/Morrison venues). Precedence, first match wins:
+//   1. venue-name alias (Red Rocks → Morrison, beats its misleading address)
+//   2. a Central-Denver neighborhood label (RiNo/LoDo — more specific than the
+//      bare "Denver" the address would give)
+//   3. the city parsed from the address
+//   4. any other label match (a suburb city / region) when there's no address city
 // Exported so the location-backfill can re-resolve existing rows the same way.
-export async function resolveLocationSlugs(args: {
+export function resolveLocationSlugsSync(args: {
   neighborhood: string | null;
-  lat: number | null;
-  lng: number | null;
-}): Promise<ResolvedLocation> {
-  let ref = resolveLocationLabel(args.neighborhood);
-  let label = ref?.label ?? args.neighborhood ?? null;
+  address: string | null;
+  venueName?: string | null;
+}): ResolvedLocation {
+  const labelRef = resolveLocationLabel(args.neighborhood);
+  const addrRef = resolveCityFromAddress(args.address);
+  // Check the venue name and the address's leading place name ("Red Rocks Park,
+  // …") against the alias, so a venue-less listing at Red Rocks still → Morrison.
+  const addrPlace = args.address?.split(",")[0] ?? null;
+  const aliasRef =
+    resolveVenueNameAlias(args.venueName) ?? resolveVenueNameAlias(addrPlace);
 
-  if (!ref && args.lat != null && args.lng != null) {
-    const rev = await reverseGeocode(args.lat, args.lng);
-    if (rev) {
-      ref =
-        resolveLocationLabel(rev.neighbourhood) ??
-        resolveLocationLabel(rev.suburb) ??
-        resolveLocationLabel(rev.city);
-      if (ref) label = ref.label;
-    }
+  let ref: LocationRef | undefined;
+  if (aliasRef) {
+    // 1. Known venue whose address misnames its city (Red Rocks → Morrison).
+    ref = aliasRef;
+  } else if (labelRef && labelRef.level === "neighborhood") {
+    // 2. A real neighborhood label is the most specific signal (RiNo, LoDo).
+    ref = labelRef;
+  } else if (addrRef && addrRef.level === "city") {
+    // 3. A suburb city parsed from the address is authoritative — overrides the
+    //    unreliable neighborhood label (the "Golden" catch-all).
+    ref = addrRef;
+  } else if (isCentralDenver(labelRef)) {
+    // 4. A Denver address only yields the region; keep a more-specific
+    //    Central-Denver label (e.g. the "Downtown" city-group).
+    ref = labelRef;
+  } else {
+    // 5. Fall back to the address region (central-denver for a bare "Denver"),
+    //    else any remaining label match.
+    ref = addrRef ?? labelRef;
   }
 
+  return toResolved(ref, args.neighborhood);
+}
+
+// Build a ResolvedLocation from a node. Never overwrites the text label with a
+// region name ("Central Denver") — keeps the fallback when we only resolved to a
+// region, so specificity is never lost.
+function toResolved(ref: LocationRef | undefined, fallbackLabel: string | null): ResolvedLocation {
   const a = ancestrySlugs(ref);
   return {
-    neighborhood: label,
+    neighborhood:
+      ref && ref.level !== "region" ? ref.label : (fallbackLabel ?? ref?.label ?? null),
     region_slug: a.regionSlug,
     city_slug: a.citySlug,
     neighborhood_slug: a.neighborhoodSlug,
   };
+}
+
+// Async resolution: the sync core first, then — only if no specific place
+// resolved — a reverse-geocode of the pin to the containing municipality.
+export async function resolveLocationSlugs(args: {
+  neighborhood: string | null;
+  address?: string | null;
+  venueName?: string | null;
+  lat: number | null;
+  lng: number | null;
+}): Promise<ResolvedLocation> {
+  const sync = resolveLocationSlugsSync({
+    neighborhood: args.neighborhood,
+    address: args.address ?? null,
+    venueName: args.venueName ?? null,
+  });
+  // A specific place (city or neighborhood) is trustworthy. A region-only result
+  // (a bare "Denver" address) or nothing — refine from the pin below.
+  if (sync.city_slug || sync.neighborhood_slug) return sync;
+
+  if (args.lat != null && args.lng != null) {
+    const rev = await reverseGeocode(args.lat, args.lng);
+    if (rev) {
+      const ref =
+        resolveLocationLabel(rev.neighbourhood) ??
+        resolveLocationLabel(rev.suburb) ??
+        resolveLocationLabel(rev.city);
+      if (ref) return toResolved(ref, ref.label);
+    }
+  }
+  return sync; // all-null slugs, but keeps the original neighborhood label
 }
 
 // Human-readable slug for an extracted venue name. Stays stable across re-ingest
@@ -213,10 +280,12 @@ export async function resolveOrCreateVenue(args: {
   if (args.address) coords = await geocode(args.address);
   if (!coords) coords = await geocode(`${args.venueName}, ${cityHint}`);
 
-  // Resolve canonical location slugs, reverse-geocoding from the pin when the
-  // LLM-supplied neighborhood label doesn't map to the taxonomy.
+  // Resolve canonical location slugs from the address (authoritative city),
+  // falling back to a reverse-geocode of the pin when text doesn't resolve.
   const loc = await resolveLocationSlugs({
     neighborhood: args.neighborhood,
+    address: args.address,
+    venueName: args.venueName,
     lat: coords?.lat ?? null,
     lng: coords?.lng ?? null,
   });
@@ -264,26 +333,35 @@ export function buildListingInsert(args: {
     venueId: venue?.id ?? null,
     dateStart: normalized.dateStart,
   });
-  // For venue-bound sources, the venue's neighborhood is authoritative — the
-  // LLM tends to default to "Downtown" when the caption doesn't say.
-  const neighborhood = venue?.neighborhood || normalized.neighborhood || null;
-  // Prefer the venue's pre-resolved slugs (it already reverse-geocoded if
-  // needed); otherwise resolve the chosen neighborhood label synchronously.
-  const ancestry =
+  // Prefer the venue's pre-resolved slugs (it already parsed its address /
+  // reverse-geocoded). For a venue-less listing, resolve from its own address
+  // (authoritative city) + label, not the catch-all neighborhood label alone.
+  const resolved: ResolvedLocation =
     venue && (venue.region_slug || venue.city_slug || venue.neighborhood_slug)
       ? {
-          regionSlug: venue.region_slug,
-          citySlug: venue.city_slug,
-          neighborhoodSlug: venue.neighborhood_slug,
+          neighborhood: venue.neighborhood || normalized.neighborhood || null,
+          region_slug: venue.region_slug,
+          city_slug: venue.city_slug,
+          neighborhood_slug: venue.neighborhood_slug,
         }
-      : ancestrySlugs(resolveLocationLabel(neighborhood));
+      : resolveLocationSlugsSync({
+          neighborhood: venue?.neighborhood || normalized.neighborhood || null,
+          address: venue?.address ?? normalized.address ?? null,
+          venueName: normalized.venueName ?? null,
+        });
+  const neighborhood = resolved.neighborhood;
+  const ancestry = {
+    regionSlug: resolved.region_slug,
+    citySlug: resolved.city_slug,
+    neighborhoodSlug: resolved.neighborhood_slug,
+  };
   return {
     slug: makeSlug(normalized.title, `${source.sourceLabel}:${item.sourceId}`),
     type: normalized.type,
     title: normalized.title,
     description: normalized.description,
     venue_id: venue?.id ?? null,
-    address: venue?.address ?? null,
+    address: venue?.address ?? normalized.address ?? null,
     neighborhood,
     region_slug: ancestry.regionSlug,
     city_slug: ancestry.citySlug,

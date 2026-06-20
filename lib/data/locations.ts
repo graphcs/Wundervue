@@ -181,6 +181,7 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "lakewood", label: "Lakewood", neighborhoods: [] },
           { slug: "morrison", label: "Morrison", neighborhoods: [] },
           { slug: "edgewater", label: "Edgewater", neighborhoods: [] },
+          { slug: "evergreen", label: "Evergreen", neighborhoods: [] },
         ],
       },
       {
@@ -203,6 +204,8 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "parker", label: "Parker", neighborhoods: [] },
           { slug: "dtc", label: "Denver Tech Center (DTC)", neighborhoods: [] },
           { slug: "aurora", label: "Aurora", neighborhoods: [] },
+          { slug: "cherry-hills-village", label: "Cherry Hills Village", neighborhoods: [] },
+          { slug: "castle-rock", label: "Castle Rock", neighborhoods: [] },
         ],
       },
       {
@@ -212,6 +215,7 @@ export const LOCATIONS: AreaNode[] = [
           { slug: "commerce-city", label: "Commerce City", neighborhoods: [] },
           { slug: "thornton", label: "Thornton", neighborhoods: [] },
           { slug: "northglenn", label: "Northglenn", neighborhoods: [] },
+          { slug: "brighton", label: "Brighton", neighborhoods: [] },
           { slug: "far-northeast", label: "Far Northeast", neighborhoods: [] },
         ],
       },
@@ -402,6 +406,7 @@ const LEGACY_ALIASES: Record<string, string> = {
   "santa fe": "baker", // bare "Santa Fe" in our data is the Art District on Santa Fe
   "downtown louisville": "louisville", // a "Downtown <town>" prefix shouldn't unmatch the town
   "downtown denver": "downtown",
+  "denver": "central-denver", // bare "Denver" → the central-denver region (no single city node)
   "north park hill": "park-hill",
   "golden triangle": "cbd", // museum district, borders the CBD
   "montbello": "far-northeast",
@@ -419,6 +424,70 @@ export function resolveLocationLabel(label: string | null | undefined): Location
   if (!label) return undefined;
   const slug = LABEL_TO_SLUG.get(norm(label));
   return slug ? BY_SLUG.get(slug) : undefined;
+}
+
+// Curated venue-name → city overrides for venues whose street address names the
+// wrong municipality. Red Rocks is in Morrison, but Google/USGS list it as
+// "Golden, CO" — so the address alone would mistag it. Matched as a substring
+// of the normalized venue name.
+const VENUE_NAME_CITY_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["red rocks", "morrison"],
+];
+
+/** City ref for a known venue whose address misnames its city, else undefined. */
+export function resolveVenueNameAlias(name: string | null | undefined): LocationRef | undefined {
+  if (!name) return undefined;
+  const n = norm(name);
+  for (const [needle, slug] of VENUE_NAME_CITY_ALIASES) {
+    // Prefix-match only: "Red Rocks Amphitheatre" matches, but a catch-all like
+    // "Multiple venues (…, Red Rocks)" must not be dragged to Morrison.
+    if (n === needle || n.startsWith(`${needle} `)) return BY_SLUG.get(slug);
+  }
+  return undefined;
+}
+
+/** True when a ref sits in Denver proper (the central-denver region, its
+ *  city-groups, or its neighborhoods) — more specific than a bare "Denver". */
+export function isCentralDenver(ref: LocationRef | undefined): boolean {
+  return !!ref && (ref.regionSlug === "central-denver" || ref.slug === "central-denver");
+}
+
+/**
+ * The raw city segment of a US street address ("123 Main St, Boulder, CO 80302"
+ * → "Boulder"), or undefined when there's no city segment (a bare trailhead).
+ * Shared by resolveCityFromAddress and the location backfill's diagnostics so
+ * they parse identically.
+ */
+export function extractAddressCity(address: string | null | undefined): string | undefined {
+  if (!address) return undefined;
+  const cleaned = address.replace(/,?\s*(USA|United States)\s*\.?\s*$/i, "").trim();
+  const parts = cleaned.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return undefined; // need at least "<street>, <city>"
+
+  // The city is the segment just before the state token (CO / Colorado, maybe
+  // with a trailing ZIP). Scan from the end so a "City, ST ZIP" tail wins.
+  for (let i = parts.length - 1; i >= 1; i--) {
+    if (/^(co|colorado)\b/i.test(parts[i])) return parts[i - 1];
+    // "...Boulder CO 80302" with no comma before the state.
+    const m = parts[i].match(/^(.*?)\s+(?:co|colorado)\s+\d{5}(?:-\d{4})?$/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  // No explicit state token — assume the last segment is the city (drop a ZIP).
+  return parts[parts.length - 1].replace(/\s+\d{5}(?:-\d{4})?$/, "").trim() || undefined;
+}
+
+/**
+ * Resolve the city named in a US address to a taxonomy city (or the
+ * central-denver region for a bare "Denver", via LEGACY_ALIASES). The address
+ * is the authoritative city signal — the free-text neighborhood label is an
+ * unreliable catch-all. Returns undefined for city-less addresses or
+ * out-of-metro cities not in the taxonomy (Aspen, Idaho Springs).
+ */
+export function resolveCityFromAddress(address: string | null | undefined): LocationRef | undefined {
+  const candidate = extractAddressCity(address);
+  if (!candidate) return undefined;
+  const ref = resolveLocationLabel(candidate);
+  return ref && (ref.level === "city" || ref.level === "region") ? ref : undefined;
 }
 
 /**

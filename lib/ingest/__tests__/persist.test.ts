@@ -114,6 +114,75 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe("resolveLocationSlugsSync precedence", () => {
+  it("derives the city from the address, overriding a wrong neighborhood label", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    // The classic bug: label says "Golden" but the address is Boulder.
+    const r = resolveLocationSlugsSync({
+      neighborhood: "Golden",
+      address: "2205 Broadway, Boulder, CO",
+      venueName: "Museum of Boulder",
+    });
+    expect(r.city_slug).toBe("boulder");
+    expect(r.region_slug).toBe("northwest-denver");
+    expect(r.neighborhood).toBe("Boulder");
+  });
+
+  it("lets a venue-name alias win over a misleading address (Red Rocks → Morrison)", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    const r = resolveLocationSlugsSync({
+      neighborhood: "Golden",
+      address: "Red Rocks Park, Golden, CO",
+      venueName: "Red Rocks Amphitheatre",
+    });
+    expect(r.city_slug).toBe("morrison");
+  });
+
+  it("keeps a Central-Denver neighborhood label above the bare 'Denver' city", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    const r = resolveLocationSlugsSync({
+      neighborhood: "RiNo",
+      address: "2715 Larimer St, Denver, CO 80205",
+      venueName: null,
+    });
+    expect(r.neighborhood_slug).toBe("rino");
+    expect(r.city_slug).toBe("five-points-area");
+  });
+
+  it("keeps a Central-Denver city-group label over a bare Denver address", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    const r = resolveLocationSlugsSync({
+      neighborhood: "Downtown",
+      address: "1600 Glenarm Pl, Denver, CO 80202",
+      venueName: null,
+    });
+    expect(r.city_slug).toBe("downtown");
+    expect(r.region_slug).toBe("central-denver");
+  });
+
+  it("falls back to the Denver region when the label is a wrong suburb city", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    const r = resolveLocationSlugsSync({
+      neighborhood: "Golden", // bogus label on a genuinely-Denver venue
+      address: "1700 Lincoln St, Denver, CO",
+      venueName: null,
+    });
+    expect(r.region_slug).toBe("central-denver");
+    expect(r.city_slug).toBeNull();
+  });
+
+  it("leaves out-of-metro addresses unresolved", async () => {
+    const { resolveLocationSlugsSync } = await import("../persist");
+    const r = resolveLocationSlugsSync({
+      neighborhood: null,
+      address: "Aspen, CO",
+      venueName: null,
+    });
+    expect(r.city_slug).toBeNull();
+    expect(r.region_slug).toBeNull();
+  });
+});
+
 describe("classifyForUpsert", () => {
   it("returns [] without any DB calls when given an empty batch", async () => {
     const { classifyForUpsert } = await import("../persist");
