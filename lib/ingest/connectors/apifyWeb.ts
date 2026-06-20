@@ -67,11 +67,18 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
           const key = href + '|' + body.slice(0, 120);
           if (seen.has(key)) return;
           seen.add(key);
-          // Cap recurring series (a weekly market posted as many same-titled
-          // occurrences) to the soonest few so it can't flood the window. Group
-          // by title, falling back to a date-stripped url, then leading text.
-          const progTitle = $el.find(titleSel).first().text().trim().toLowerCase();
-          const prog = progTitle || href.replace(/\\/\\d{4}-\\d{2}-\\d{2}\\/?$/, '').replace(/\\/+$/, '') || body.slice(0, 60);
+          // Cap a recurring series (one event posted as many occurrences) to the
+          // soonest few so it can't flood the window. Group by a normalized URL
+          // stem — strip a trailing slash, a /YYYY-MM-DD occurrence date, and
+          // WordPress's "-2/-3" duplicate-slug suffix — so distinct events that
+          // merely share a title are NOT merged. Fall back to title, then text,
+          // only when the item has no per-event link of its own.
+          const ownHref = $el.find('a').first().attr('href') || '';
+          const stem = ownHref
+            .replace(/\\/+$/, '')
+            .replace(/\\/\\d{4}-\\d{2}-\\d{2}$/, '')
+            .replace(/-\\d+$/, '');
+          const prog = stem || $el.find(titleSel).first().text().trim().toLowerCase() || body.slice(0, 60);
           const n = perProgram.get(prog) || 0;
           if (n >= PER_PROGRAM) return;
           perProgram.set(prog, n + 1);
