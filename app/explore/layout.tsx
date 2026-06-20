@@ -1,16 +1,18 @@
 import { Suspense } from "react";
 import { DiscoveryBar } from "@/components/explore/DiscoveryBar";
 import { VenueHeaderOverlay } from "@/components/explore/VenueHeaderOverlay";
+import { ensureDynamicCities } from "@/lib/data/dynamicCities.server";
 
-export default function ExploreLayout({
+export default async function ExploreLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const dynamicCities = await ensureDynamicCities();
   return (
     <>
       <Suspense fallback={<div className="h-[66px]" />}>
-        <DiscoveryBar />
+        <DiscoveryBar dynamicCities={dynamicCities} />
       </Suspense>
       <div className="mx-auto max-w-[1100px] px-7 py-8">
         <Suspense fallback={null}>

@@ -7,6 +7,7 @@ import {
   legacyPlaceRedirect,
   locationBySlug,
 } from "@/lib/data/locations";
+import { ensureDynamicCities } from "@/lib/data/dynamicCities.server";
 import { CATEGORIES, categoryLabel } from "@/lib/data/categories";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { parseSearchParams } from "@/lib/filters/parseSearchParams";
@@ -33,6 +34,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { segment } = await params;
+  await ensureDynamicCities(); // recognize auto-added city slugs
   if (isPlaceSlug(segment)) {
     const label = locationBySlug(segment)?.label ?? segment;
     return {
@@ -56,6 +58,7 @@ export default async function ExploreSegmentPage({
 }: PageProps) {
   const { segment } = await params;
   const sp = await searchParams;
+  await ensureDynamicCities(); // recognize auto-added city slugs
 
   const isPlace = isPlaceSlug(segment);
   const isCat = CAT_SLUGS.has(segment);

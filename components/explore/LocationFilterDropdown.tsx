@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pill } from "@/components/ui/Pill";
-import { LOCATIONS } from "@/lib/data/locations";
+import { LOCATIONS, type DynamicCity } from "@/lib/data/locations";
 
 interface Props {
   label?: string;
@@ -10,6 +10,8 @@ interface Props {
   selected: string[];
   onToggle: (slug: string) => void;
   onClear?: () => void;
+  /** Auto-discovered metro cities, rendered as leaves under their region. */
+  dynamicCities?: readonly DynamicCity[];
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -114,6 +116,7 @@ export function LocationFilterDropdown({
   selected,
   onToggle,
   onClear,
+  dynamicCities = [],
 }: Props) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -174,42 +177,62 @@ export function LocationFilterDropdown({
                   onToggleExpand={() => toggleExpand(region.slug)}
                   onToggle={() => onToggle(region.slug)}
                 />
-                {isExpanded(region.slug) &&
-                  region.cities.map((city) => {
-                    const citySelected = sel.has(city.slug);
-                    const cityImplied = regionSelected;
-                    const hasHoods = city.neighborhoods.length > 0;
-                    return (
-                      <div key={city.slug}>
+                {isExpanded(region.slug) && (
+                  <>
+                    {region.cities.map((city) => {
+                      const citySelected = sel.has(city.slug);
+                      const cityImplied = regionSelected;
+                      const hasHoods = city.neighborhoods.length > 0;
+                      return (
+                        <div key={city.slug}>
+                          <Row
+                            label={city.label}
+                            slug={city.slug}
+                            depth={1}
+                            checked={citySelected}
+                            implied={cityImplied}
+                            expandable={hasHoods}
+                            expanded={isExpanded(city.slug)}
+                            onToggleExpand={() => toggleExpand(city.slug)}
+                            onToggle={() => onToggle(city.slug)}
+                          />
+                          {isExpanded(city.slug) &&
+                            city.neighborhoods.map((hood) => (
+                              <Row
+                                key={hood.slug}
+                                label={hood.label}
+                                slug={hood.slug}
+                                depth={2}
+                                checked={sel.has(hood.slug)}
+                                implied={regionSelected || citySelected}
+                                expandable={false}
+                                expanded={false}
+                                onToggleExpand={() => {}}
+                                onToggle={() => onToggle(hood.slug)}
+                              />
+                            ))}
+                        </div>
+                      );
+                    })}
+                    {/* Auto-discovered metro cities live under their region as leaves. */}
+                    {dynamicCities
+                      .filter((c) => c.regionSlug === region.slug)
+                      .map((c) => (
                         <Row
-                          label={city.label}
-                          slug={city.slug}
+                          key={c.slug}
+                          label={c.label}
+                          slug={c.slug}
                           depth={1}
-                          checked={citySelected}
-                          implied={cityImplied}
-                          expandable={hasHoods}
-                          expanded={isExpanded(city.slug)}
-                          onToggleExpand={() => toggleExpand(city.slug)}
-                          onToggle={() => onToggle(city.slug)}
+                          checked={sel.has(c.slug)}
+                          implied={regionSelected}
+                          expandable={false}
+                          expanded={false}
+                          onToggleExpand={() => {}}
+                          onToggle={() => onToggle(c.slug)}
                         />
-                        {isExpanded(city.slug) &&
-                          city.neighborhoods.map((hood) => (
-                            <Row
-                              key={hood.slug}
-                              label={hood.label}
-                              slug={hood.slug}
-                              depth={2}
-                              checked={sel.has(hood.slug)}
-                              implied={regionSelected || citySelected}
-                              expandable={false}
-                              expanded={false}
-                              onToggleExpand={() => {}}
-                              onToggle={() => onToggle(hood.slug)}
-                            />
-                          ))}
-                      </div>
-                    );
-                  })}
+                      ))}
+                  </>
+                )}
               </div>
             );
           })}

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { DENVER_REGIONS } from "@/lib/data/denverRegions";
+import { DENVER_REGIONS, regionSlugForPoint } from "@/lib/data/denverRegions";
+
+describe("regionSlugForPoint", () => {
+  it("assigns a metro point to its containing region", () => {
+    expect(regionSlugForPoint(39.7392, -104.9903)).toBe("central-denver"); // downtown
+    expect(regionSlugForPoint(39.4583, -104.8961)).toBe("southeast-denver"); // Castle Pines
+    expect(regionSlugForPoint(40.015, -105.2705)).toBe("northwest-denver"); // Boulder
+  });
+
+  it("returns undefined for a point outside every polygon", () => {
+    expect(regionSlugForPoint(39.1911, -106.8175)).toBeUndefined(); // Aspen (out-of-metro)
+  });
+});
 
 describe("DENVER_REGIONS overlay", () => {
   it("is a FeatureCollection of the five mapped region polygons", () => {

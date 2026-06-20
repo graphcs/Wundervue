@@ -11,6 +11,7 @@ import { rankForYouWith, forYouReasons, buildForYouBehavior } from "@/lib/data/r
 import { buildWanted } from "@/lib/data/profileTaxonomy";
 import { ExploreResults } from "@/components/explore/ExploreResults";
 import { DiscoveryBar } from "@/components/explore/DiscoveryBar";
+import { ensureDynamicCities } from "@/lib/data/dynamicCities.server";
 import { HomeHero } from "@/components/home/HomeHero";
 import { FeedTabs } from "@/components/home/FeedTabs";
 import { MyEvents } from "@/components/home/MyEvents";
@@ -31,6 +32,7 @@ export default async function Home({ searchParams }: PageProps) {
   const filters = parseSearchParams(sp);
 
   const isMyEvents = filters.tab === "my-events";
+  const dynamicCities = await ensureDynamicCities();
 
   return (
     <>
@@ -39,7 +41,9 @@ export default async function Home({ searchParams }: PageProps) {
         <FeedTabs />
       </div>
       {/* My Events is client-only (favorites); All/For-You filter via DiscoveryBar. */}
-      {!isMyEvents && <DiscoveryBar showSearch={false} />}
+      {!isMyEvents && (
+        <DiscoveryBar showSearch={false} dynamicCities={dynamicCities} />
+      )}
       <div className="mx-auto max-w-[1100px] px-7 py-8">
         {isMyEvents ? <MyEvents /> : <Feed sp={sp} filters={filters} />}
       </div>

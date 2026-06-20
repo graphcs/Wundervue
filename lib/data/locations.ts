@@ -284,6 +284,27 @@ export const REGIONS: ReadonlyArray<LocationRef> = REGION_REFS;
 export const CITIES: ReadonlyArray<LocationRef> = CITY_REFS;
 export const NEIGHBORHOODS_ALL: ReadonlyArray<LocationRef> = NEIGHBORHOOD_REFS;
 
+// ---------------------------------------------------------------------------
+// Dynamic cities — metro cities auto-discovered at ingest and stored in the
+// `metro_cities` DB table (read by lib/data/dynamicCities.server.ts). The static
+// tree above stays the curated source of truth; this registry is purely additive
+// and hydrated at runtime (server: per request; client: from a bootstrap prop).
+// Every resolver below checks the curated maps FIRST and falls back to these, so
+// with an empty registry (tests, build time) behavior is identical to before.
+// ---------------------------------------------------------------------------
+
+export interface DynamicCity {
+  slug: string;
+  label: string;
+  /** A curated region slug from the static tree (assigned by point-in-polygon). */
+  regionSlug: string;
+}
+
+const DYNAMIC_BY_SLUG = new Map<string, LocationRef>();
+const DYNAMIC_LABEL_TO_SLUG = new Map<string, string>();
+const DYNAMIC_PLACE_SLUGS = new Set<string>();
+let DYNAMIC_CITIES: DynamicCity[] = [];
+
 // A "city group" (Central Denver's "downtown", "five-points-area", …) is an
 // organizational layer that holds neighborhoods — a listing sits in one of the
 // neighborhoods, not the group. Suburb towns (Boulder, Golden, …) carry no
@@ -317,9 +338,10 @@ export const ALL_PLACES: ReadonlyArray<LocationRef> = [
 ];
 const PLACE_SLUG_SET = new Set(ALL_PLACES.map((p) => p.slug));
 
-/** True when `slug` names a browsable place (neighborhood, suburb, or aggregate). */
+/** True when `slug` names a browsable place (neighborhood, suburb, aggregate, or
+ *  an auto-discovered dynamic city). */
 export function isPlaceSlug(slug: string): boolean {
-  return PLACE_SLUG_SET.has(slug);
+  return PLACE_SLUG_SET.has(slug) || DYNAMIC_PLACE_SLUGS.has(slug);
 }
 
 // Old flat-taxonomy slugs (lib/data/neighborhoods.ts) that no longer name a
@@ -342,9 +364,10 @@ export const LLM_LOCATION_LABELS: string[] = [
   ...SUBURB_CITY_REFS.map((c) => c.label),
 ];
 
-/** Look up any location (area/region/city/neighborhood) by its slug. */
+/** Look up any location (area/region/city/neighborhood) by its slug, including
+ *  auto-discovered dynamic cities (curated entries take precedence). */
 export function locationBySlug(slug: string): LocationRef | undefined {
-  return BY_SLUG.get(slug);
+  return BY_SLUG.get(slug) ?? DYNAMIC_BY_SLUG.get(slug);
 }
 
 export interface Ancestry {
@@ -359,7 +382,7 @@ export interface Ancestry {
  * fills all three. Accepts a slug or a resolved LocationRef.
  */
 export function ancestrySlugs(slugOrRef: string | LocationRef | undefined): Ancestry {
-  const ref = typeof slugOrRef === "string" ? BY_SLUG.get(slugOrRef) : slugOrRef;
+  const ref = typeof slugOrRef === "string" ? locationBySlug(slugOrRef) : slugOrRef;
   const empty: Ancestry = { regionSlug: null, citySlug: null, neighborhoodSlug: null };
   if (!ref) return empty;
   switch (ref.level) {
@@ -422,8 +445,41 @@ for (const [alias, slug] of Object.entries(LEGACY_ALIASES)) {
  */
 export function resolveLocationLabel(label: string | null | undefined): LocationRef | undefined {
   if (!label) return undefined;
-  const slug = LABEL_TO_SLUG.get(norm(label));
-  return slug ? BY_SLUG.get(slug) : undefined;
+  const n = norm(label);
+  const slug = LABEL_TO_SLUG.get(n) ?? DYNAMIC_LABEL_TO_SLUG.get(n);
+  return slug ? locationBySlug(slug) : undefined;
+}
+
+/**
+ * Replace the dynamic-city set. Idempotent — the server loader calls it once per
+ * request and the client bootstrap once per render. Cities whose slug is already
+ * curated (in BY_SLUG) are skipped so the static tree always wins.
+ */
+export function registerDynamicCities(cities: readonly DynamicCity[]): void {
+  DYNAMIC_BY_SLUG.clear();
+  DYNAMIC_LABEL_TO_SLUG.clear();
+  DYNAMIC_PLACE_SLUGS.clear();
+  DYNAMIC_CITIES = [];
+  for (const c of cities) {
+    if (BY_SLUG.has(c.slug)) continue; // never shadow a curated node
+    const areaSlug =
+      REGION_REFS.find((r) => r.slug === c.regionSlug)?.areaSlug ?? "denver-metro";
+    DYNAMIC_BY_SLUG.set(c.slug, {
+      level: "city",
+      slug: c.slug,
+      label: c.label,
+      regionSlug: c.regionSlug,
+      areaSlug,
+    });
+    DYNAMIC_LABEL_TO_SLUG.set(norm(c.label), c.slug);
+    DYNAMIC_PLACE_SLUGS.add(c.slug);
+    DYNAMIC_CITIES.push(c);
+  }
+}
+
+/** The dynamic cities currently registered (for client bootstrap / merge). */
+export function getRegisteredDynamicCities(): readonly DynamicCity[] {
+  return DYNAMIC_CITIES;
 }
 
 // Curated venue-name → city overrides for venues whose street address names the
@@ -497,9 +553,11 @@ export function resolveCityFromAddress(address: string | null | undefined): Loca
  * neighborhood/city string before *_id columns are populated everywhere.
  */
 export function descendantLabels(slug: string): string[] {
-  const ref = BY_SLUG.get(slug);
+  const ref = locationBySlug(slug);
   if (!ref) return [];
   if (ref.level === "neighborhood") return [ref.label];
+  const dyn = DYNAMIC_BY_SLUG.get(slug);
+  if (dyn) return [dyn.label]; // a dynamic city is itself the leaf
 
   const labels: string[] = [];
   for (const area of LOCATIONS) {
@@ -512,6 +570,13 @@ export function descendantLabels(slug: string): string[] {
         for (const hood of city.neighborhoods) labels.push(hood.label);
       }
     }
+  }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region (or
+  // the whole area) so a region/area selection still covers them.
+  if (ref.level === "region") {
+    for (const c of DYNAMIC_CITIES) if (c.regionSlug === slug) labels.push(c.label);
+  } else if (ref.level === "area") {
+    for (const c of DYNAMIC_CITIES) labels.push(c.label);
   }
   return labels;
 }
@@ -540,9 +605,10 @@ export function locationMatchesSelection(
 
 /** Slugs of all descendant nodes (cities + neighborhoods) under a selection. */
 export function descendantSlugs(slug: string): string[] {
-  const ref = BY_SLUG.get(slug);
+  const ref = locationBySlug(slug);
   if (!ref) return [];
   if (ref.level === "neighborhood") return [ref.slug];
+  if (DYNAMIC_BY_SLUG.has(slug)) return [slug]; // a dynamic city is itself the leaf
 
   const slugs: string[] = [];
   for (const area of LOCATIONS) {
@@ -555,6 +621,13 @@ export function descendantSlugs(slug: string): string[] {
         for (const hood of city.neighborhoods) slugs.push(hood.slug);
       }
     }
+  }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region (or
+  // the whole area) so a region/area selection still covers them.
+  if (ref.level === "region") {
+    for (const c of DYNAMIC_CITIES) if (c.regionSlug === slug) slugs.push(c.slug);
+  } else if (ref.level === "area") {
+    for (const c of DYNAMIC_CITIES) slugs.push(c.slug);
   }
   return slugs;
 }

@@ -13,12 +13,17 @@ import { eventKey, makeSlug } from "./dedup";
 import { geocode, reverseGeocode } from "./geocode";
 import {
   ancestrySlugs,
+  extractAddressCity,
+  getRegisteredDynamicCities,
   isCentralDenver,
+  registerDynamicCities,
   resolveCityFromAddress,
   resolveLocationLabel,
   resolveVenueNameAlias,
+  type DynamicCity,
   type LocationRef,
 } from "@/lib/data/locations";
+import { regionSlugForPoint } from "@/lib/data/denverRegions";
 import { findCanonicalSlug } from "./venueCanonical";
 
 let cachedClient: SupabaseClient | null = null;
@@ -178,6 +183,32 @@ export async function resolveLocationSlugs(args: {
   if (sync.city_slug || sync.neighborhood_slug) return sync;
 
   if (args.lat != null && args.lng != null) {
+    // Auto-add: the address names a real city the curated taxonomy doesn't know
+    // and the pin sits inside a metro region polygon → register it as a dynamic
+    // metro city and tag the row with it. Out-of-metro pins (no containing
+    // polygon, e.g. Aspen) fall through to the reverse-geocode / null path and
+    // stay untagged, exactly as before.
+    const candidate = extractAddressCity(args.address ?? null);
+    if (candidate && !resolveLocationLabel(candidate)) {
+      const regionSlug = regionSlugForPoint(args.lat, args.lng);
+      if (regionSlug) {
+        const added = await ensureMetroCity({
+          label: candidate,
+          regionSlug,
+          lat: args.lat,
+          lng: args.lng,
+        });
+        if (added) {
+          return {
+            neighborhood: added.label,
+            region_slug: added.regionSlug,
+            city_slug: added.slug,
+            neighborhood_slug: null,
+          };
+        }
+      }
+    }
+
     const rev = await reverseGeocode(args.lat, args.lng);
     if (rev) {
       const ref =
@@ -188,6 +219,62 @@ export async function resolveLocationSlugs(args: {
     }
   }
   return sync; // all-null slugs, but keeps the original neighborhood label
+}
+
+// kebab-case slug for an auto-discovered city label, matching the static slug
+// style ("Castle Pines" → "castle-pines").
+function slugifyCity(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Insert (or no-op on conflict) a dynamic metro city discovered from an address
+ * and register it in-process so the rest of this ingest run resolves it without
+ * re-inserting. Returns the city, or null on failure / unslugifiable label.
+ */
+export async function ensureMetroCity(args: {
+  label: string;
+  regionSlug: string;
+  lat: number;
+  lng: number;
+}): Promise<DynamicCity | null> {
+  const slug = slugifyCity(args.label);
+  if (!slug) return null;
+  const client = getServiceClient();
+  const { data, error } = await client
+    .from("metro_cities")
+    .upsert(
+      {
+        slug,
+        label: args.label,
+        region_slug: args.regionSlug,
+        lat: args.lat,
+        lng: args.lng,
+        source: "auto",
+      },
+      { onConflict: "slug" },
+    )
+    .select("slug, label, region_slug")
+    .single();
+  if (error || !data) {
+    console.error(`[metro_cities] upsert failed for ${slug}:`, error?.message);
+    return null;
+  }
+  const city: DynamicCity = {
+    slug: data.slug,
+    label: data.label,
+    regionSlug: data.region_slug,
+  };
+  // Visible to the rest of THIS ingest run (later listings in the same city
+  // resolve via resolveLocationLabel instead of re-inserting). Site-wide
+  // visibility comes from the 5-min cache TTL in dynamicCities.server.ts.
+  registerDynamicCities([...getRegisteredDynamicCities(), city]);
+  return city;
 }
 
 // Human-readable slug for an extracted venue name. Stays stable across re-ingest
