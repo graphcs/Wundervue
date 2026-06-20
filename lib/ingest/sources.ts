@@ -1152,20 +1152,31 @@ export const SOURCES: SourceConfig[] = [
   // private-bookings, or image-only Instagram) so the sheet↔code mapping is
   // complete and nobody re-investigates them blindly.
   {
-    // Disabled: thefamilyjones.co runs WordPress + The Events Calendar, but its
-    // /wp-json/tribe REST sits behind intermittent Cloudflare bot protection
-    // (often returns an HTML challenge instead of JSON → the fetch throws). Its
-    // feed is also mostly partnered/offsite events (festivals, farmers markets)
-    // rather than the distillery's own — low signal for the noise. Revisit via
-    // Apify (JS render) if its in-house events become worth the spend.
+    // The Family Jones (LoHi distillery) publishes a curated "Colorado spirits
+    // events" calendar on WordPress + The Events Calendar, but the whole site
+    // sits behind SiteGround's anti-bot (sgcaptcha): a plain fetch of the
+    // /wp-json tribe REST gets a 202 JS challenge it can't solve, so the
+    // in-process tribeEvents connector can't read it. apifyWeb with renderJs
+    // runs a real browser that passes the challenge, then scrapes the Tribe
+    // list view. The feed mixes the distillery's own events with partnered/
+    // offsite ones, each carrying its own venue/address — so no defaultVenueSlug.
     id: "family-jones-web",
-    enabled: false,
-    connector: "tribeEvents",
+    enabled: true,
+    connector: "apifyWeb",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://thefamilyjones.co/events/",
-    maxItems: 40,
-    defaultCategory: "Food & Drink",
+    url: "https://thefamilyjones.co/events/list/",
+    renderJs: true,
+    waitForSelector: ".tribe-events-calendar-list__event",
+    waitForTimeoutMs: 45000,
+    selectors: {
+      item: ".tribe-events-calendar-list__event",
+      title: ".tribe-events-calendar-list__event-title",
+    },
+    // The list view renders ~10 events per page; click through "Next Events"
+    // to pull the fuller upcoming window in one browser session.
+    paginateNextSelector: ".tribe-events-c-nav__next",
+    maxItems: 60,
   },
   {
     // Stem Ciders (RiNo taproom + The Outpost on Platte) runs WordPress + The

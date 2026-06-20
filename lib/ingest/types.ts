@@ -99,6 +99,13 @@ export interface SourceConfig {
   // apifyWeb (renderJs) — how long to wait for waitForSelector (ms, default
   // 20000). Bump it for slow widgets (e.g. the AEG/AXS calendar takes ~30-50s).
   waitForTimeoutMs?: number;
+  // apifyWeb (renderJs) — CSS selector for a "next page" control on an
+  // AJAX-paginated list (e.g. The Events Calendar list nav,
+  // `.tribe-events-c-nav__next`). When set, the browser pageFunction clicks it
+  // and accumulates items across pages until it reaches `maxItems` or the
+  // control is gone/disabled — list views that render only a small window per
+  // page would otherwise yield just the soonest handful.
+  paginateNextSelector?: string;
   // apifyWeb / cheerioWeb — cap on how many extracted items to keep. Pages with
   // long, chronologically-ordered event grids (e.g. a venue calendar with 150+
   // shows) would otherwise push every future event through LLM normalization
