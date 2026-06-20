@@ -8,6 +8,7 @@ import {
   descendantLabels,
   descendantSlugs,
   getRegisteredDynamicCities,
+  isCuratedSlug,
   isPlaceSlug,
   locationBySlug,
   locationMatchesSelection,
@@ -24,6 +25,14 @@ describe("dynamic cities (auto-added metro cities)", () => {
     regionSlug: "southeast-denver",
   };
   afterEach(() => registerDynamicCities([])); // never leak into other tests
+
+  it("isCuratedSlug distinguishes curated nodes from dynamic cities", () => {
+    expect(isCuratedSlug("boulder")).toBe(true); // curated suburb city
+    expect(isCuratedSlug("central-denver")).toBe(true); // curated region
+    expect(isCuratedSlug("rino")).toBe(true); // curated neighborhood
+    registerDynamicCities([castlePines]);
+    expect(isCuratedSlug("castle-pines")).toBe(false); // dynamic, not curated
+  });
 
   it("makes an auto-added city resolvable across the taxonomy functions", () => {
     registerDynamicCities([castlePines]);

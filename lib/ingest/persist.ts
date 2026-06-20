@@ -16,6 +16,7 @@ import {
   extractAddressCity,
   getRegisteredDynamicCities,
   isCentralDenver,
+  isCuratedSlug,
   registerDynamicCities,
   resolveCityFromAddress,
   resolveLocationLabel,
@@ -189,7 +190,10 @@ export async function resolveLocationSlugs(args: {
     // polygon, e.g. Aspen) fall through to the reverse-geocode / null path and
     // stay untagged, exactly as before.
     const candidate = extractAddressCity(args.address ?? null);
-    if (candidate && !resolveLocationLabel(candidate)) {
+    // Only auto-add a candidate that looks like a real city name. extractAddressCity's
+    // fallback can return a street/suite segment for malformed addresses ("…, Stout
+    // Street", "123 Main St CO 80202"); minting a "stout-street" city would be junk.
+    if (candidate && !looksLikeStreet(candidate) && !resolveLocationLabel(candidate)) {
       const regionSlug = regionSlugForPoint(args.lat, args.lng);
       if (regionSlug) {
         const added = await ensureMetroCity({
@@ -221,15 +225,30 @@ export async function resolveLocationSlugs(args: {
   return sync; // all-null slugs, but keeps the original neighborhood label
 }
 
-// kebab-case slug for an auto-discovered city label, matching the static slug
-// style ("Castle Pines" → "castle-pines").
-function slugifyCity(label: string): string {
-  return label
-    .trim()
+// Shared kebab-case core: lowercase, non-alphanumerics → "-", trim dashes.
+function kebab(s: string): string {
+  return s
     .toLowerCase()
-    .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+// kebab-case slug for an auto-discovered city label ("Castle Pines" →
+// "castle-pines"). Strips apostrophes first so "O'Brien's" → "obriens"; venue
+// slugs (venueSlug) deliberately keep apostrophe punctuation as a dash, so the
+// two conventions differ only there.
+function slugifyCity(label: string): string {
+  return kebab(label.replace(/['’]/g, ""));
+}
+
+// True when a parsed "city" segment is really a street/suite/PO-box fragment, so
+// the auto-add path can reject it instead of minting a junk metro city.
+function looksLikeStreet(s: string): boolean {
+  const t = s.trim();
+  if (/^\d/.test(t)) return true; // "123 Main St", "1700 Lincoln"
+  return /\b(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|ct|court|cir|circle|way|pkwy|parkway|hwy|highway|ste|suite|unit|apt|fl|floor|pmb|p\.?o\.?)\b/i.test(
+    t,
+  );
 }
 
 /**
@@ -244,7 +263,10 @@ export async function ensureMetroCity(args: {
   lng: number;
 }): Promise<DynamicCity | null> {
   const slug = slugifyCity(args.label);
-  if (!slug) return null;
+  // Bail if the label is unslugifiable, or if its slug collides with a curated
+  // node (e.g. a label that strips to "highland"): registerDynamicCities would
+  // drop it anyway, so we'd otherwise write a junk row and mis-tag the listing.
+  if (!slug || isCuratedSlug(slug)) return null;
   const client = getServiceClient();
   const { data, error } = await client
     .from("metro_cities")
@@ -286,11 +308,7 @@ export async function ensureMetroCity(args: {
 // and passes undefined → existing rows keep their unsalted slugs. Pass a hint
 // from day one when a non-Denver source comes online.
 export function venueSlug(name: string, cityHint?: string): string {
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+  const slugify = kebab;
   const base = slugify(name).slice(0, 60) || "venue";
   if (!cityHint) return base;
   const citySlug = slugify(cityHint);

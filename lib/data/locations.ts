@@ -304,6 +304,17 @@ const DYNAMIC_BY_SLUG = new Map<string, LocationRef>();
 const DYNAMIC_LABEL_TO_SLUG = new Map<string, string>();
 const DYNAMIC_PLACE_SLUGS = new Set<string>();
 let DYNAMIC_CITIES: DynamicCity[] = [];
+// Signature of the last-registered set; an identical re-register is a no-op so
+// the per-request / per-render call doesn't needlessly clear()+rebuild the maps.
+let DYNAMIC_SIGNATURE: string | null = null;
+
+/** Dynamic cities that roll up under a region/area selection (none for a city or
+ *  neighborhood — they're leaves). Shared by descendantSlugs/descendantLabels. */
+function dynamicCitiesUnder(ref: LocationRef): DynamicCity[] {
+  if (ref.level === "region") return DYNAMIC_CITIES.filter((c) => c.regionSlug === ref.slug);
+  if (ref.level === "area") return DYNAMIC_CITIES.slice();
+  return [];
+}
 
 // A "city group" (Central Denver's "downtown", "five-points-area", …) is an
 // organizational layer that holds neighborhoods — a listing sits in one of the
@@ -368,6 +379,13 @@ export const LLM_LOCATION_LABELS: string[] = [
  *  auto-discovered dynamic cities (curated entries take precedence). */
 export function locationBySlug(slug: string): LocationRef | undefined {
   return BY_SLUG.get(slug) ?? DYNAMIC_BY_SLUG.get(slug);
+}
+
+/** True when `slug` is a curated taxonomy node (not a dynamic city). Used by the
+ *  auto-add path to avoid minting a dynamic city whose slug collides with a
+ *  curated neighborhood/region (which registerDynamicCities would then drop). */
+export function isCuratedSlug(slug: string): boolean {
+  return BY_SLUG.has(slug);
 }
 
 export interface Ancestry {
@@ -456,6 +474,15 @@ export function resolveLocationLabel(label: string | null | undefined): Location
  * curated (in BY_SLUG) are skipped so the static tree always wins.
  */
 export function registerDynamicCities(cities: readonly DynamicCity[]): void {
+  // No-op when the set is unchanged: avoids churn on every render/request and
+  // shrinks the window where the maps are mid-rebuild. (Synchronous, so there's
+  // no yield point inside the rebuild itself.)
+  const sig = cities
+    .map((c) => `${c.slug} ${c.regionSlug} ${c.label}`)
+    .sort()
+    .join("|");
+  if (sig === DYNAMIC_SIGNATURE) return;
+  DYNAMIC_SIGNATURE = sig;
   DYNAMIC_BY_SLUG.clear();
   DYNAMIC_LABEL_TO_SLUG.clear();
   DYNAMIC_PLACE_SLUGS.clear();
@@ -571,13 +598,8 @@ export function descendantLabels(slug: string): string[] {
       }
     }
   }
-  // Dynamic cities live outside LOCATIONS — roll them up under their region (or
-  // the whole area) so a region/area selection still covers them.
-  if (ref.level === "region") {
-    for (const c of DYNAMIC_CITIES) if (c.regionSlug === slug) labels.push(c.label);
-  } else if (ref.level === "area") {
-    for (const c of DYNAMIC_CITIES) labels.push(c.label);
-  }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region/area.
+  for (const c of dynamicCitiesUnder(ref)) labels.push(c.label);
   return labels;
 }
 
@@ -622,12 +644,7 @@ export function descendantSlugs(slug: string): string[] {
       }
     }
   }
-  // Dynamic cities live outside LOCATIONS — roll them up under their region (or
-  // the whole area) so a region/area selection still covers them.
-  if (ref.level === "region") {
-    for (const c of DYNAMIC_CITIES) if (c.regionSlug === slug) slugs.push(c.slug);
-  } else if (ref.level === "area") {
-    for (const c of DYNAMIC_CITIES) slugs.push(c.slug);
-  }
+  // Dynamic cities live outside LOCATIONS — roll them up under their region/area.
+  for (const c of dynamicCitiesUnder(ref)) slugs.push(c.slug);
   return slugs;
 }
