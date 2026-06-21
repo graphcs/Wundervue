@@ -37,14 +37,14 @@ export default async function Home({ searchParams }: PageProps) {
   return (
     <>
       <HomeHero />
-      <div className="mx-auto max-w-[1100px] px-7 pt-6">
+      <div className="mx-auto max-w-[1100px] px-4 sm:px-7 pt-6">
         <FeedTabs />
       </div>
       {/* My Events is client-only (favorites); All/For-You filter via DiscoveryBar. */}
       {!isMyEvents && (
         <DiscoveryBar showSearch={false} dynamicCities={dynamicCities} />
       )}
-      <div className="mx-auto max-w-[1100px] px-7 py-8">
+      <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
         {isMyEvents ? <MyEvents /> : <Feed sp={sp} filters={filters} />}
       </div>
     </>

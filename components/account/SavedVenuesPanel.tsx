@@ -98,7 +98,7 @@ export function SavedVenuesPanel() {
             </svg>
           </div>
           <h3 className="text-dark text-[15px] font-medium">No saved venues yet</h3>
-          <p className="text-gray max-w-[260px] text-[13px]">
+          <p className="text-gray w-full max-w-[260px] text-[13px]">
             Follow venues you love to keep track of their events and deals.
           </p>
           <Link

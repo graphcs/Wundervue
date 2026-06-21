@@ -51,7 +51,7 @@ export function ProfileDropdown({ onClose }: Props) {
   };
 
   return (
-    <div className="border-border absolute right-0 top-[44px] z-50 w-[280px] overflow-hidden rounded-xl border bg-white shadow-xl">
+    <div className="border-border fixed inset-x-2 top-[60px] z-50 overflow-hidden rounded-xl border bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-[44px] sm:w-[280px]">
       <div className="border-border border-b px-4 py-3">
         <div className="text-dark text-sm font-medium">{profile.name}</div>
         <div className="text-gray mt-0.5 truncate text-[12px]">{profile.email}</div>

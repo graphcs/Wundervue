@@ -14,7 +14,7 @@ export default async function ExploreLayout({
       <Suspense fallback={<div className="h-[66px]" />}>
         <DiscoveryBar dynamicCities={dynamicCities} />
       </Suspense>
-      <div className="mx-auto max-w-[1100px] px-7 py-8">
+      <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
         <Suspense fallback={null}>
           <VenueHeaderOverlay />
         </Suspense>

@@ -69,7 +69,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
   };
 
   return (
-    <div className="mx-auto max-w-[1100px] px-7 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
       <header className="mb-5">
         <h1 className="text-dark text-[28px] font-medium leading-tight">Denver Venues</h1>
         <p className="text-gray mt-1 text-[14px]">

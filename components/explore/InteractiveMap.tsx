@@ -194,7 +194,7 @@ export function InteractiveMap({ listings, activeId, onActiveChange }: Props) {
             {activeGroup.listings.length === 1 ? (
               <PopupCard listing={activeGroup.listings[0]} />
             ) : (
-              <div className="flex max-h-[40vh] w-[240px] flex-col gap-1.5 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-sm">
+              <div className="flex max-h-[40vh] w-[240px] max-w-[calc(100vw-2rem)] flex-col gap-1.5 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-sm">
                 <div className="text-graphite px-1 text-[11px] font-medium">
                   {activeGroup.listings.length} at this location
                 </div>
@@ -243,7 +243,7 @@ function PopupCard({
       className={
         compact
           ? "flex w-full gap-2.5 rounded-lg p-1.5 hover:bg-tag-bg"
-          : "border-border flex w-[260px] gap-2.5 rounded-xl border bg-white p-2 hover:border-dark"
+          : "border-border flex w-[260px] max-w-[calc(100vw-2rem)] gap-2.5 rounded-xl border bg-white p-2 hover:border-dark"
       }
     >
       <div

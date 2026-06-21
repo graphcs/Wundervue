@@ -35,8 +35,8 @@ export function ExploreResults({
   return (
     <>
       <ListingGrid listings={listings} reasons={reasons} />
-      <div className="mt-8 grid grid-cols-3 items-center">
-        <div />
+      <div className="mt-8 flex flex-col items-center gap-3 md:grid md:grid-cols-3">
+        <div className="hidden md:block" />
         <div className="flex justify-center">
           {totalPages > 1 ? (
             <Pagination

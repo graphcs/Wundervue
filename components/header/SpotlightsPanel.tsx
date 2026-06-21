@@ -21,7 +21,7 @@ export function SpotlightsPanel({ onClose, onMouseEnter, onMouseLeave }: Props) 
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="mx-auto max-w-[1100px] px-7"
+      className="mx-auto max-w-[1100px] px-4 sm:px-7"
     >
       <div
         role="menu"

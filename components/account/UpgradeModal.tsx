@@ -115,7 +115,7 @@ export function UpgradeModal() {
         <h2 className="text-[22px] font-medium leading-tight">
           Upgrade to Insider
         </h2>
-        <p className="max-w-[280px] text-[13px] opacity-90">
+        <p className="w-full max-w-[280px] text-[13px] opacity-90">
           Unlock personalized recommendations, unlimited saves, and exclusive
           deals.
         </p>

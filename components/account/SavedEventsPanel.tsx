@@ -323,7 +323,7 @@ export function SavedEventsPanel() {
   return (
     <>
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-6">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4 sm:px-6">
           <div className="w-full max-w-[300px] rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-dark text-[16px] font-semibold">Delete folder?</h3>
             <p className="text-graphite mt-1.5 text-[13px] leading-relaxed">
@@ -444,7 +444,7 @@ export function SavedEventsPanel() {
               }}
               placeholder="Folder name…"
               maxLength={40}
-              className="border-border focus:border-dark rounded-pill w-[140px] border bg-white px-3 py-1 text-[12px] focus:outline-none"
+              className="border-border focus:border-dark rounded-pill w-full max-w-[140px] border bg-white px-3 py-1 text-[12px] focus:outline-none sm:w-[140px]"
             />
             <button
               type="button"
@@ -638,7 +638,7 @@ export function SavedEventsPanel() {
                       aria-label="Move to folder"
                       value={assignments.get(l.id) ?? ""}
                       onChange={(e) => assignToFolder(l.id, e.target.value || null)}
-                      className="border-border text-graphite max-w-[110px] rounded-md border bg-white px-1.5 py-1 text-[11px] focus:border-dark focus:outline-none"
+                      className="border-border text-graphite max-w-[110px] shrink-0 rounded-md border bg-white px-1.5 py-1 text-[11px] focus:border-dark focus:outline-none"
                     >
                       <option value="">Unfiled</option>
                       {folders.map((f) => (

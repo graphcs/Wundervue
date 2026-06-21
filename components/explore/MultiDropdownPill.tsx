@@ -56,7 +56,7 @@ export function MultiDropdownPill({
         </svg>
       </Pill>
       {open && (
-        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[220px] max-h-[320px] overflow-y-auto rounded-lg border bg-white shadow-lg">
+        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[220px] max-w-[calc(100vw-1.5rem)] max-h-[320px] overflow-y-auto rounded-lg border bg-white shadow-lg">
           {options.map((opt) => {
             const checked = selected.includes(opt.slug);
             return (
