@@ -161,7 +161,7 @@ export function LocationFilterDropdown({
         </svg>
       </Pill>
       {open && (
-        <div className="border-border absolute left-0 top-full z-50 mt-1 max-h-[380px] min-w-[260px] overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
+        <div className="border-border absolute left-0 top-full z-50 mt-1 max-h-[380px] min-w-[260px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
           {LOCATIONS[0].regions.map((region) => {
             const regionSelected = sel.has(region.slug);
             return (

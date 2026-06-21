@@ -34,7 +34,10 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
     listing.venueId && listing.venueName
       ? { slug: listing.venueId, name: listing.venueName, address: listing.address }
       : null;
-  const heroHeight = variant === "page" ? "h-[360px]" : "h-[240px]";
+  const heroHeight =
+    variant === "page"
+      ? "h-[200px] sm:h-[360px]"
+      : "h-[160px] sm:h-[240px]";
   const fullPageHref =
     listing.type === "deal"
       ? `/deals/${listing.slug}`
@@ -75,7 +78,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
         />
       </div>
 
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <span className="bg-tag-bg text-graphite rounded-full px-3 py-1 text-[11px] font-medium">
             {listing.neighborhood}
@@ -90,7 +93,7 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
         <h1
           className={
             variant === "page"
-              ? "text-dark text-[28px] font-medium leading-tight"
+              ? "text-dark text-[24px] sm:text-[28px] font-medium leading-tight"
               : "text-dark text-[22px] font-medium leading-tight"
           }
         >

@@ -41,11 +41,11 @@ export default function AccountPage() {
   }, []);
 
   if (!ctx.hydrated) {
-    return <div className="text-gray mx-auto max-w-[980px] px-7 py-20 text-center text-[14px]">Loading…</div>;
+    return <div className="text-gray mx-auto max-w-[980px] px-4 sm:px-7 py-20 text-center text-[14px]">Loading…</div>;
   }
   if (!ctx.isLoggedIn || !ctx.profile) {
     return (
-      <div className="mx-auto max-w-[980px] px-7 py-24 text-center">
+      <div className="mx-auto max-w-[980px] px-4 sm:px-7 py-24 text-center">
         <h1 className="text-dark text-[24px] font-medium">Your account</h1>
         <p className="text-gray mt-2 text-[14px]">Sign in to manage your profile, saves, and preferences.</p>
         <button
@@ -81,7 +81,7 @@ export default function AccountPage() {
 
       <div className="flex flex-col gap-6 md:flex-row">
         <nav className="md:w-[220px] md:shrink-0">
-          <div className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
+          <div className="flex flex-wrap gap-1 md:flex-col md:flex-nowrap">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -142,7 +142,7 @@ function ProfileTab() {
     <>
       {banner && <div className="bg-coral/10 text-coral mb-4 rounded-lg px-4 py-2 text-[13px] font-medium">{banner}</div>}
       <Card title="Profile details">
-        <div className="flex max-w-[420px] flex-col gap-3">
+        <div className="flex w-full max-w-[420px] flex-col gap-3">
           <label className="flex flex-col gap-1.5">
             <span className="text-dark text-[12px] font-medium">Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)} className="border-border focus:border-dark rounded-lg border px-3 py-2 text-sm focus:outline-none" />

@@ -42,7 +42,7 @@ export function SortDropdown({ value, onChange }: Props) {
         </svg>
       </Pill>
       {open && (
-        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[160px] overflow-hidden rounded-lg border bg-white py-1 shadow-lg">
+        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[160px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border bg-white py-1 shadow-lg">
           {SORT_OPTIONS.map((opt) => (
             <button
               key={opt.id}

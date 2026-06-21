@@ -46,7 +46,7 @@ export default function JoinFolderPage() {
   }, [slug, router]);
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-7 py-20 text-center">
+    <div className="mx-auto flex max-w-md flex-col items-center px-4 sm:px-7 py-20 text-center">
       {status === "joining" && <p className="text-gray text-[15px]">Joining this collection…</p>}
 
       {status === "signin" && (

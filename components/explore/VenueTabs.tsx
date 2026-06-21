@@ -39,7 +39,7 @@ export function VenueTabs({ upcoming, deals, past }: Props) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`relative -mb-px border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+              className={`relative -mb-px border-b-2 px-2 py-2.5 sm:px-4 text-[13px] font-medium transition-colors ${
                 active
                   ? "border-dark text-dark"
                   : "text-graphite hover:text-dark border-transparent"

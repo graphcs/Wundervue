@@ -69,7 +69,7 @@ export function DateDropdown({ value, from, to, onChange }: Props) {
 
       {open && (
         <div
-          className="border-border absolute left-0 top-full z-50 mt-1 overflow-hidden rounded-lg border bg-white shadow-lg"
+          className="border-border absolute left-0 top-full z-50 mt-1 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border bg-white shadow-lg"
           style={{ width: customExpanded ? 320 : 220 }}
         >
           <div className="py-1">

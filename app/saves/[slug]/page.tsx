@@ -26,7 +26,7 @@ export default async function SharedSavesPage({ params }: PageProps) {
   if (!shared) notFound();
 
   return (
-    <div className="mx-auto max-w-[1100px] px-7 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
       <header className="mb-6">
         <p className="text-coral text-[12px] font-semibold uppercase tracking-wider">Shared Saves</p>
         <h1 className="text-dark mt-1 text-[28px] font-medium leading-tight">{shared.name}</h1>

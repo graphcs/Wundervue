@@ -22,7 +22,7 @@ export function VenueHeader({ venue, showClose = false, listingCount }: Props) {
   const categories = venue.categories ?? [];
 
   return (
-    <section className="border-border relative mb-6 rounded-2xl border bg-white px-6 py-5">
+    <section className="border-border relative mb-6 rounded-2xl border bg-white px-4 py-5 sm:px-6">
       {showClose && (
         <Link
           href="/explore"
@@ -45,9 +45,9 @@ export function VenueHeader({ venue, showClose = false, listingCount }: Props) {
         </Link>
       )}
 
-      <div className="flex flex-col gap-3 pr-10">
+      <div className="flex flex-col gap-3 pr-12 sm:pr-10">
         <div>
-          <h2 className="text-dark text-[22px] font-medium leading-tight">
+          <h2 className="text-dark text-[18px] sm:text-[22px] font-medium leading-tight">
             {venue.name}
           </h2>
           <p className="text-gray mt-1 text-[13px]">

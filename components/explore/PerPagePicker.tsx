@@ -48,7 +48,7 @@ export function PerPagePicker() {
       {open && (
         <div
           role="listbox"
-          className="border-border absolute right-0 bottom-full z-50 mb-1 min-w-[120px] overflow-hidden rounded-lg border bg-white shadow-lg"
+          className="border-border absolute right-0 bottom-full z-50 mb-1 min-w-[120px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border bg-white shadow-lg"
         >
           {PAGE_SIZE_OPTIONS.map((opt) => (
             <button

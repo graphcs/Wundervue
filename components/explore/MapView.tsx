@@ -110,11 +110,8 @@ export function MapView({ listings }: Props) {
   }, []);
 
   return (
-    <div
-      className="border-border grid overflow-hidden rounded-2xl border bg-white"
-      style={{ gridTemplateColumns: "380px 1fr", height: "calc(100vh - 220px)", minHeight: 600 }}
-    >
-      <aside className="border-border overflow-y-auto border-r px-4 py-3">
+    <div className="border-border grid min-h-[60vh] grid-cols-1 overflow-hidden rounded-2xl border bg-white lg:h-[calc(100vh-220px)] lg:min-h-[600px] lg:grid-cols-[380px_1fr]">
+      <aside className="border-border max-h-[60vh] overflow-y-auto border-b px-4 py-3 lg:max-h-none lg:border-b-0 lg:border-r">
         {listings.length === 0 ? (
           <p className="text-gray px-3 py-6 text-sm">No results.</p>
         ) : (
@@ -131,7 +128,7 @@ export function MapView({ listings }: Props) {
         )}
       </aside>
 
-      <div className="relative">
+      <div className="relative h-[60vh] lg:h-auto">
         <InteractiveMap
           listings={listings}
           activeId={activeId}

@@ -297,7 +297,7 @@ export function CalendarView({ listings }: Props) {
             <div className="grid grid-cols-7">
               {cells.map((day, i) => {
                 if (day === null) {
-                  return <div key={`b${i}`} className="border-border min-h-[108px] border-b border-r bg-[#fafafa]" />;
+                  return <div key={`b${i}`} className="border-border min-h-[64px] sm:min-h-[108px] border-b border-r bg-[#fafafa]" />;
                 }
                 const key = dayKey(new Date(year, month, day));
                 const items = byDay.get(key) ?? [];
@@ -315,7 +315,7 @@ export function CalendarView({ listings }: Props) {
                     type="button"
                     key={key}
                     onClick={() => setSelected(key)}
-                    className={`group relative min-h-[108px] cursor-pointer border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-[#fafafa] ${
+                    className={`group relative min-h-[64px] sm:min-h-[108px] cursor-pointer border-b border-r border-border p-1 sm:p-1.5 text-left align-top transition-colors hover:bg-[#fafafa] ${
                       isSelected ? "ring-coral z-10 ring-2 ring-inset" : ""
                     }`}
                   >
@@ -347,7 +347,7 @@ export function CalendarView({ listings }: Props) {
 
                     {/* Hover-to-see-day: full list of the day's events on hover. */}
                     {items.length > 0 && (
-                      <div className={`border-border pointer-events-none absolute z-30 hidden w-60 rounded-xl border bg-white p-2.5 text-left shadow-xl group-hover:block ${popPos}`}>
+                      <div className={`border-border pointer-events-none absolute z-30 hidden w-60 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-white p-2.5 text-left shadow-xl group-hover:block ${popPos}`}>
                         <p className="text-graphite mb-1.5 text-[11px] font-semibold">
                           {MONTHS[month]} {day} · {items.length} event{items.length > 1 ? "s" : ""}
                         </p>
@@ -375,7 +375,7 @@ export function CalendarView({ listings }: Props) {
               const items = sortByStart(byDay.get(key) ?? []);
               const isToday = key === todayKey;
               return (
-                <div key={key} className="border-border min-h-[280px] border-b border-r last:border-r-0">
+                <div key={key} className="border-border min-h-[160px] sm:min-h-[280px] border-b border-r last:border-r-0">
                   <button
                     type="button"
                     onClick={() => { setSelected(key); changeMode("day"); }}

@@ -31,7 +31,7 @@ export default async function SharedFolderPage({ params }: PageProps) {
   const canEdit = await canEditFolder(folder.id, folder.ownerId);
 
   return (
-    <div className="mx-auto max-w-[1100px] px-7 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
       <header className="mb-6">
         <p className="text-coral text-[12px] font-semibold uppercase tracking-wider">
           Shared Collection

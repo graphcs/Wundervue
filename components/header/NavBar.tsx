@@ -68,6 +68,7 @@ const LINK_CLASS =
 export function NavBar() {
   const { isLoggedIn, hydrated, openOnboarding } = useAuthContext();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -85,14 +86,18 @@ export function NavBar() {
   useEffect(() => () => cancelClose(), []);
 
   useEffect(() => {
-    if (openIndex === null) return;
+    if (openIndex === null && !mobileOpen) return;
     function onPointerDown(e: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpenIndex(null);
+        setMobileOpen(false);
       }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpenIndex(null);
+      if (e.key === "Escape") {
+        setOpenIndex(null);
+        setMobileOpen(false);
+      }
     }
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKey);
@@ -100,7 +105,7 @@ export function NavBar() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [openIndex]);
+  }, [openIndex, mobileOpen]);
 
   const openLink = openIndex !== null ? NAV[openIndex] : null;
   const openDropdown =
@@ -111,7 +116,7 @@ export function NavBar() {
 
   return (
     <div ref={rootRef} className="bg-bg border-border relative border-b">
-      <nav className="mx-auto flex max-w-[1280px] items-center gap-7 px-6 py-3">
+      <nav className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-3 sm:px-6 lg:gap-7">
         <Link href="/" aria-label="Wundervue — home" className="inline-block shrink-0">
           <Image
             src="/images/wundervue-logo.webp"
@@ -177,7 +182,7 @@ export function NavBar() {
             <button
               type="button"
               onClick={() => openOnboarding(0)}
-              className="border-border hover:border-dark text-dark rounded-pill border px-4 py-2 text-[13px] font-medium transition-colors"
+              className="border-border hover:border-dark text-dark hidden rounded-pill border px-4 py-2 text-[13px] font-medium transition-colors lg:inline-block"
             >
               Log In
             </button>
@@ -190,8 +195,71 @@ export function NavBar() {
           </a>
           <NotificationBell />
           {hydrated && isLoggedIn && <ProfileIcon />}
+          <button
+            type="button"
+            aria-label="Menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+            className="text-dark hover:text-graphite -mr-1 inline-flex h-9 w-9 items-center justify-center lg:hidden"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              {mobileOpen ? (
+                <path d="M6 6l12 12M18 6L6 18" />
+              ) : (
+                <>
+                  <path d="M3 6h18" />
+                  <path d="M3 12h18" />
+                  <path d="M3 18h18" />
+                </>
+              )}
+            </svg>
+          </button>
         </div>
       </nav>
+
+      {mobileOpen && (
+        <div className="lg:hidden" style={{ background: PANEL_BG }}>
+          <ul className="mx-auto flex max-w-[1280px] flex-col px-4 py-2">
+            {NAV.map((link) => (
+              <li key={link.label} className="border-border/60 border-b last:border-b-0">
+                {isInternal(link.href) ? (
+                  <Link
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`${LINK_CLASS} block py-3`}
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileOpen(false)}
+                    className={`${LINK_CLASS} block py-3`}
+                  >
+                    {link.label}
+                  </a>
+                )}
+              </li>
+            ))}
+            {hydrated && !isLoggedIn && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    openOnboarding(0);
+                  }}
+                  className={`${LINK_CLASS} block w-full py-3 text-left`}
+                >
+                  Log In
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {openDropdown && (
         <div onMouseEnter={cancelClose} onMouseLeave={scheduleClose} className="mx-auto max-w-[1280px] px-6">

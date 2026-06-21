@@ -61,7 +61,7 @@ export function DropdownPill<T extends string>({
         </svg>
       </Pill>
       {open && (
-        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[180px] overflow-hidden rounded-lg border bg-white shadow-lg">
+        <div className="border-border absolute left-0 top-full z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border bg-white shadow-lg">
           {options.map((opt) => (
             <button
               key={opt.id}

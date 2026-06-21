@@ -311,7 +311,7 @@ export function OnboardingModal() {
         role="dialog"
         aria-modal="true"
         className="relative z-10 flex w-full max-w-[520px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        style={{ height: 540, maxHeight: "90vh" }}
+        style={{ height: 540, maxHeight: "min(90vh, 540px)" }}
       >
         <button
           type="button"
@@ -334,7 +334,7 @@ export function OnboardingModal() {
           </svg>
         </button>
 
-        <div className="flex flex-1 flex-col overflow-y-auto px-8 pb-8 pt-10">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-10">
           {step === -1 && (
             <>
               <h2 className="text-dark mb-2 text-[22px] font-medium">Welcome back</h2>
@@ -430,7 +430,7 @@ export function OnboardingModal() {
               </button>
               <h2 className="text-dark mb-2 text-[22px] font-medium">Choose your plan</h2>
               <p className="text-gray mb-5 text-[13px]">Start free or unlock the full experience.</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => choosePlan("free")}
@@ -517,7 +517,7 @@ export function OnboardingModal() {
                   ? "you're good to go"
                   : `${3 - interests.size} more needed`}
               </p>
-              <div className="mb-5 grid grid-cols-2 gap-2">
+              <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {ONBOARDING_INTERESTS.map((opt) => {
                   const active = interests.has(opt.id);
                   return (

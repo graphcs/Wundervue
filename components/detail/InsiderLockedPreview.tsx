@@ -24,7 +24,7 @@ export function InsiderLockedPreview({ listing }: Props) {
 
   return (
     <article className="flex flex-col">
-      <div className="bg-tag-bg relative h-[360px] w-full overflow-hidden rounded-t-2xl">
+      <div className="bg-tag-bg relative h-[200px] sm:h-[360px] w-full overflow-hidden rounded-t-2xl">
         <Badge type={listing.type} />
         {listing.isFree && <FreeBadge />}
         <span className="absolute bottom-3 left-3 z-10">
@@ -38,7 +38,7 @@ export function InsiderLockedPreview({ listing }: Props) {
           style={{ filter: "brightness(0.6)" }}
         />
       </div>
-      <div className="border-border rounded-b-2xl border border-t-0 px-5 py-6">
+      <div className="border-border rounded-b-2xl border border-t-0 px-4 py-6 sm:px-5">
         <div className="mb-3 flex flex-wrap gap-1.5">
           <span className="bg-tag-bg text-graphite rounded-full px-2.5 py-1 text-[11px] font-medium">
             {listing.neighborhood}
@@ -48,7 +48,7 @@ export function InsiderLockedPreview({ listing }: Props) {
           </span>
           <LifestyleTagChips tags={listing.tags} />
         </div>
-        <h1 className="text-dark mb-2 text-[24px] font-medium leading-tight">
+        <h1 className="text-dark mb-2 text-[20px] sm:text-[24px] font-medium leading-tight">
           {listing.title}
         </h1>
         <p className="text-gray text-[14px] leading-snug">

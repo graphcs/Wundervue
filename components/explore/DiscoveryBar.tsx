@@ -167,7 +167,7 @@ export function DiscoveryBar({
 
   return (
     <div className="bg-bg border-border border-b">
-      <div className="mx-auto max-w-[1100px] px-7 pb-3 pt-4">
+      <div className="mx-auto max-w-[1100px] px-4 pb-3 pt-4 sm:px-7">
         {showSearch && (
           <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
             <div className="relative flex-1">
@@ -211,7 +211,7 @@ export function DiscoveryBar({
             </Pill>
           ))}
 
-          <div className="mx-1.5 h-[18px] w-px bg-[#d5d5d5]" />
+          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
 
           <DateDropdown
             value={filters.date}
@@ -243,7 +243,7 @@ export function DiscoveryBar({
             onToggle={toggleCategory}
           />
 
-          <div className="mx-1.5 h-[18px] w-px bg-[#d5d5d5]" />
+          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
 
           {LIFESTYLE_TAGS.map((tag) => (
             <Pill
@@ -270,14 +270,14 @@ export function DiscoveryBar({
             Free Only
           </Pill>
 
-          <div className="mx-1.5 h-[18px] w-px bg-[#d5d5d5]" />
+          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
 
           <SortDropdown
             value={filters.sort}
             onChange={(sort) => replaceFilters({ sort })}
           />
 
-          <div className="ml-auto">
+          <div className="w-full sm:ml-auto sm:w-auto">
             <ViewToggle
               value={filters.view}
               onChange={(v) => replaceFilters({ view: v })}

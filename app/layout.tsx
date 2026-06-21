@@ -45,7 +45,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${omnes.variable} h-full antialiased`}>
-      <body className="bg-bg text-dark min-h-full flex flex-col font-sans">
+      <body className="bg-bg text-dark min-h-full flex flex-col overflow-x-clip font-sans">
         <AuthProvider>
           <Header />
           <main className="flex-1">{children}</main>

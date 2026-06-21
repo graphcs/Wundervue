@@ -27,7 +27,7 @@ export function HomeHero() {
 
   return (
     <section className="bg-bg border-border border-b">
-      <div className="mx-auto max-w-[760px] px-7 py-12 text-center sm:py-16">
+      <div className="mx-auto max-w-[760px] px-4 sm:px-7 py-12 text-center sm:py-16">
         <h1 className="text-dark text-[30px] font-medium leading-tight sm:text-[40px]">
           Find your next thing to do in Denver
         </h1>
@@ -45,11 +45,11 @@ export function HomeHero() {
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search events, deals, neighborhoods…"
             aria-label="Search Denver events and deals"
-            className="border-border text-dark placeholder:text-chrome focus:border-dark w-full rounded-pill border bg-white py-4 pl-12 pr-[120px] text-[15px] shadow-sm focus:outline-none"
+            className="border-border text-dark placeholder:text-chrome focus:border-dark w-full rounded-pill border bg-white py-4 pl-12 pr-[96px] sm:pr-[120px] text-[15px] shadow-sm focus:outline-none"
           />
           <button
             type="submit"
-            className="bg-dark rounded-pill absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2.5 text-[13px] font-medium text-white hover:opacity-90"
+            className="bg-dark rounded-pill absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 text-[12px] sm:px-6 sm:py-2.5 sm:text-[13px] font-medium text-white hover:opacity-90"
           >
             Search
           </button>
