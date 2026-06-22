@@ -289,6 +289,10 @@ export async function normalizeMulti({
     anthropic.messages.create({
       model: resolveModel(),
       max_tokens: 2048,
+      // Deterministic, same as normalize(): at the default temperature a
+      // borderline is_event_or_deal call flips run-to-run and an event
+      // intermittently appears/vanishes from a multi-event caption.
+      temperature: 0,
       tools: [MULTI_TOOL_SCHEMA],
       tool_choice: { type: "tool", name: MULTI_TOOL_NAME },
       system:

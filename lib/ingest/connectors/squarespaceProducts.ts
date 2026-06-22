@@ -27,9 +27,13 @@ interface SqFeed {
   items?: SqProduct[];
 }
 
-// Matches a date-ish variant value ("July 3rd", "Dec 5", "12/14").
+// Matches a date-ish variant value: a month name + day ("July 3rd", "Dec 5"),
+// or a numeric date ("12/14"). A BARE ordinal ("6th") is intentionally NOT a
+// date on its own — it false-matches "6th graders", "3rd Edition", etc. with no
+// month context. The numeric form excludes size/quantity/duration fractions
+// ("1/2 lb", "1/2 day") that aren't dates.
 const DATEISH =
-  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d{1,2}\b|\b\d{1,2}\s*(st|nd|rd|th)\b|\b\d{1,2}\/\d{1,2}\b/i;
+  /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d{1,2}(?:st|nd|rd|th)?\b|\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b(?!\s*(?:lb|lbs|oz|g|kg|ml|l|ct|pk|pc|pcs|pack|in|cm|mm|qt|gal|day|days|hr|hrs|hour|hours|wk|week|weeks|mo|month|months|yr|year|years|%|"|'))/i;
 
 function stripHtml(s: string | undefined): string {
   return (s ?? "")

@@ -18,7 +18,10 @@ const LOCATIONS = [
 // Image-locked specifics from the Happy Hour graphic — update if the menu changes.
 const ITEMS =
   "$5 well liquor & select domestic drafts, chips & salsa; $6 house wines, chili cheese fries, pretzel bites & queso; $7 house bubbles & 1/2-pound chicken wings. Ask your server for specifics.";
-const HH_RE = /Happy Hour\s+([0-9][^<]*?every day)/i;
+// Capture the time window after "Happy Hour", ending at a daily phrase. Accept
+// the common wordings ("every day", "everyday", "daily", "7 days a week") and
+// don't require the window to start with a digit ("Daily 2-5PM" is valid).
+const HH_RE = /Happy Hour\s+([^<]{0,80}?(?:every\s?day|everyday|daily|7\s*days(?:\s*a\s*week)?))/i;
 
 function pageText(html: string): string {
   return html
@@ -37,9 +40,13 @@ export async function fetchCherryCricketDeals(source: SourceConfig): Promise<Raw
     const window = await withRetry(async () => {
       const res = await fetch(loc.url, { headers: { "User-Agent": "Mozilla/5.0" } });
       if (!res.ok) throw new Error(`cherry-cricket ${loc.name} ${res.status}`);
-      return pageText(await res.text()).match(HH_RE)?.[1]?.trim() ?? null;
+      const text = pageText(await res.text());
+      // Presence check: no "Happy Hour" anywhere on the page → the deal is gone.
+      if (!/happy hour/i.test(text)) return null;
+      // Present: use the parsed window, but fall back to a generic daily label
+      // rather than DROPPING a live deal when the wording doesn't parse.
+      return text.match(HH_RE)?.[1]?.trim() || "offered daily — see venue for current times";
     });
-    // No Happy Hour text on the page → the deal is gone; skip it.
     if (!window) continue;
 
     const venueName = `The Cherry Cricket – ${loc.name}`;

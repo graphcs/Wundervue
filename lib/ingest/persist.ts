@@ -457,7 +457,11 @@ export function buildListingInsert(args: {
   const key = eventKey({
     canonicalTitle: normalized.canonicalTitle,
     venueId: venue?.id ?? null,
-    dateStart,
+    // Recurring/ongoing items have a rolling or advancing dateStart (the next
+    // occurrence for a weekly event, or "now" for a perpetual deal), so keying
+    // the event_key on the day would change it every run and defeat cross-source
+    // dedup. Key recurring items on title+venue only; reserve the day for one-offs.
+    dateStart: normalized.recurring ? null : dateStart,
   });
   // Prefer the venue's pre-resolved slugs (it already parsed its address /
   // reverse-geocoded). For a venue-less listing, resolve from its own address

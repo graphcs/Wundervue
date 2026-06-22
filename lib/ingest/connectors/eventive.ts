@@ -83,8 +83,12 @@ export async function fetchEventive(source: SourceConfig): Promise<RawItem[]> {
     for (const [filmId, byRoom] of Object.entries(byFilm)) {
       for (const [room, shows] of Object.entries(byRoom)) {
         for (const s of shows) {
+          const ms = Date.parse(s.start_time);
+          // Skip a missing/non-ISO start_time: a NaN ms would corrupt the
+          // showtime sort and the cross-film soonest-first cap below.
+          if (Number.isNaN(ms)) continue;
           const arr = showsByFilm.get(filmId) ?? [];
-          arr.push({ ms: Date.parse(s.start_time), iso: s.start_time, room });
+          arr.push({ ms, iso: s.start_time, room });
           showsByFilm.set(filmId, arr);
         }
       }

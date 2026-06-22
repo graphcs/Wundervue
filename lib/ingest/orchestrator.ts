@@ -182,8 +182,14 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
           const results = await normalizeMulti({ item, source });
           return results.map((result) => {
             // Content-stable per-event id (order-independent) so re-runs update
-            // rather than duplicate the same event from the same post.
-            const key = `${result.canonicalTitle}|${result.dateStart?.slice(0, 10) ?? result.dateDisplay}`;
+            // rather than duplicate the same event from the same post. A
+            // recurring event advances dateStart to the next occurrence every
+            // run, so keying on that day would re-key (and duplicate) it each
+            // run — use the stable dateDisplay ("Every Tuesday") instead.
+            const dateKey = result.recurring
+              ? result.dateDisplay || "recurring"
+              : (result.dateStart?.slice(0, 10) ?? result.dateDisplay);
+            const key = `${result.canonicalTitle}|${dateKey}`;
             const suffix = createHash("sha1").update(key).digest("hex").slice(0, 10);
             return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
           });
