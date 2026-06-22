@@ -1,5 +1,6 @@
-import type { IngestResult, ListingInsert, RawItem, SourceConfig } from "./types";
+import type { IngestResult, ListingInsert, NormalizedListing, RawItem, SourceConfig } from "./types";
 import { fetchInstagram } from "./connectors/instagram";
+import { fetchInstagramVision } from "./connectors/instagramVision";
 import { fetchSerpEvents } from "./connectors/serpEvents";
 import { fetchApifyWeb } from "./connectors/apifyWeb";
 import { fetchCheerioWeb } from "./connectors/cheerioWeb";
@@ -61,6 +62,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
   switch (source.connector) {
     case "instagram":
       return fetchInstagram(source);
+    case "instagramVision":
+      return fetchInstagramVision(source);
     case "serpEvents":
       return fetchSerpEvents(source);
     case "apifyWeb":
@@ -165,26 +168,40 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     // Cheaper than an LLM normalize call, so do it first.
     const liveItems = await filterLiveUrls(rawItems, source.id);
 
-    const normalizedNested = await Promise.all(
-      liveItems.map(async (item) => {
-        try {
-          // Opt-in multi-event sources only (e.g. venues that post monthly
-          // roundups). Every other source takes the unchanged single-event path.
-          if (source.multiEvent) {
-            const results = await normalizeMulti({ item, source });
-            return results.map((result) => {
-              // Content-stable per-event id (order-independent) so re-runs update
-              // rather than duplicate the same event from the same post.
-              const key = `${result.canonicalTitle}|${result.dateStart?.slice(0, 10) ?? result.dateDisplay}`;
-              const suffix = createHash("sha1").update(key).digest("hex").slice(0, 10);
-              return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
-            });
-          }
-          const result = await normalize({ item, source });
-          return result ? [{ item, result }] : [];
-        } catch (err) {
-          console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);
-          return [];
+    // Normalize with BOUNDED concurrency. An unbounded Promise.all over a large
+    // batch fires 20+ simultaneous LLM calls; OpenRouter throttles per key, and a
+    // throttled call returns without a tool block, so normalize yields null and
+    // the event is silently dropped (it passes in isolation but loses the race in
+    // the full run). Cap it like the image/URL stages.
+    type NormPair = { item: RawItem; result: NormalizedListing };
+    const normalizeItem = async (item: RawItem): Promise<NormPair[]> => {
+      try {
+        // Opt-in multi-event sources only (e.g. venues that post monthly
+        // roundups). Every other source takes the unchanged single-event path.
+        if (source.multiEvent) {
+          const results = await normalizeMulti({ item, source });
+          return results.map((result) => {
+            // Content-stable per-event id (order-independent) so re-runs update
+            // rather than duplicate the same event from the same post.
+            const key = `${result.canonicalTitle}|${result.dateStart?.slice(0, 10) ?? result.dateDisplay}`;
+            const suffix = createHash("sha1").update(key).digest("hex").slice(0, 10);
+            return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
+          });
+        }
+        const result = await normalize({ item, source });
+        return result ? [{ item, result }] : [];
+      } catch (err) {
+        console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);
+        return [];
+      }
+    };
+    const normalizedNested = new Array<NormPair[]>(liveItems.length);
+    let normCursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(NORMALIZE_CONCURRENCY, liveItems.length) }, async () => {
+        while (normCursor < liveItems.length) {
+          const idx = normCursor++;
+          normalizedNested[idx] = await normalizeItem(liveItems[idx]);
         }
       }),
     );
@@ -204,6 +221,7 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
         venueName: n.result.venueName,
         address: n.result.address,
         neighborhood: n.result.neighborhood,
+        city: source.cityHint,
       });
       pairs.push({
         row: buildListingInsert({ source, item: n.item, normalized: n.result, venue }),
@@ -333,6 +351,9 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
 }
 
 const URL_CHECK_CONCURRENCY = 8;
+// One LLM tool call per item; OpenRouter throttles concurrent calls per key, so
+// cap the batch (an unbounded fan-out drops events to tool-less throttled responses).
+const NORMALIZE_CONCURRENCY = 5;
 // Image gen + upload is slow (~5-10s per AI image) and OpenRouter rate-limits
 // concurrent calls per key. Keep this low so a 30-item Instagram pull doesn't
 // blow through the rate limit on its first run.

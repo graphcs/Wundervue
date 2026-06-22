@@ -4,6 +4,7 @@ export type Cadence = "hourly" | "daily" | "weekly";
 
 export type ConnectorKind =
   | "instagram"
+  | "instagramVision"
   | "serpEvents"
   | "apifyWeb"
   | "cheerioWeb"
@@ -136,6 +137,11 @@ export interface SourceConfig {
   // venueName hint in the blob; the normalizer can still refine from the title.
   defaultVenueName?: string;
   defaultCategory?: string;
+  // Single-city sources whose page text gives bare venue names with no city —
+  // appended as the geocode hint ("<venue>, <cityHint>") and venue-slug suffix
+  // so e.g. a Boulder park doesn't resolve to a same-named Denver-area place.
+  // Defaults to "Denver, CO" in resolveOrCreateVenue when unset.
+  cityHint?: string;
 
   // Opt-in: when true, a single caption that lists several events is split into
   // one listing per event via normalizeMulti() (vs normalize()'s one-per-caption

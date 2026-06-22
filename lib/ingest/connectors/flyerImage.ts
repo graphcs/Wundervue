@@ -72,7 +72,7 @@ function collectImages(html: string, max: number): string[] {
   return out;
 }
 
-async function fetchImageBlock(url: string): Promise<Anthropic.ImageBlockParam | null> {
+export async function fetchImageBlock(url: string): Promise<Anthropic.ImageBlockParam | null> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(20000),
@@ -98,20 +98,32 @@ async function fetchImageBlock(url: string): Promise<Anthropic.ImageBlockParam |
 }
 
 // Send images to the vision model and read back the events it sees. Shared by
-// the flyer-URL path (this file) and the screenshot path (screenshotVision.ts).
-export async function visionExtractEvents(images: Anthropic.ImageBlockParam[]): Promise<FlyerEvent[]> {
+// the flyer-URL path (this file), the screenshot path (screenshotVision.ts), and
+// the Instagram-post path (instagramVision.ts). `opts.referenceDate` lets a
+// caller (e.g. an IG post dated in the past) anchor relative dates ("tonight")
+// to the post date instead of today; `opts.contextText` passes accompanying
+// prose (e.g. the post caption) as an extra hint alongside the image(s).
+export async function visionExtractEvents(
+  images: Anthropic.ImageBlockParam[],
+  opts?: { referenceDate?: string; contextText?: string },
+): Promise<FlyerEvent[]> {
   if (images.length === 0) return [];
   const anthropic = buildOpenRouterClient();
+  const refLine = opts?.referenceDate
+    ? ` These image(s) were posted on ${opts.referenceDate}; if a date is written relatively (e.g. "tonight", "this Friday", "this weekend"), resolve it to an absolute calendar date from that post date and write the absolute date (with year) in date_text.`
+    : "";
   const content: Anthropic.ContentBlockParam[] = [
     {
       type: "text",
       text:
-        "These are images from a venue's website — event flyers or a calendar graphic. " +
-        "Read EVERY event shown and record each one. Copy date_text verbatim as written (including the month/year shown). " +
-        "Ignore non-event images, logos, and photos. If no events appear, return an empty array.",
+        "These are images from a venue — event flyers, a season/calendar graphic, or a social post. " +
+        "Read EVERY event shown and record each one. Copy date_text verbatim as written (including the month/year shown)." +
+        refLine +
+        " Ignore non-event images, logos, and photos. If no events appear, return an empty array.",
     },
     ...images,
   ];
+  if (opts?.contextText) content.push({ type: "text", text: opts.contextText });
   const response: Anthropic.Message = await withRetry(() =>
     anthropic.messages.create({
       model: resolveModel(),

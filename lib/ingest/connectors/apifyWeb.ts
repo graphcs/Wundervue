@@ -62,7 +62,11 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
       function collect() {
         $(itemSel).each((_, el) => {
           const $el = $(el);
-          const href = $el.find('a').first().attr('href') || request.url;
+          // Resolve to an absolute URL: cheerio returns the raw (often relative)
+          // href, and a relative source_url fails the downstream live-URL check
+          // (new URL() throws) so the listing gets dropped before normalize.
+          let href = $el.find('a').first().attr('href') || request.url;
+          try { href = new URL(href, request.url).href; } catch (e) { href = request.url; }
           const body = $el.text().trim();
           const key = href + '|' + body.slice(0, 120);
           if (seen.has(key)) return;

@@ -47,6 +47,19 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueName: "Queen City Coffee",
     defaultCategory: "Food & Drink",
   },
+  {
+    // Denver Central Market — RiNo food hall. IG posts real events (ticketed
+    // Book Swaps, the recurring free RiNo Movie Nights at The Lot on Larimer,
+    // Pride parties) among heavy vendor/menu marketing the normalizer filters.
+    // Venue resolves per post (some events are offsite).
+    id: "denver-central-market-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "dencentralmkt",
+    defaultVenueName: "Denver Central Market",
+  },
 
   // ── Denver venue + aggregator scrapes — web + Instagram. Each data source
   // gets an apifyWeb entry (LLM-extract fallback, no per-site selectors needed)
@@ -514,26 +527,20 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "avery-brewing",
   },
   {
-    // Gothic Theatre (Englewood, AEG venue 14001) renders its calendar with an
-    // AEG/AXS JavaScript widget — no fetchable feed, and the events load slowly
-    // (~30-50s, well past the default 20s wait). apifyWeb renderJs waits for the
-    // titles, then scrapes each `a.c-axs-event-card__header` card (all ~58 upcoming
-    // shows across every month are in the DOM at once); full card text carries the
-    // date, showtime, and support acts to the normalizer. Single venue, pinned.
+    // Gothic Theatre (Englewood, AEG venue). The /calendar AXS widget loads its
+    // events from a public static JSON feed (data-file events.json) — same
+    // pattern as Mission Ballroom — so aegEvents reads the page, follows the
+    // feed, and maps clean structured shows (title, ISO date, support acts,
+    // ticket art). No browser/Apify needed; far cheaper and more reliable than
+    // the prior renderJs scrape, and the feed carries the date the normalizer
+    // needs. Single venue, pinned.
     id: "gothic-theatre-web",
     enabled: true,
-    connector: "apifyWeb",
+    connector: "aegEvents",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://gothictheatre.com/calendar/",
-    renderJs: true,
-    waitForSelector: ".c-axs-event-card__title",
-    waitForTimeoutMs: 55000,
-    selectors: {
-      item: ".c-axs-event-card__header",
-      title: ".c-axs-event-card__title",
-    },
-    maxItems: 50,
+    maxItems: 60,
     defaultVenueSlug: "gothic-theatre",
     defaultCategory: "Music",
   },
@@ -1254,17 +1261,20 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Food & Drink",
   },
   {
-    // Disabled: coloradowinewalk.com is a Wix site but does NOT use the Wix
-    // Events app — a trial ingest returned 0 items (the events are static
-    // marketing content, not in warmup-data). Revisit with apifyWeb whole-page
-    // extraction if its event list is ever worth the spend.
+    // Wix site without the Events app — the event lives in static marketing
+    // content (one annual Denver "grand tasting" wine walk), so wixEvents found
+    // nothing. apifyWeb+renderJs renders the Wix page; whole-page LLM extraction
+    // (no item selector) reads the single event.
     id: "colorado-wine-walk-web",
-    enabled: false,
-    connector: "wixEvents",
+    enabled: true,
+    connector: "apifyWeb",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.coloradowinewalk.com/events",
-    maxItems: 30,
+    renderJs: true,
+    waitForSelector: "h1",
+    waitForTimeoutMs: 15000,
+    maxItems: 5,
     defaultCategory: "Food & Drink",
   },
 
@@ -1308,9 +1318,35 @@ export const SOURCES: SourceConfig[] = [
   { id: "cellar-west-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cellarwest.square.site/", maxItems: 40 },
   // Squarespace tattoo-shop site, no events page (flash drops only on Instagram).
   { id: "love-you-tattoo-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.loveyoutattooboulder.com/", maxItems: 40 },
-  // Only feed is the city-wide bouldercolorado.gov/events calendar (council meetings etc.) —
-  // too noisy and not arts-scoped; Boulder arts events arrive via aggregators instead.
-  { id: "boulder-arts-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bouldercolorado.gov/events", maxItems: 40 },
+  // City of Boulder events (Drupal). The full calendar is dominated by civic
+  // meetings (City Council, Advisory Boards); filter to the public categories —
+  // Recreation (event_category=4) + Community (5) — for Pops in the Parks, Walk/Bike,
+  // cultural events and community programs, skipping the meetings. Server-rendered,
+  // so static cheerioWeb. Boulder is in the metro taxonomy.
+  {
+    id: "boulder-events-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: [
+      "https://bouldercolorado.gov/events?event_category=4",
+      "https://bouldercolorado.gov/events?event_category=5",
+      "https://bouldercolorado.gov/events?event_category=5&page=1",
+    ],
+    selectors: {
+      item: ".event-card",
+      title: ".event-card__title",
+      // Without these the scraped text is title-only, so the normalizer can't
+      // date the event (it never fetches the detail page) and every recurring
+      // occurrence scrapes as identical text. The card carries a visible date
+      // (.event-card__date, e.g. "Wed Jun 24 2026") and a venue subtitle.
+      date: ".event-card__date",
+      description: ".event-card__subtitle",
+    },
+    cityHint: "Boulder, CO",
+    maxItems: 40,
+  },
   // denvergov agency page has no events feed; shelter events are sporadic gov postings.
   { id: "denver-animal-shelter-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.denvergov.org/", maxItems: 40 },
   // Shopify lifestyle brand/blog + merch, not an event source.
@@ -1326,7 +1362,15 @@ export const SOURCES: SourceConfig[] = [
   // Covered by stem-ciders-web; account posts brand/image content, not caption events.
   { id: "stem-ciders-rino-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "stemcidersrino" },
   // Brand/image account, no caption-level event data (OCR out of scope).
-  { id: "courtyard-303-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "thecourtyard303" },
+  // The Courtyard (by The Jasmine Bar, Louisville CO) posts its live-music
+  // schedule as flyer images — notably a "Summer Concert Series" graphic listing
+  // ~28 dated shows. Disabled: jasmine-bar-web already ingests this exact series
+  // from the venue's Squarespace feed (a cleaner Website source that wins dedup),
+  // so vision-OCR'ing the IG here is redundant — it only adds the occasional
+  // one-off flyer (Derby/Easter) at the cost of ~30 vision calls/run plus
+  // near-dup and year-old-post noise. The instagramVision connector it would use
+  // (vision-OCR per post) stays available for flyer-only IG venues with NO feed.
+  { id: "courtyard-303-ig", enabled: false, connector: "instagramVision", cadence: "weekly", sourceLabel: "Instagram", handle: "thecourtyard303", defaultVenueName: "The Courtyard", defaultCategory: "Music", cityHint: "Louisville, CO", maxItems: 60 },
 ];
 
 const BY_ID = new Map(SOURCES.map((s) => [s.id, s]));

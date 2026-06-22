@@ -173,6 +173,10 @@ export async function normalize({
     anthropic.messages.create({
       model: resolveModel(),
       max_tokens: 1024,
+      // Deterministic: classification/extraction shouldn't vary run-to-run.
+      // At the default temperature a borderline event/deal call flips between
+      // is_event_or_deal true/false and the listing intermittently vanishes.
+      temperature: 0,
       tools: [TOOL_SCHEMA],
       tool_choice: { type: "tool", name: TOOL_NAME },
       system:
