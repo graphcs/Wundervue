@@ -33,7 +33,10 @@ export type ConnectorKind =
   | "dmnsEvents"
   | "aegEvents"
   | "cherryCricketDeals"
-  | "popmenuEvents";
+  | "popmenuEvents"
+  | "squarespaceProducts"
+  | "flyerImage"
+  | "screenshotVision";
 
 export interface SourceConfig {
   id: string;
@@ -122,6 +125,9 @@ export interface SourceConfig {
   // public, from the <org>.eventive.org tenant bundle). See connectors/eventive.ts.
   eventiveBucket?: string;
   eventiveApiKey?: string;
+
+  // flyerImage — max content images from the page to send to the vision model.
+  maxImages?: number;
 
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;

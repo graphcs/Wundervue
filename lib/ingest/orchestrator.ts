@@ -29,6 +29,9 @@ import { fetchDmnsEvents } from "./connectors/dmnsEvents";
 import { fetchAegEvents } from "./connectors/aegEvents";
 import { fetchCherryCricketDeals } from "./connectors/cherryCricketDeals";
 import { fetchPopmenuEvents } from "./connectors/popmenuEvents";
+import { fetchSquarespaceProducts } from "./connectors/squarespaceProducts";
+import { fetchFlyerImage } from "./connectors/flyerImage";
+import { fetchScreenshotVision } from "./connectors/screenshotVision";
 import { fetchAveryTaproomEvents } from "./connectors/averyTaproomEvents";
 import { createHash } from "node:crypto";
 import { normalize, normalizeMulti } from "./normalize";
@@ -118,6 +121,12 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchCherryCricketDeals(source);
     case "popmenuEvents":
       return fetchPopmenuEvents(source);
+    case "squarespaceProducts":
+      return fetchSquarespaceProducts(source);
+    case "flyerImage":
+      return fetchFlyerImage(source);
+    case "screenshotVision":
+      return fetchScreenshotVision(source);
   }
 }
 

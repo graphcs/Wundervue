@@ -33,6 +33,20 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "mission-ballroom",
     defaultCategory: "Music",
   },
+  {
+    // Coffee roaster (Five Points, Wynkoop, Aurora, W Cedar roastery). IG posts
+    // real events — Pride/vendor markets, monthly Cowpoke Friday hangs, ticketed
+    // cupping workshops, guest-barista takeovers — among shop updates the
+    // normalizer filters. Multi-location, so venue resolves per post.
+    id: "queen-city-coffee-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "queencitycoffee",
+    defaultVenueName: "Queen City Coffee",
+    defaultCategory: "Food & Drink",
+  },
 
   // ── Denver venue + aggregator scrapes — web + Instagram. Each data source
   // gets an apifyWeb entry (LLM-extract fallback, no per-site selectors needed)
@@ -541,48 +555,51 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
-    // Disabled: citymud.com/events is a Squarespace *products* collection
-    // (workshops sold as commerce items), not an events calendar — the
-    // ?format=json `upcoming` events array is empty, so squarespaceEvents finds
-    // nothing. It currently holds a single workshop product with its dates baked
-    // into the title text ("...June 13 & July 11"), not structured fields.
-    // Reading it would need a products connector + LLM date extraction for ~1
-    // item — not worth it. (Apothecary workshops, niche; rare for discovery.)
+    // Squarespace *products* collection: pottery classes sold as commerce items
+    // with dates in variant attributes ("July 3rd"). The squarespaceProducts
+    // connector reads /events?format=json and emits one listing per dated variant
+    // (skips non-dated merch). Low volume but real class events.
     id: "city-mud-web",
-    enabled: false,
-    connector: "squarespaceEvents",
+    enabled: true,
+    connector: "squarespaceProducts",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.citymud.com/events",
+    defaultVenueName: "City Mud",
+    defaultCategory: "Arts & Culture",
     maxItems: 40,
   },
   {
-    // Disabled: junglerumbar.com (Squarespace tiki bar) has no events — /events
-    // 404s, the nav is menus + private-event rentals, and JSON-LD is just
-    // WebSite/LocalBusiness. The only "deal" is a generic everyday happy hour
-    // ("4-6 Everyday & 9-11 Tue+Wed") with no specifics — true of nearly every
-    // bar, not a discoverable dated deal. Nothing structured to ingest.
+    // Events live only in a monthly flyer image on the homepage (no text/feed;
+    // captionless IG). The flyerImage connector sends the page's images to the
+    // vision model to read the calendar (Drag Bingo, Live Jazz Weds, Tea Dance).
     id: "jungle-rum-bar-web",
-    enabled: false,
-    connector: "squarespaceEvents",
+    enabled: true,
+    connector: "flyerImage",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://junglerumbar.com/events",
+    url: "https://junglerumbar.com/",
+    defaultVenueName: "Jungle Rum Bar",
+    defaultCategory: "Food & Drink",
+    maxImages: 6,
     maxItems: 40,
   },
   {
-    // Disabled: waldschankeciders.com/events is a GoDaddy Website Builder events
-    // widget rendered inside a sandboxed iframe whose src is
-    // `javascript:…getAttribute("srcdoc")` — the events are JS-populated at
-    // runtime, with no ICS feed, no JSON, and obfuscated classes, so they're
-    // unreachable by fetch or even a normal renderJs pass. Its partner-run events
-    // are captured by their own organizers; other one-offs arrive via Visit Denver.
+    // Events are a Canva-designed month grid embedded via a GoDaddy widget
+    // (GoDaddy iframe -> Canva embed -> <canvas>): no text, feed, API, fetchable
+    // image, or DOM links (the 'Learn More' buttons are Canva element-links).
+    // The screenshotVision connector screenshots the rendered Canva embed and
+    // vision-OCRs it. The Canva embed URL is auto-discovered from the events page
+    // each run, so a new monthly design is picked up automatically.
     id: "waldschanke-ciders-web",
-    enabled: false,
-    connector: "icsCalendar",
+    enabled: true,
+    connector: "screenshotVision",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://waldschankeciders.com/events",
+    defaultVenueName: "Waldschänke Ciders",
+    defaultCategory: "Food & Drink",
+    waitForTimeoutMs: 15000,
     maxItems: 40,
   },
   {
@@ -976,6 +993,9 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.downtowndenver.com/events",
+    // React-hydrated list — static fetch yields empty <h4> titles; render JS.
+    renderJs: true,
+    waitForSelector: "[role=listitem] h4",
     selectors: {
       item: "[role=listitem]:has(h4)",
       title: "h4",
@@ -996,9 +1016,16 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://mcadenver.org/events",
+    // Events render client-side — the static cheerio fetch returns 0; render JS
+    // (browser) and wait for the cards. Each .block-featured holds category,
+    // date, space, title, description.
+    renderJs: true,
+    waitForSelector: ".block-featured",
     selectors: {
       item: ".block-featured",
     },
+    defaultVenueName: "Museum of Contemporary Art Denver",
+    defaultCategory: "Arts & Culture",
     maxItems: 40,
   },
   {
@@ -1171,14 +1198,15 @@ export const SOURCES: SourceConfig[] = [
   // private-bookings, or image-only Instagram) so the sheet↔code mapping is
   // complete and nobody re-investigates them blindly.
   {
-    // The Family Jones (LoHi distillery) publishes a curated "Colorado spirits
-    // events" calendar on WordPress + The Events Calendar, but the whole site
-    // sits behind SiteGround's anti-bot (sgcaptcha): a plain fetch of the
-    // /wp-json tribe REST gets a 202 JS challenge it can't solve, so the
-    // in-process tribeEvents connector can't read it. apifyWeb with renderJs
-    // runs a real browser that passes the challenge, then scrapes the Tribe
-    // list view. The feed mixes the distillery's own events with partnered/
-    // offsite ones, each carrying its own venue/address — so no defaultVenueSlug.
+    // The Family Jones (LoHi distillery) publishes a "Colorado spirits events"
+    // calendar (WordPress + The Events Calendar) — its own tastings plus a heavy
+    // schedule of partnered/offsite stops (farmers markets, bazaars, pop-ups),
+    // each carrying its own venue/address, so no defaultVenueSlug. Kept enabled
+    // for the unique Denver pop-ups it surfaces (craft walks, bazaars) that no
+    // other source has; note some market rows geocode imperfectly. The site sits
+    // behind SiteGround sgcaptcha (a 202 JS challenge the in-process tribeEvents
+    // connector can't pass), so apifyWeb+renderJs runs a real browser to scrape
+    // the Tribe list view.
     id: "family-jones-web",
     enabled: true,
     connector: "apifyWeb",
@@ -1264,6 +1292,12 @@ export const SOURCES: SourceConfig[] = [
   { id: "blue-pan-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/", maxItems: 40 },
   // Weekly food-truck location schedule, not discrete datable events.
   { id: "blue-pan-food-truck-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/food-truck/", maxItems: 40 },
+  // Disabled: food-truck schedule IG. multiEvent fans the weekly post + the daily
+  // "we're here today" posts into ~33 rows for ~10 real stops — heavy dups (same
+  // stop, 2-3 title variants), wildly inconsistent geocoding (Cohesion -> 3
+  // different neighborhoods), date-flooding (17 stops on one day), and half the
+  // stops are private apartment complexes. Net feed noise.
+  { id: "blue-pan-food-truck-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "bluepanfoodtruck", defaultCategory: "Food & Drink", multiEvent: true },
   // Shopify coffee-retail site, no events.
   { id: "queen-city-coffee-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://queencitycollectivecoffee.com/", maxItems: 40 },
   // Square/Shopify coffee-retail site, no events.
