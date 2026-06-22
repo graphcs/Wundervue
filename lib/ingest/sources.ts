@@ -8,8 +8,24 @@ import type { SourceConfig } from "./types";
 export const SOURCES: SourceConfig[] = [
   // ── Apify Instagram: per-account deep dives for venues we follow closely.
   {
-    id: "mission-ballroom-ig",
+    id: "mission-ballroom-web",
+    // AEG/AXS venue: /upcoming-events embeds an AXS widget backed by a public
+    // static events.json feed (auto-discovered from the page's data-file). Clean
+    // JSON, no auth/JS — far better coverage than the Instagram feed below.
     enabled: true,
+    connector: "aegEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://missionballroom.com/upcoming-events/",
+    defaultVenueSlug: "mission-ballroom",
+    defaultCategory: "Music",
+    maxItems: 60,
+  },
+  {
+    id: "mission-ballroom-ig",
+    // Disabled: redundant with mission-ballroom-web (AEG feed), which is
+    // cleaner and comprehensive; the IG just re-announces the same shows.
+    enabled: false,
     connector: "instagram",
     cadence: "daily",
     sourceLabel: "Instagram",
@@ -205,33 +221,31 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Markets",
   },
   {
-    // Disabled: goldfinchdenver.com sits behind a Cloudflare JS challenge (every
-    // page 403s a plain fetch), so the free connectors can't read it — only Apify
-    // with JS rendering could, at cost. And the events calendar is overwhelmingly
-    // recurring bar specials ("Exclusive Bar Takeover" daily, Breakfast Club,
-    // Live Music Wednesday, Movies/Tinis/Tacos, Neighborhood Night, Thursday
-    // Specialty) with only the rare one-off (Signal Surrender, Night Shift Pride)
-    // — same low signal-to-noise as rino-beer-garden. Not worth the Apify spend;
-    // its notable events arrive via Visit Denver / Arts & Venues.
     id: "goldfinch-denver-web",
-    enabled: false,
-    connector: "apifyWeb",
+    // PopMenu venue behind a Cloudflare JS challenge: the popmenuEvents
+    // connector drives it with a browser over a residential proxy (clears the
+    // challenge) and reads the event cards. Recurring bar nights (Live Music
+    // Wednesday, Open Mic, Sunday Sessions) now ingest as recurring listings.
+    enabled: true,
+    connector: "popmenuEvents",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.goldfinchdenver.com/events",
+    defaultVenueName: "The Goldfinch",
+    defaultCategory: "Food & Drink",
+    maxItems: 40,
   },
   {
     id: "denver-museum-nature-science-web",
-    // Disabled: dmns.org runs on Blazor Server (UI state over a SignalR
-    // websocket) with no scrapeable HTML or public events API; the editorial
-    // pages are evergreen program categories, not a dated event feed. DMNS
-    // exhibitions arrive via Visit Denver; curated events come from Instagram
-    // below (venue-pinned to the museum).
-    enabled: false,
-    connector: "apifyWeb",
+    // dmns.org/purchase/tickets is a Blazor Server app whose ticketing backend
+    // blocks datacenter IPs — no HTML/JSON/feed. The dmnsEvents connector drives
+    // it with a real browser over a residential proxy: clicks the Events tab and
+    // reads the rendered cards. Slow (~1 min) but weekly. Venue-pinned below.
+    enabled: true,
+    connector: "dmnsEvents",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.dmns.org/",
+    url: "https://www.dmns.org/purchase/tickets/?category=events",
     defaultVenueSlug: "denver-museum-nature-science",
     defaultCategory: "Arts & Culture",
   },
@@ -370,6 +384,8 @@ export const SOURCES: SourceConfig[] = [
     handle: "cerebral.westhighland",
     defaultVenueSlug: "cerebral-west-highland",
     defaultCategory: "Food & Drink",
+    // Posts monthly roundup captions listing several events at once.
+    multiEvent: true,
   },
   {
     // Downtown Aquarium's full-year calendar.asp (Landry's). A custom connector
@@ -1095,17 +1111,20 @@ export const SOURCES: SourceConfig[] = [
   },
   {
     id: "denver-film-web",
-    // Disabled: denverfilm.org is an Eventive cinema catalog (1,200+ films +
-    // daily Sie FilmCenter showtimes) — too granular/noisy for a discovery app,
-    // and the clean events endpoint needs a secret API key. Denver Film's
-    // notable events (festival, Film on the Rocks, premieres) arrive via Visit
-    // Denver / Mile High; curated highlights come from Instagram below.
-    enabled: false,
-    connector: "apifyWeb",
+    // denverfilm.org runs on Eventive (a client-rendered widget, no public
+    // feed). The /upcoming API returns the Now Playing set — current films
+    // with showtimes — which the eventive connector collapses to one listing
+    // per film (not per showtime) and pins to Sie FilmCenter. bucket + api_key
+    // are the public widget values from the denverfilm.eventive.org tenant bundle.
+    enabled: true,
+    connector: "eventive",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.denverfilm.org/",
+    eventiveBucket: "5ed7cb60eb909700905eb9e4",
+    eventiveApiKey: "285f587b83e6ab326e737e00d62ca378",
+    defaultVenueSlug: "sie-filmcenter",
     defaultCategory: "Arts & Culture",
+    maxItems: 40,
   },
   {
     id: "denver-film-ig",
@@ -1235,8 +1254,10 @@ export const SOURCES: SourceConfig[] = [
   { id: "hello-darling-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://hellodarling.cafe/events", maxItems: 40 },
   // /taproom-events is an empty/embedded Squarespace block — no dated event data exposed.
   { id: "crooked-stave-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.crookedstave.com/taproom-events", maxItems: 40 },
-  // Restaurant site (menus/hours), no events calendar or feed.
-  { id: "cherry-cricket-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cherrycricket.com/", maxItems: 40 },
+  // Recurring Happy Hour deal per location (2-5PM & 10PM-12AM daily). Priced
+  // items are image-locked (see connector); window scraped from each location
+  // page. Deals stay visible via the perpetual-deal window in persist.ts.
+  { id: "cherry-cricket-deals", enabled: true, connector: "cherryCricketDeals", cadence: "weekly", sourceLabel: "Website", url: "https://cherrycricket.com/", defaultCategory: "Food & Drink" },
   // Sandwich-shop chain site, no events.
   { id: "snarfs-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.eatsnarfs.com/", maxItems: 40 },
   // Pizza-restaurant site (menus/locations), no events calendar.

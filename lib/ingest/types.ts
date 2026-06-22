@@ -28,7 +28,12 @@ export type ConnectorKind =
   | "icsCalendar"
   | "libcalEvents"
   | "potteryWithPurpose"
-  | "averyTaproomEvents";
+  | "averyTaproomEvents"
+  | "eventive"
+  | "dmnsEvents"
+  | "aegEvents"
+  | "cherryCricketDeals"
+  | "popmenuEvents";
 
 export interface SourceConfig {
   id: string;
@@ -113,6 +118,11 @@ export interface SourceConfig {
   // soonest N; weekly re-runs pull the window forward.
   maxItems?: number;
 
+  // eventive — Eventive event-bucket id + publishable widget api_key (both
+  // public, from the <org>.eventive.org tenant bundle). See connectors/eventive.ts.
+  eventiveBucket?: string;
+  eventiveApiKey?: string;
+
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
   // squarespaceEvents — venue name to label each event with (the Squarespace
@@ -120,6 +130,12 @@ export interface SourceConfig {
   // venueName hint in the blob; the normalizer can still refine from the title.
   defaultVenueName?: string;
   defaultCategory?: string;
+
+  // Opt-in: when true, a single caption that lists several events is split into
+  // one listing per event via normalizeMulti() (vs normalize()'s one-per-caption
+  // default). Reusable on any source whose posts are monthly/weekly roundups;
+  // leave unset for the vast majority. See lib/ingest/normalize.ts.
+  multiEvent?: boolean;
 }
 
 export interface RawItem {
@@ -149,6 +165,11 @@ export interface NormalizedListing {
   timeDisplay: string;
   isFree: boolean;
   dealValue: string | null;
+  // True for an ongoing/recurring offering with no fixed end — a daily happy
+  // hour, "now available", a weekly special. Deals flagged recurring get a
+  // rolling visibility window in buildListingInsert so they don't vanish from
+  // the date-based feed (see persist.ts).
+  recurring?: boolean;
   tags: LifestyleTag[];
   // Free-text venue / address extracted from the source. Used to look up an
   // existing venue row or create a new one (with geocoded lat/lng) so the map

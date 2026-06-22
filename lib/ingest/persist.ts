@@ -426,6 +426,26 @@ export async function resolveOrCreateVenue(args: {
   return created;
 }
 
+// A recurring/ongoing deal (daily happy hour, "now available") has no fixed end,
+// so it would fall outside the date-based feed window and never surface. Give it
+// a rolling visibility window — start now (if undated), end PERPETUAL_DEAL_DAYS
+// out — re-extended on every ingest so it stays live without manual upkeep.
+const PERPETUAL_DEAL_DAYS = 60;
+function dealVisibilityWindow(n: NormalizedListing): {
+  dateStart: string | null;
+  dateEnd: string | null;
+} {
+  const isDeal = n.type === "deal" || n.type === "both";
+  if (n.recurring && isDeal && !n.dateEnd) {
+    const now = Date.now();
+    return {
+      dateStart: n.dateStart ?? new Date(now).toISOString(),
+      dateEnd: new Date(now + PERPETUAL_DEAL_DAYS * 86400000).toISOString(),
+    };
+  }
+  return { dateStart: n.dateStart, dateEnd: n.dateEnd };
+}
+
 export function buildListingInsert(args: {
   source: SourceConfig;
   item: RawItem;
@@ -433,10 +453,11 @@ export function buildListingInsert(args: {
   venue: VenueRow | null;
 }): ListingInsert {
   const { source, item, normalized, venue } = args;
+  const { dateStart, dateEnd } = dealVisibilityWindow(normalized);
   const key = eventKey({
     canonicalTitle: normalized.canonicalTitle,
     venueId: venue?.id ?? null,
-    dateStart: normalized.dateStart,
+    dateStart,
   });
   // Prefer the venue's pre-resolved slugs (it already parsed its address /
   // reverse-geocoded). For a venue-less listing, resolve from its own address
@@ -472,8 +493,8 @@ export function buildListingInsert(args: {
     city_slug: ancestry.citySlug,
     neighborhood_slug: ancestry.neighborhoodSlug,
     category: normalized.category || source.defaultCategory || null,
-    date_start: normalized.dateStart,
-    date_end: normalized.dateEnd,
+    date_start: dateStart,
+    date_end: dateEnd,
     date_display: normalized.dateDisplay || null,
     time_display: normalized.timeDisplay || null,
     is_free: normalized.isFree,

@@ -132,6 +132,40 @@ function titlesNearIdentical(a: string, b: string): boolean {
   return shortWords >= 3 && long.startsWith(short + " ");
 }
 
+// Significant title tokens for the LLM-cluster safety net: drop generic words so
+// shared "the/at/film/show" can't make unrelated events look related.
+const TITLE_GENERIC = new Set([
+  "the", "a", "an", "at", "of", "and", "with", "for", "to", "in", "on", "by",
+  "presents", "present", "feat", "featuring", "live", "show", "shows", "screening",
+  "film", "films", "movie", "movies", "night", "series", "event", "party", "day",
+]);
+function subjectTokens(t: string): Set<string> {
+  return new Set(
+    normalizeTitle(t)
+      .split(" ")
+      .filter((w) => w.length >= 3 && !TITLE_GENERIC.has(w)),
+  );
+}
+
+// LLM-cluster safety net. A model can over-merge distinct events that merely
+// share a venue + day — e.g. two different films screening the same afternoon at
+// a multi-screen cinema (Sie FilmCenter). Only accept a model-proposed duplicate
+// when its title plausibly names the same subject as the canonical: identical,
+// one contains the other, or they share a significant (non-generic) token.
+// Blocks "Girls Like Girls" vs "Sie/Saw: Castration Movie Anthology II" while
+// still allowing "Sundressed at Oskar Blues" vs "Sundressed".
+function titlesShareSubject(a: string, b: string): boolean {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  // Empty titles fall through the substring check ("".includes("") === true),
+  // so a missing title safely defers to the model rather than blocking.
+  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+  const ta = subjectTokens(a);
+  const tb = subjectTokens(b);
+  if (ta.size === 0 || tb.size === 0) return true;
+  return [...ta].some((w) => tb.has(w));
+}
+
 // Same-title rows only merge when they plausibly describe ONE event: either side
 // undated (an ongoing exhibition / "Now Showing" / "<UNKNOWN>" repost — the main
 // Instagram duplication case) or both on the SAME calendar day. Distinct dated
@@ -460,7 +494,20 @@ export async function clusterAndMarkDuplicates(
       // "Open Lab" at every location) collapses to one card — product choice to
       // keep the grid clean rather than show near-identical per-branch cards.
       const canonical = rows[0];
-      const dupIds = rows.slice(1).map((r) => r.id);
+      // Drop any model-proposed member whose title shares no subject with the
+      // canonical — guards against same-venue/same-day over-merges (e.g. two
+      // different films at a multi-screen cinema).
+      const dupIds = rows
+        .slice(1)
+        .filter((r) => {
+          if (titlesShareSubject(canonical.title, r.title)) return true;
+          console.warn(
+            `[cluster] rejected merge of "${r.title}" into "${canonical.title}" (titles share no subject)`,
+          );
+          return false;
+        })
+        .map((r) => r.id);
+      if (dupIds.length === 0) continue;
       const { error: e3 } = await client
         .from("listings")
         .update({ published_at: null, dedup_of: canonical.id })

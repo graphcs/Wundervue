@@ -24,8 +24,14 @@ import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
+import { fetchEventive } from "./connectors/eventive";
+import { fetchDmnsEvents } from "./connectors/dmnsEvents";
+import { fetchAegEvents } from "./connectors/aegEvents";
+import { fetchCherryCricketDeals } from "./connectors/cherryCricketDeals";
+import { fetchPopmenuEvents } from "./connectors/popmenuEvents";
 import { fetchAveryTaproomEvents } from "./connectors/averyTaproomEvents";
-import { normalize } from "./normalize";
+import { createHash } from "node:crypto";
+import { normalize, normalizeMulti } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import {
   clusterAndMarkDuplicates,
@@ -102,6 +108,16 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchPotteryWithPurpose(source);
     case "averyTaproomEvents":
       return fetchAveryTaproomEvents(source);
+    case "eventive":
+      return fetchEventive(source);
+    case "dmnsEvents":
+      return fetchDmnsEvents(source);
+    case "aegEvents":
+      return fetchAegEvents(source);
+    case "cherryCricketDeals":
+      return fetchCherryCricketDeals(source);
+    case "popmenuEvents":
+      return fetchPopmenuEvents(source);
   }
 }
 
@@ -140,17 +156,30 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     // Cheaper than an LLM normalize call, so do it first.
     const liveItems = await filterLiveUrls(rawItems, source.id);
 
-    const normalized = await Promise.all(
+    const normalizedNested = await Promise.all(
       liveItems.map(async (item) => {
         try {
+          // Opt-in multi-event sources only (e.g. venues that post monthly
+          // roundups). Every other source takes the unchanged single-event path.
+          if (source.multiEvent) {
+            const results = await normalizeMulti({ item, source });
+            return results.map((result) => {
+              // Content-stable per-event id (order-independent) so re-runs update
+              // rather than duplicate the same event from the same post.
+              const key = `${result.canonicalTitle}|${result.dateStart?.slice(0, 10) ?? result.dateDisplay}`;
+              const suffix = createHash("sha1").update(key).digest("hex").slice(0, 10);
+              return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
+            });
+          }
           const result = await normalize({ item, source });
-          return result ? { item, result } : null;
+          return result ? [{ item, result }] : [];
         } catch (err) {
           console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);
-          return null;
+          return [];
         }
       }),
     );
+    const normalized = normalizedNested.flat();
 
     // Resolve a venue per item. Sequential because the geocoder rate-limits
     // (1 req/sec public Nominatim quota) — parallelising would just queue
