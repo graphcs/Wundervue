@@ -176,10 +176,22 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     type NormPair = { item: RawItem; result: NormalizedListing };
     const normalizeItem = async (item: RawItem): Promise<NormPair[]> => {
       try {
+        // Instagram captions describe events relative to when the POST was made
+        // ("tonight", "this Friday", a year-less "April 25"). The IG connectors
+        // set item.fetchedAt to the post timestamp, so anchor relative-date
+        // resolution to that instead of today — otherwise an old post resurfaces
+        // as a fake future event. Other connectors fetchedAt ≈ now, so this is a
+        // no-op for them; undefined falls back to normalize()'s today default.
+        const isInstagram =
+          source.connector === "instagram" || source.connector === "instagramVision";
+        const currentDate =
+          isInstagram && item.fetchedAt && !Number.isNaN(Date.parse(item.fetchedAt))
+            ? item.fetchedAt.slice(0, 10)
+            : undefined;
         // Opt-in multi-event sources only (e.g. venues that post monthly
         // roundups). Every other source takes the unchanged single-event path.
         if (source.multiEvent) {
-          const results = await normalizeMulti({ item, source });
+          const results = await normalizeMulti({ item, source, currentDate });
           return results.map((result) => {
             // Content-stable per-event id (order-independent) so re-runs update
             // rather than duplicate the same event from the same post. A
@@ -194,7 +206,7 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
             return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
           });
         }
-        const result = await normalize({ item, source });
+        const result = await normalize({ item, source, currentDate });
         return result ? [{ item, result }] : [];
       } catch (err) {
         console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);

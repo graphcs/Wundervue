@@ -415,6 +415,23 @@ export const SOURCES: SourceConfig[] = [
     multiEvent: true,
   },
   {
+    // Outside Pizza — independent pizzeria operating out of Cerebral's West
+    // Highland kitchen. Mostly menu/brand posts, but a few real events surface
+    // (Drag Brunch, off-site Gozney pop-ups). Caption-based: the event detail is
+    // in the text, no flyer to OCR, and the normalizer drops the menu posts.
+    // Pinned to its home venue so location-less captions map correctly; an
+    // off-site pop-up (e.g. RiNo) overrides via the LLM-extracted venue, and any
+    // event it shares with the West Highland account dedups on title+venue+day.
+    id: "outside-pizza-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "outsidepizza",
+    defaultVenueSlug: "cerebral-west-highland",
+    defaultCategory: "Food & Drink",
+  },
+  {
     // Downtown Aquarium's full-year calendar.asp (Landry's). A custom connector
     // attaches month-header dates, decodes the page's Windows-1252 bytes, and
     // filters out the ~65% of entries that are repetitive program/camp
