@@ -1177,6 +1177,25 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Music",
   },
   {
+    // DASH Events produces Denver-area art festivals. The Cheesman Park Art Fest
+    // page is one festival behind a SiteGround 202 challenge, dates in a collapsed
+    // accordion — renderJs passes the challenge and whole-page extraction (no item
+    // selector; jQuery .text() includes the collapsed dates) reads it. Garden of
+    // the Gods is Colorado Springs (out of metro), so only Cheesman Park is pulled.
+    id: "dash-events-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://dashevents.com/productions/cheesman-park-art-fest/",
+    renderJs: true,
+    waitForSelector: "h1",
+    maxItems: 5,
+    defaultVenueName: "Cheesman Park",
+    cityHint: "Denver, CO",
+    defaultCategory: "Arts & Culture",
+  },
+  {
     id: "highlands-square-web",
     enabled: true,
     connector: "apifyWeb",
