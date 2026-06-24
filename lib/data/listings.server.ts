@@ -295,6 +295,9 @@ export async function getBrowseVenues(
     todayStart.setUTCHours(0, 0, 0, 0);
     const cutoff = todayStart.toISOString();
 
+    // Two listings queries, not one: Supabase caps a SELECT at 1000 rows, so the
+    // upcoming count must be filtered to upcoming rows *at the DB* (a complete,
+    // sub-1000 set) — an unfiltered merged query would truncate and undercount.
     const [venuesRes, upcomingRes, savesRes] = await Promise.all([
       client.from("venues").select("id, slug, name, description, address, neighborhood, categories, follower_count"),
       client

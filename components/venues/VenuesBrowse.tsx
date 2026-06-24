@@ -7,21 +7,16 @@ import { getForYouSignals } from "@/lib/data/forYouSignals.server";
 import { venueCategoryLabel } from "@/lib/data/categories";
 import { locationMatchesSelection } from "@/lib/data/locations";
 import type { DynamicCity } from "@/lib/data/locations";
+import { first, csv } from "@/lib/filters/parseSearchParams";
 import { paginate } from "@/lib/filters/paginate";
+import { buildVenuesHref, parseVenueSort } from "@/lib/venues/browseParams";
 import { Pagination } from "@/components/explore/Pagination";
-import { VenueFilterBar, type VenueSort } from "@/components/venues/VenueFilterBar";
+import { PinIcon } from "@/components/detail/icons";
+import { VenueFilterBar } from "@/components/venues/VenueFilterBar";
 
 const PAGE_SIZE = 9;
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-function str(sp: SearchParams, key: string): string | undefined {
-  const v = sp[key];
-  return typeof v === "string" ? v : undefined;
-}
-function csv(value: string | undefined): string[] {
-  return value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
-}
 
 interface Props {
   sp: SearchParams;
@@ -39,24 +34,14 @@ interface Props {
   dynamicCities: readonly DynamicCity[];
 }
 
-function PinIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
 export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle, allVenuesHref, dynamicCities }: Props) {
-  const q = (str(sp, "vq") ?? "").trim();
-  const cats = csv(str(sp, "vcat"));
-  const locs = csv(str(sp, "vloc"));
-  const sort: VenueSort =
-    str(sp, "vsort") === "saved" ? "saved" : str(sp, "vsort") === "followed" ? "followed" : "upcoming";
+  const q = (first(sp, "vq") ?? "").trim();
+  const cats = csv(first(sp, "vcat"));
+  const locs = csv(first(sp, "vloc"));
+  const sort = parseVenueSort(first(sp, "vsort"));
   // "Has upcoming events" defaults on, so the All view matches its prior behavior;
   // users opt in to seeing quiet venues by turning it off.
-  const hasUpcoming = str(sp, "vupcoming") !== "0";
+  const hasUpcoming = first(sp, "vupcoming") !== "0";
 
   const [all, imageMap, signals] = await Promise.all([
     getBrowseVenues({ includeEmpty: true }),
@@ -87,9 +72,12 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
   const { items, page, totalPages } = paginate(sorted, sp, PAGE_SIZE);
 
   // Link back to the unfiltered view of this same context (preserve sticky + mine).
-  const clearParams = new URLSearchParams(sticky);
-  if (mine && showMineToggle) clearParams.set("mine", "1");
-  const clearHref = clearParams.toString() ? `${basePath}?${clearParams}` : basePath;
+  const clearHref = buildVenuesHref({
+    basePath,
+    sticky,
+    showMineToggle,
+    filters: { mine, q: "", cats: [], locs: [], sort: "upcoming", hasUpcoming: true },
+  });
 
   return (
     <>
@@ -179,7 +167,7 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
                     )}
                     {venue.address && (
                       <div className="text-gray mt-auto flex items-center gap-1.5 pt-1 text-[11px]">
-                        <PinIcon />
+                        <PinIcon size={11} />
                         <span className="line-clamp-1">{venue.address}</span>
                       </div>
                     )}

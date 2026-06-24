@@ -34,7 +34,7 @@ const VALID_LIFESTYLE: LifestyleTag[] = [
 type ParamValue = string | string[] | undefined;
 type ParamMap = Record<string, ParamValue> | URLSearchParams;
 
-function first(params: ParamMap, key: string): string | undefined {
+export function first(params: ParamMap, key: string): string | undefined {
   if (params instanceof URLSearchParams) {
     return params.get(key) ?? undefined;
   }
@@ -43,7 +43,7 @@ function first(params: ParamMap, key: string): string | undefined {
   return v;
 }
 
-function csv(value: string | undefined): string[] {
+export function csv(value: string | undefined): string[] {
   if (!value) return [];
   return value
     .split(",")
