@@ -23,7 +23,7 @@ const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
 // Derived from SORT_OPTIONS so the dropdown + validation can't drift.
 const VALID_SORTS: readonly SortOption[] = SORT_OPTIONS.map((o) => o.id);
 const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar"];
-const VALID_TABS: FeedTab[] = ["all", "for-you", "my-events"];
+const VALID_TABS: FeedTab[] = ["all", "for-you", "my-events", "my-venues"];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
   "dog-friendly",

@@ -86,7 +86,7 @@ export type ViewMode = "grid" | "map" | "calendar";
 
 // Which feed the homepage shows. "all" = everything; "for-you" = personalized
 // (Insider); "my-events" = the user's saved events.
-export type FeedTab = "all" | "for-you" | "my-events";
+export type FeedTab = "all" | "for-you" | "my-events" | "my-venues";
 
 export interface Filters {
   type: TypeFilter;

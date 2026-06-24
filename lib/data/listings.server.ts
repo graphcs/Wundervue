@@ -275,20 +275,28 @@ export interface BrowseVenue {
   neighborhood: string;
   categories: string[];
   upcomingCount: number;
+  /** Sum of save_count across the venue's published listings ("Most saved"). */
+  saveCount: number;
+  /** Denormalized venue_follows count ("Most followed"). */
+  followerCount: number;
 }
 
-// Real venues (from ingestion) that have at least one upcoming listing, sorted
-// by activity. Powers the /venues browse grid. Counts use the same "today UTC"
-// cutoff as the explore feed so "upcoming" means the same thing everywhere.
-export async function getBrowseVenues(): Promise<BrowseVenue[]> {
+// Real venues (from ingestion), sorted by activity. Powers the /venues browse
+// grid. Counts use the same "today UTC" cutoff as the explore feed so "upcoming"
+// means the same thing everywhere. By default only venues with at least one
+// upcoming listing are returned; pass { includeEmpty: true } to also get venues
+// with zero upcoming events (used by the "My Venues" / has-upcoming filter).
+export async function getBrowseVenues(
+  opts: { includeEmpty?: boolean } = {},
+): Promise<BrowseVenue[]> {
   try {
     const client = await getSupabaseServerClient();
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
     const cutoff = todayStart.toISOString();
 
-    const [venuesRes, listingsRes] = await Promise.all([
-      client.from("venues").select("id, slug, name, description, address, neighborhood, categories"),
+    const [venuesRes, upcomingRes, savesRes] = await Promise.all([
+      client.from("venues").select("id, slug, name, description, address, neighborhood, categories, follower_count"),
       client
         .from("listings")
         .select("venue_id")
@@ -298,21 +306,38 @@ export async function getBrowseVenues(): Promise<BrowseVenue[]> {
         // or a future single-date event. Keeps the venue count in step with the
         // explore feed so a mid-run event isn't shown but uncounted.
         .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`),
+      // Total saves across each venue's published listings (past included) — the
+      // "Most saved" popularity signal. RLS-safe: save_count rides on listings.
+      client
+        .from("listings")
+        .select("venue_id, save_count")
+        .not("published_at", "is", null)
+        .not("venue_id", "is", null),
     ]);
 
     const counts = new Map<string, number>();
-    for (const r of (listingsRes.data ?? []) as Array<{ venue_id: string | null }>) {
+    for (const r of (upcomingRes.data ?? []) as Array<{ venue_id: string | null }>) {
       if (!r.venue_id) continue;
       counts.set(r.venue_id, (counts.get(r.venue_id) ?? 0) + 1);
+    }
+
+    const saves = new Map<string, number>();
+    for (const r of (savesRes.data ?? []) as Array<{ venue_id: string | null; save_count: number | null }>) {
+      if (!r.venue_id) continue;
+      saves.set(r.venue_id, (saves.get(r.venue_id) ?? 0) + (r.save_count ?? 0));
     }
 
     const out: BrowseVenue[] = [];
     for (const v of (venuesRes.data ?? []) as Array<{
       id: string; slug: string; name: string; description: string | null; address: string | null;
-      neighborhood: string | null; categories: string[] | null;
+      neighborhood: string | null; categories: string[] | null; follower_count: number | null;
     }>) {
+      // Drop ingestion placeholders ("<UNKNOWN>", or any blank-named row) — they
+      // are not real venues and shouldn't appear in the browse grid.
+      const name = (v.name ?? "").trim();
+      if (!name || name === "<UNKNOWN>") continue;
       const upcomingCount = counts.get(v.id) ?? 0;
-      if (upcomingCount === 0) continue;
+      if (upcomingCount === 0 && !opts.includeEmpty) continue;
       out.push({
         slug: v.slug,
         name: v.name,
@@ -321,6 +346,8 @@ export async function getBrowseVenues(): Promise<BrowseVenue[]> {
         neighborhood: v.neighborhood ?? "",
         categories: v.categories ?? [],
         upcomingCount,
+        saveCount: saves.get(v.id) ?? 0,
+        followerCount: v.follower_count ?? 0,
       });
     }
     out.sort((a, b) => b.upcomingCount - a.upcomingCount || a.name.localeCompare(b.name));
