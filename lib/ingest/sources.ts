@@ -60,6 +60,20 @@ export const SOURCES: SourceConfig[] = [
     handle: "dencentralmkt",
     defaultVenueName: "Denver Central Market",
   },
+  {
+    // Boulder County Fair (Longmont, Aug 5-9) — IG posts the fair plus dated
+    // grandstand events (CPRA Rodeo, Demolition Derby, Mexican Rodeo Fiesta,
+    // Tractor Pull) among promo/giveaway/hiring noise the normalizer filters.
+    // One venue (the fairgrounds); cityHint pins to Longmont.
+    id: "boulder-county-fair-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "bouldercountyfair",
+    defaultVenueName: "Boulder County Fairgrounds",
+    cityHint: "Longmont, CO",
+  },
 
   // ── Denver venue + aggregator scrapes — web + Instagram. Each data source
   // gets an apifyWeb entry (LLM-extract fallback, no per-site selectors needed)
@@ -1083,6 +1097,84 @@ export const SOURCES: SourceConfig[] = [
     url: "https://calendar.google.com/calendar/ical/c_d08c98b40bd04ce35c8222d49209732d8851b1b493f0a722b0704a463b3db75b%40group.calendar.google.com/public/basic.ics",
     maxItems: 40,
     defaultVenueSlug: "lady-justice-brewing",
+  },
+  {
+    // Foxglove Bar & Hideout (cocktail bar in Lafayette, CO) publishes its events
+    // as an embedded public Google Calendar; the generic icsCalendar connector
+    // reads the .ics feed directly (live music, food trucks, special parties),
+    // skipping recurring masters and "Closed …" entries. No seeded venue, so pin
+    // via defaultVenueName (most entries omit LOCATION); cityHint keeps the
+    // geocode in Lafayette.
+    id: "foxglove-bar-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://calendar.google.com/calendar/ical/c_e9d05360a00c7b7e96f0a8089feb7aaa40f1a8e7ccb19bdf2722b395016b5969%40group.calendar.google.com/public/basic.ics",
+    maxItems: 40,
+    defaultVenueName: "Foxglove Bar & Hideout",
+    defaultVenueAddress: "107 1/2 S Public Rd, Lafayette, CO 80026",
+    cityHint: "Lafayette, CO",
+    // Keep the active recurring entries — the Tue–Fri happy hour ($2 off house
+    // specialties) is a real deal, not noise.
+    icsIncludeRecurring: true,
+  },
+  {
+    // The Rayback Collective (Boulder beer garden / food-truck park) runs its
+    // events through an EventCalendarApp widget; its public ICS feed (the webcal
+    // "Subscribe" URL, /widget-subscription/<acct>/<widgetUuid>) carries the real
+    // programming — Boulder Comedy Show, trivia, live music, watch parties, REI
+    // workshops, story time. All one venue; the feed has no RRULE masters, so the
+    // default skip-recurring is fine. Most entries omit a street address, so pin
+    // via defaultVenueName + defaultVenueAddress (a name-only geocode fails).
+    id: "rayback-collective-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://api.eventcalendarapp.com/widget-subscription/9891/a2e09585-ba01-492a-8efa-7fa0f2b68697",
+    maxItems: 40,
+    defaultVenueName: "The Rayback Collective",
+    defaultVenueAddress: "2775 Valmont Rd, Boulder, CO 80304",
+    cityHint: "Boulder, CO",
+  },
+  {
+    // The Rayback's SECOND EventCalendarApp widget (0352139f) is its daily
+    // food-truck schedule (Pupusas Familia, Passport, Mile High Tikka Express,
+    // Pho Wheels...) — separate from the programming widget above. All at the one
+    // public venue, dated. The ICS is huge (~12k historical entries); icsCalendar
+    // keeps only upcoming, capped at maxItems.
+    id: "rayback-food-trucks-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://api.eventcalendarapp.com/widget-subscription/9891/0352139f-4e45-49e9-b48b-54c8a73ecadd",
+    maxItems: 40,
+    defaultVenueName: "The Rayback Collective",
+    defaultVenueAddress: "2775 Valmont Rd, Boulder, CO 80304",
+    cityHint: "Boulder, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Cervantes' Masterpiece Ballroom + Other Side (Five Points music venues).
+    // WordPress + the RHP events plugin — upcoming shows server-rendered as
+    // .rhpSingleEvent cards (~145). Multi-venue (also promotes Red Rocks shows),
+    // so venue resolves per event. Static cheerioWeb; capped to the soonest window.
+    id: "cervantes-masterpiece-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://cervantesmasterpiece.com/",
+    selectors: {
+      item: ".rhpSingleEvent",
+      title: ".rhp-event__title--list",
+      date: ".eventDateList",
+      description: ".rhp-event__venue",
+    },
+    maxItems: 40,
+    defaultCategory: "Music",
   },
   {
     id: "highlands-square-web",

@@ -130,12 +130,24 @@ export interface SourceConfig {
   // flyerImage — max content images from the page to send to the vision model.
   maxImages?: number;
 
+  // icsCalendar — include ACTIVE recurring (RRULE) entries instead of skipping
+  // all of them. Opt-in for calendars whose recurring entries are real events/
+  // deals worth keeping (a weekly happy hour, trivia night); expired series
+  // (UNTIL in the past) are still dropped.
+  icsIncludeRecurring?: boolean;
+
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
   // squarespaceEvents — venue name to label each event with (the Squarespace
   // feed's per-item location is often the platform's empty default). Used as the
   // venueName hint in the blob; the normalizer can still refine from the title.
   defaultVenueName?: string;
+  // Street address for a single-venue source whose entries omit it (e.g. an
+  // icsCalendar feed where each event only implies the venue). Injected so the
+  // venue geocodes — and reverse-geocodes to the right metro city — instead of
+  // failing a name-only lookup and defaulting to a wrong neighborhood. Pair with
+  // defaultVenueName.
+  defaultVenueAddress?: string;
   defaultCategory?: string;
   // Single-city sources whose page text gives bare venue names with no city —
   // appended as the geocode hint ("<venue>, <cityHint>") and venue-slug suffix
@@ -161,6 +173,10 @@ export interface RawItem {
   // normalize.ts when the LLM fails to extract them from the prose blob.
   venueName?: string;
   address?: string;
+  // Connector-asserted recurrence (e.g. an icsCalendar RRULE master). When true,
+  // mapRawEvent forces the normalized listing recurring regardless of the LLM —
+  // the connector parsed the recurrence rule, so it's authoritative.
+  recurring?: boolean;
 }
 
 export interface NormalizedListing {

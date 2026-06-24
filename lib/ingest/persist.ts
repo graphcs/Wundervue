@@ -436,7 +436,12 @@ function dealVisibilityWindow(n: NormalizedListing): {
   dateEnd: string | null;
 } {
   const isDeal = n.type === "deal" || n.type === "both";
-  if (n.recurring && isDeal && !n.dateEnd) {
+  // A recurring/ongoing deal gets a rolling visibility window. Ignore any
+  // dateEnd the LLM extracted: for an ongoing offering that's just one
+  // occurrence's end (e.g. an icsCalendar happy-hour RRULE where each entry
+  // carries a single 4–5 PM slot), not the real end of the deal — keeping it
+  // would expire a perpetual deal after the next occurrence.
+  if (n.recurring && isDeal) {
     const now = Date.now();
     return {
       dateStart: n.dateStart ?? new Date(now).toISOString(),
