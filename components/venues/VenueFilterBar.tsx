@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { VENUE_CATEGORIES } from "@/lib/data/categories";
+import { VENUE_CATEGORY_FILTER_OPTIONS } from "@/lib/data/categories";
 import type { DynamicCity } from "@/lib/data/locations";
 import { LIFESTYLE_TAGS } from "@/lib/filters/types";
 import type { DatePreset, LifestyleTag } from "@/lib/types";
@@ -27,7 +27,7 @@ const SORT_OPTIONS: { id: VenueSort; label: string }[] = [
   { id: "followed", label: "Most followed" },
 ];
 
-const CAT_OPTIONS = VENUE_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label }));
+const CAT_OPTIONS = VENUE_CATEGORY_FILTER_OPTIONS.map((c) => ({ slug: c.slug, label: c.label }));
 
 export function VenueFilterBar(props: Props) {
   const { mine, showMineToggle, q, cats, locs, sort, hasUpcoming, date, from, to, lifestyle, basePath, sticky, dynamicCities } = props;

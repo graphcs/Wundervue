@@ -1,4 +1,5 @@
 import type { CategoryOption } from "@/lib/types";
+import { LIFESTYLE_TAGS } from "@/lib/filters/types";
 
 export const CATEGORIES: CategoryOption[] = [
   { slug: "music", label: "Music" },
@@ -10,6 +11,15 @@ export const CATEGORIES: CategoryOption[] = [
   { slug: "comedy", label: "Comedy" },
   { slug: "wellness", label: "Wellness" },
 ];
+
+// Category options for the FILTER dropdowns only. Excludes any slug that is also
+// an Insider lifestyle tag (e.g. "outdoor") so the free Category filter never
+// duplicates a gated Lifestyle filter. CATEGORIES itself stays the full
+// ingestion/landing-page vocabulary, so existing listings keep their category.
+const LIFESTYLE_SLUGS = new Set<string>(LIFESTYLE_TAGS.map((t) => t.id));
+export const CATEGORY_FILTER_OPTIONS: CategoryOption[] = CATEGORIES.filter(
+  (c) => !LIFESTYLE_SLUGS.has(c.slug),
+);
 
 export const ONBOARDING_INTERESTS = [
   { id: "concerts", label: "Concerts & Live Music", icon: "🎵" },
@@ -55,6 +65,19 @@ export const VENUE_CATEGORIES = [
   { slug: "comedy", label: "Comedy" },
   { slug: "nightlife", label: "Nightlife" },
 ] as const;
+
+// Venue category options for the FILTER dropdown only. Drops "outdoors" and
+// "family-friendly" (they mirror the Insider lifestyle tags outdoor/family, so
+// the free filter shouldn't duplicate a gated one) plus "brewery-distillery".
+// VENUE_CATEGORIES itself is unchanged, so chips and ingestion keep all slugs.
+const VENUE_CATEGORY_FILTER_HIDDEN = new Set<string>([
+  "outdoors",
+  "family-friendly",
+  "brewery-distillery",
+]);
+export const VENUE_CATEGORY_FILTER_OPTIONS = VENUE_CATEGORIES.filter(
+  (c) => !VENUE_CATEGORY_FILTER_HIDDEN.has(c.slug),
+);
 
 const VENUE_LABEL = new Map<string, string>(VENUE_CATEGORIES.map((c) => [c.slug, c.label]));
 const VENUE_ORDER = new Map<string, number>(VENUE_CATEGORIES.map((c, i) => [c.slug, i]));

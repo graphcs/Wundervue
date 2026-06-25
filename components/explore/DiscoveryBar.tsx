@@ -8,7 +8,7 @@ import { SortDropdown } from "./SortDropdown";
 import { DateDropdown } from "./DateDropdown";
 import { useFilters } from "@/lib/hooks/useFilters";
 import { useAuthContext } from "@/components/auth/AuthProvider";
-import { CATEGORIES } from "@/lib/data/categories";
+import { CATEGORY_FILTER_OPTIONS } from "@/lib/data/categories";
 import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
 import { registerDynamicCities, type DynamicCity } from "@/lib/data/locations";
 import type { LifestyleTag, TypeFilter, ViewMode } from "@/lib/types";
@@ -163,7 +163,7 @@ export function DiscoveryBar({
     replaceFilters({ q: q.trim() || undefined });
   };
 
-  const catOptions = CATEGORIES.filter((c) => c.slug !== pathCategory);
+  const catOptions = CATEGORY_FILTER_OPTIONS.filter((c) => c.slug !== pathCategory);
 
   return (
     <div className="bg-bg border-border border-b">
