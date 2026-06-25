@@ -66,17 +66,25 @@ export const VENUE_CATEGORIES = [
   { slug: "nightlife", label: "Nightlife" },
 ] as const;
 
-// Venue category options for the FILTER dropdown only. Drops "outdoors" and
-// "family-friendly" (they mirror the Insider lifestyle tags outdoor/family, so
-// the free filter shouldn't duplicate a gated one) plus "brewery-distillery".
-// VENUE_CATEGORIES itself is unchanged, so chips and ingestion keep all slugs.
-const VENUE_CATEGORY_FILTER_HIDDEN = new Set<string>([
-  "outdoors",
-  "family-friendly",
-  "brewery-distillery",
-]);
+// Lifestyle tag id → equivalent venue category slug, for the few that don't
+// share a slug. Lets the venue filter derive its lifestyle exclusions from
+// LIFESTYLE_TAGS (same rule as CATEGORY_FILTER_OPTIONS) instead of hardcoding
+// them, so a new lifestyle tag updates both filters from one source.
+const LIFESTYLE_TO_VENUE_SLUG: Record<string, string> = {
+  outdoor: "outdoors",
+  family: "family-friendly",
+};
+const VENUE_LIFESTYLE_SLUGS = new Set<string>(
+  LIFESTYLE_TAGS.map((t) => LIFESTYLE_TO_VENUE_SLUG[t.id] ?? t.id),
+);
+// Categories deliberately hidden from the venue filter for product reasons
+// (not a lifestyle overlap) — kept separate so the rationale stays clear.
+const VENUE_FILTER_HIDDEN = new Set<string>(["brewery-distillery"]);
+
+// Venue category options for the FILTER dropdown only. VENUE_CATEGORIES itself
+// is unchanged, so chips and ingestion keep every slug.
 export const VENUE_CATEGORY_FILTER_OPTIONS = VENUE_CATEGORIES.filter(
-  (c) => !VENUE_CATEGORY_FILTER_HIDDEN.has(c.slug),
+  (c) => !VENUE_LIFESTYLE_SLUGS.has(c.slug) && !VENUE_FILTER_HIDDEN.has(c.slug),
 );
 
 const VENUE_LABEL = new Map<string, string>(VENUE_CATEGORIES.map((c) => [c.slug, c.label]));

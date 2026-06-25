@@ -6,30 +6,13 @@ import { MultiDropdownPill } from "./MultiDropdownPill";
 import { LocationFilterDropdown } from "./LocationFilterDropdown";
 import { SortDropdown } from "./SortDropdown";
 import { DateDropdown } from "./DateDropdown";
+import { LifestyleFilterPills } from "./LifestyleFilterPills";
 import { useFilters } from "@/lib/hooks/useFilters";
-import { useAuthContext } from "@/components/auth/AuthProvider";
 import { CATEGORY_FILTER_OPTIONS } from "@/lib/data/categories";
-import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
+import { TYPE_FILTERS } from "@/lib/filters/types";
 import { registerDynamicCities, type DynamicCity } from "@/lib/data/locations";
-import type { LifestyleTag, TypeFilter, ViewMode } from "@/lib/types";
-
-function SearchIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+import { SearchIcon } from "@/components/detail/icons";
+import type { TypeFilter, ViewMode } from "@/lib/types";
 
 function GridIcon({ active }: { active: boolean }) {
   return (
@@ -153,9 +136,6 @@ export function DiscoveryBar({
     toggleNeighborhood,
     toggleCategory,
   } = useFilters();
-  const { profile, isLoggedIn, openUpgrade } = useAuthContext();
-  const lifestyleGated = !isLoggedIn || profile?.plan !== "insider";
-
   const [q, setQ] = useState(filters.q ?? "");
 
   const onSearchSubmit = (e: FormEvent) => {
@@ -172,7 +152,7 @@ export function DiscoveryBar({
           <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
             <div className="relative flex-1">
               <span className="text-chrome pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                <SearchIcon />
+                <SearchIcon size={16} />
               </span>
               <input
                 type="search"
@@ -245,23 +225,10 @@ export function DiscoveryBar({
 
           <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
 
-          {LIFESTYLE_TAGS.map((tag) => (
-            <Pill
-              key={tag.id}
-              active={filters.lifestyle.includes(tag.id)}
-              onClick={() => {
-                if (lifestyleGated) {
-                  openUpgrade();
-                  return;
-                }
-                toggleLifestyle(tag.id as LifestyleTag);
-              }}
-              title={lifestyleGated ? "Lifestyle filters — Insider only" : undefined}
-            >
-              <span className="text-[13px] leading-none">{tag.emoji}</span>
-              {tag.label}
-            </Pill>
-          ))}
+          <LifestyleFilterPills
+            selected={filters.lifestyle}
+            onToggle={toggleLifestyle}
+          />
 
           <Pill
             active={filters.freeOnly}

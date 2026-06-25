@@ -111,17 +111,8 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
   return (
     <>
       <VenueFilterBar
-        mine={mine}
+        filters={{ mine, q, cats, locs, sort, hasUpcoming, date, from, to, lifestyle }}
         showMineToggle={showMineToggle}
-        q={q}
-        cats={cats}
-        locs={locs}
-        sort={sort}
-        hasUpcoming={hasUpcoming}
-        date={date}
-        from={from}
-        to={to}
-        lifestyle={lifestyle}
         basePath={basePath}
         sticky={sticky}
         dynamicCities={dynamicCities}

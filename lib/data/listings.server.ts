@@ -118,6 +118,14 @@ export async function getVenueImageMapBySlug(): Promise<Map<string, string>> {
   try {
     const client = await getSupabaseServerClient();
 
+    // Fire the venue-curated images query up front so it overlaps the listings
+    // pagination below — we only need to APPLY it after listings (to preserve
+    // its priority), not issue it after.
+    const venuesPromise = client
+      .from("venues")
+      .select("slug, image_url")
+      .not("image_url", "is", null);
+
     const map = new Map<string, string>();
 
     // Listings first (lower priority) — overwritten by venues.image_url below.
@@ -152,10 +160,7 @@ export async function getVenueImageMapBySlug(): Promise<Map<string, string>> {
     }
 
     // Venue-curated images take priority.
-    const { data: venuesData } = await client
-      .from("venues")
-      .select("slug, image_url")
-      .not("image_url", "is", null);
+    const { data: venuesData } = await venuesPromise;
     for (const row of (venuesData ?? []) as Array<{
       slug: string;
       image_url: string | null;
