@@ -505,7 +505,10 @@ export function buildListingInsert(args: {
     date_start: dateStart,
     date_end: dateEnd,
     date_display: normalized.dateDisplay || null,
-    time_display: normalized.timeDisplay || null,
+    // Fall back to the source's fixed operating hours (e.g. a zoo's "9 AM – 4 PM")
+    // when the listing states no time — opt-in per source, so event venues with
+    // varying times are unaffected.
+    time_display: normalized.timeDisplay || source.defaultTime || null,
     is_free: normalized.isFree,
     deal_value: normalized.dealValue,
     image_url: item.imageUrl ?? null,

@@ -15,6 +15,12 @@ import { buildOpenRouterClient, resolveModel } from "../normalize";
 // The vision extraction (visionExtractEvents) + RawItem mapping (eventsToRawItems)
 // are exported and reused by screenshotVision.ts, which feeds a page screenshot
 // instead of fetched flyer URLs.
+// A full desktop-Chrome UA — bare "Mozilla/5.0" is rejected (403) by Cloudflare
+// UA gating on some venue sites (e.g. rosettahall.com); a realistic one passes
+// and is strictly more accepted everywhere else.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 const TOOL_NAME = "record_flyer_events";
 const TOOL_SCHEMA: Anthropic.Tool = {
   name: TOOL_NAME,
@@ -29,7 +35,7 @@ const TOOL_SCHEMA: Anthropic.Tool = {
           "One entry per event shown on the image(s). Empty array if they contain no event listings.",
         items: {
           type: "object",
-          required: ["title", "date_text", "time_text", "description"],
+          required: ["title", "date_text", "time_text", "price_text", "description"],
           properties: {
             title: { type: "string", description: "Event name as shown." },
             date_text: {
@@ -38,6 +44,11 @@ const TOOL_SCHEMA: Anthropic.Tool = {
                 "The date EXACTLY as written — e.g. 'Tues June 2nd', 'June 13', 'Every Wednesday'. Include the month/year context shown on the image.",
             },
             time_text: { type: "string", description: "Time as shown, e.g. '6:30PM'. Empty if none." },
+            price_text: {
+              type: "string",
+              description:
+                "Cover/ticket price or admission as shown, e.g. '$10 cover', 'Free', '$20'. A price shown ONCE on a multi-date flyer applies to EVERY date — repeat it on each entry. Empty if none shown.",
+            },
             description: { type: "string", description: "Short description if any, else empty." },
           },
         },
@@ -50,6 +61,7 @@ export interface FlyerEvent {
   title?: string;
   date_text?: string;
   time_text?: string;
+  price_text?: string;
   description?: string;
 }
 
@@ -76,7 +88,7 @@ export async function fetchImageBlock(url: string): Promise<Anthropic.ImageBlock
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(20000),
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: { "User-Agent": BROWSER_UA },
     });
     if (!res.ok) return null;
     const ct = (res.headers.get("content-type") ?? "").toLowerCase();
@@ -117,7 +129,8 @@ export async function visionExtractEvents(
       type: "text",
       text:
         "These are images from a venue — event flyers, a season/calendar graphic, or a social post. " +
-        "Read EVERY event shown and record each one. Copy date_text verbatim as written (including the month/year shown)." +
+        "Read EVERY event shown and record each one. Copy date_text verbatim as written (including the month/year shown). " +
+        "When ONE event is listed on MULTIPLE dates (e.g. a flyer naming June 26, July 24, August 14), output a SEPARATE entry for EACH date and repeat the SHARED time, price, and description on every entry — these apply to all dates." +
         refLine +
         " Ignore non-event images, logos, and photos. If no events appear, return an empty array.",
     },
@@ -162,6 +175,7 @@ export function eventsToRawItems(
     const text = [
       title,
       when ? `Date: ${when}` : "",
+      (e.price_text ?? "").trim() ? `Price: ${(e.price_text ?? "").trim()}` : "",
       source.defaultVenueName ? `Venue: ${source.defaultVenueName}` : "",
       (e.description ?? "").trim(),
     ]
@@ -177,7 +191,7 @@ export async function fetchFlyerImage(source: SourceConfig): Promise<RawItem[]> 
   if (!pageUrl) throw new Error(`source ${source.id} missing url`);
 
   const html = await withRetry(async () => {
-    const res = await fetch(pageUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const res = await fetch(pageUrl, { headers: { "User-Agent": BROWSER_UA } });
     if (!res.ok) throw new Error(`flyer page ${res.status}`);
     return res.text();
   });

@@ -23,6 +23,8 @@ import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule
 import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
 import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
+import { fetchElfsightCalendar } from "./connectors/elfsightCalendar";
+import { fetchLocalistEvents } from "./connectors/localistEvents";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
 import { fetchEventive } from "./connectors/eventive";
@@ -43,6 +45,7 @@ import {
   reconcileVenueDuplicates,
 } from "./dedupCluster";
 import { mergeDuplicateVenues } from "./venueMerge";
+import { expandRecurringOccurrences } from "./expandOccurrences";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -108,6 +111,10 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchJsonLdEvents(source);
     case "icsCalendar":
       return fetchIcsCalendar(source);
+    case "elfsightCalendar":
+      return fetchElfsightCalendar(source);
+    case "localistEvents":
+      return fetchLocalistEvents(source);
     case "libcalEvents":
       return fetchLibCalEvents(source);
     case "potteryWithPurpose":
@@ -234,11 +241,22 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     }> = [];
     for (const n of normalized) {
       if (!n) continue;
+      // A source with a configured address is single-venue: pin every post to it
+      // authoritatively. The per-post name/neighborhood the LLM guesses from
+      // captions otherwise spawns duplicate venue rows and a wrong neighborhood
+      // (e.g. an IG caption placing a S. Broadway bar in "LoDo"), so prefer the
+      // config and reverse-geocode the neighborhood from the pin. Multi-venue
+      // sources (no defaultVenueAddress) keep resolving per post.
+      const pinSingle = Boolean(source.defaultVenueAddress);
       const venue = await resolveOrCreateVenue({
         defaultVenueSlug: source.defaultVenueSlug,
-        venueName: n.result.venueName,
-        address: n.result.address,
-        neighborhood: n.result.neighborhood,
+        venueName: pinSingle
+          ? source.defaultVenueName ?? n.result.venueName
+          : n.result.venueName ?? source.defaultVenueName ?? null,
+        address: pinSingle
+          ? source.defaultVenueAddress ?? n.result.address
+          : n.result.address ?? source.defaultVenueAddress ?? null,
+        neighborhood: pinSingle ? source.defaultNeighborhood ?? null : n.result.neighborhood,
         city: source.cityHint,
       });
       pairs.push({
@@ -253,12 +271,18 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     // showing a broken card or a low-quality thumbnail.
     const withImages = await resolveImagesForBatch(pairs, source.id);
 
-    const actions = await classifyForUpsert(withImages);
+    // Split recurring WEEKLY events into one row per upcoming occurrence (a
+    // specific day + time). Done after image resolution so every occurrence
+    // clones the series' single resolved image instead of generating its own.
+    const normalizedBySourceId = new Map(normalized.map((n) => [n.item.sourceId, n.result]));
+    const expanded = expandRecurringOccurrences(withImages, normalizedBySourceId);
+
+    const actions = await classifyForUpsert(expanded);
     const counts = await applyBatch(actions);
 
     let batchVenueIds = [
       ...new Set(
-        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
+        expanded.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
       ),
     ];
 

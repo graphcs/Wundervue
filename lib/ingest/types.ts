@@ -36,6 +36,8 @@ export type ConnectorKind =
   | "cherryCricketDeals"
   | "popmenuEvents"
   | "squarespaceProducts"
+  | "elfsightCalendar"
+  | "localistEvents"
   | "flyerImage"
   | "screenshotVision";
 
@@ -90,6 +92,13 @@ export interface SourceConfig {
     image?: string;
     link?: string;
   };
+  // cheerioWeb — opt-in detail-page enrichment. Some sites show the date on the
+  // list card but the TIME only on the event's own page (e.g. Boulder's Drupal
+  // events: list cards have no time, the detail page has a "Time" field). When
+  // set, the connector fetches each item's link and appends this selector's text
+  // so normalize() can read the time. Use only for sources with cheap (static,
+  // non-Cloudflare) detail pages — each kept item costs one extra fetch.
+  detailSelector?: string;
   // comedyWorksCalendar — how many months past the current one to crawl (the
   // calendar pages one month per URL). Default 3 (current + next 3 = 4 months).
   monthsAhead?: number;
@@ -148,7 +157,18 @@ export interface SourceConfig {
   // failing a name-only lookup and defaulting to a wrong neighborhood. Pair with
   // defaultVenueName.
   defaultVenueAddress?: string;
+  // Neighborhood label for a single-venue source, used when the reverse-geocode
+  // of the pin resolves only to a broad region (e.g. a S. Broadway bar that
+  // reverse-geocodes to "Central Denver" instead of "Baker"). Mapped to the full
+  // city/neighborhood slug chain. Only honored for single-venue sources (those
+  // with defaultVenueAddress).
+  defaultNeighborhood?: string;
   defaultCategory?: string;
+  // Fixed operating hours for a single-venue source whose events don't state a
+  // time (e.g. a zoo "9:00 AM – 4:00 PM"). Used as the time_display fallback in
+  // buildListingInsert. Only set for venues with genuinely consistent hours —
+  // event venues with varying showtimes should leave it unset.
+  defaultTime?: string;
   // Single-city sources whose page text gives bare venue names with no city —
   // appended as the geocode hint ("<venue>, <cityHint>") and venue-slug suffix
   // so e.g. a Boulder park doesn't resolve to a same-named Denver-area place.

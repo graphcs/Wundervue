@@ -129,7 +129,16 @@ function titlesNearIdentical(a: string, b: string): boolean {
   if (na === nb) return true;
   const [short, long] = na.length <= nb.length ? [na, nb] : [nb, na];
   const shortWords = short.split(" ").filter(Boolean).length;
-  return shortWords >= 3 && long.startsWith(short + " ");
+  if (shortWords >= 3 && long.startsWith(short + " ")) return true;
+  // Same show titled differently across sources (a flyer's "Yacht Rock Party ft.
+  // DJ Fa'dorah" vs a calendar's "Yacht Rock on the Roof with DJ Fa'dorah"): merge
+  // when one title's distinctive tokens (generic words dropped) are ALL contained
+  // in the other's, with ≥2 shared. The caller gates this to same venue +
+  // mergeable dates, so the false-merge surface is small.
+  const ta = subjectTokens(a);
+  const tb = subjectTokens(b);
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  return small.size >= 2 && [...small].every((w) => big.has(w));
 }
 
 // Significant title tokens for the LLM-cluster safety net: drop generic words so
@@ -182,6 +191,8 @@ interface VenueRow {
   source: string;
   date_start: string | null;
   created_at: string;
+  time_display: string | null;
+  deal_value: string | null;
 }
 
 // A time_display that is a single clock time, e.g. "7:00 PM" → minutes past
@@ -246,8 +257,14 @@ function sourcePriority(source: string): number {
 // source (a venue Website with its showtime + ticket link + art beats a social
 // repost), THEN the soonest dated / earliest created. Used everywhere a cluster
 // picks its survivor.
-type RankInput = { source: string; date_start: string | null; created_at: string };
-function canonicalRank(r: RankInput, now: number): [number, number, number] {
+type RankInput = {
+  source: string;
+  date_start: string | null;
+  created_at: string;
+  time_display?: string | null;
+  deal_value?: string | null;
+};
+function canonicalRank(r: RankInput, now: number): [number, number, number, number, number] {
   let dateTier = 1; // undated
   let timeVal = Date.parse(r.created_at);
   if (r.date_start) {
@@ -257,14 +274,20 @@ function canonicalRank(r: RankInput, now: number): [number, number, number] {
       timeVal = t;
     }
   }
-  return [dateTier, -sourcePriority(r.source), timeVal];
+  // Among same-date, same-source duplicates, prefer the more complete row — one
+  // that captured a time, then one that captured a deal/price — so the visible
+  // canonical keeps the richer info (e.g. a flyer's "$10 cover" survives over a
+  // calendar copy of the same show that has neither).
+  const hasTime = (r.time_display ?? "").trim() ? 0 : 1;
+  const hasDeal = (r.deal_value ?? "").trim() ? 0 : 1;
+  return [dateTier, -sourcePriority(r.source), hasTime, hasDeal, timeVal];
 }
 
 function byCanonicalRank(now: number): (a: RankInput, b: RankInput) => number {
   return (a, b) => {
     const ra = canonicalRank(a, now);
     const rb = canonicalRank(b, now);
-    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || ra[3] - rb[3] || ra[4] - rb[4];
   };
 }
 
@@ -273,6 +296,7 @@ interface ClusterRow {
   source: string;
   date_start: string | null;
   time_display: string | null;
+  deal_value: string | null;
   created_at: string;
   dedup_of: string | null;
   published_at: string | null;
@@ -294,7 +318,7 @@ export async function reconcileVenueDuplicates(venueIds: string[]): Promise<void
   for (const venueId of venueIds) {
     const { data, error } = await client
       .from("listings")
-      .select("id, source, date_start, time_display, created_at, dedup_of, published_at")
+      .select("id, source, date_start, time_display, deal_value, created_at, dedup_of, published_at")
       .eq("venue_id", venueId);
     if (error) throw new Error(`venue dedup reconcile fetch failed: ${error.message}`);
     const rows = (data ?? []) as ClusterRow[];
@@ -358,7 +382,7 @@ export async function mergeVenueTitleDuplicatesForVenues(
   for (const venueId of venueIds) {
     const { data, error } = await client
       .from("listings")
-      .select("id, title, source, date_start, created_at")
+      .select("id, title, source, date_start, created_at, time_display, deal_value")
       .eq("venue_id", venueId)
       .not("published_at", "is", null)
       .is("dedup_of", null)

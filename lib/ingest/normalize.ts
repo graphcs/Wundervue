@@ -254,9 +254,11 @@ function mapRawEvent(raw: Record<string, unknown>, item: RawItem): NormalizedLis
     timeDisplay: String(raw.time_display ?? ""),
     isFree: Boolean(raw.is_free),
     dealValue: (raw.deal_value as string | null) ?? null,
-    // A connector that parsed a recurrence rule (e.g. icsCalendar RRULE) is
-    // authoritative; otherwise trust the LLM's read of the text.
-    recurring: item.recurring || Boolean(raw.recurring),
+    // A connector that knows the recurrence is authoritative (?? not ||): icsCalendar
+    // sets `true` for an RRULE master; a connector emitting pre-expanded, specific-day
+    // instances (e.g. localistEvents) sets `false` so the LLM's "Every Thursday" read
+    // of a description doesn't re-trigger occurrence splitting. Undefined → trust the LLM.
+    recurring: item.recurring ?? Boolean(raw.recurring),
     tags: (raw.tags as NormalizedListing["tags"]) ?? [],
     // Prefer the LLM extraction, but fall back to connector-provided structured
     // data so we never discard a known-good venue/address the LLM omitted.
