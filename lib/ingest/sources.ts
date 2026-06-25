@@ -48,6 +48,58 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Food & Drink",
   },
   {
+    // BurnDown — Broadway bar/venue with a main stage + rooftop patio. IG posts
+    // weekly "live music lineup" roundups (Thur/Fri/Sat, each with a time), the
+    // recurring Thursday SunSet Series DJ sets, and one-offs (anniversary
+    // Crawfest, World Cup watch parties) among shop banter the normalizer drops.
+    // Weekend lineup posts list three shows, so multiEvent.
+    id: "burndown-denver-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "burndowndenver",
+    multiEvent: true,
+    defaultVenueName: "BurnDown",
+    defaultVenueAddress: "476 S Broadway, Denver, CO 80209",
+    defaultNeighborhood: "Baker",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Elemental Bakery & Coffeehouse — single cafe at York Street Yards
+    // (Clayton). IG is mostly menu/product marketing the normalizer filters out
+    // via isEventOrDeal; keeps the rare real events/deals (pet-portrait sessions,
+    // proceeds fundraisers, seasonal pop-ups). Poor but non-zero source.
+    id: "elemental-denver-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "elementaldenver",
+    defaultVenueName: "Elemental Bakery & Coffeehouse",
+    defaultVenueAddress: "3875 Steele St, Denver, CO 80205",
+    defaultNeighborhood: "City Park",
+    cityHint: "Denver, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Edgewater Music Festival — annual one-day blues/music festival (~June) at
+    // Citizen's Park, Edgewater. Sparse single-event account (one festival/year),
+    // but worth capturing each edition when announced. isEventOrDeal filters the
+    // sponsor/merch/FAQ promo.
+    id: "edgewater-music-festival-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "edgewatermusicfestival",
+    defaultVenueName: "Citizens Park",
+    defaultVenueAddress: "5560 W 24th Ave, Edgewater, CO 80214",
+    cityHint: "Edgewater, CO",
+    defaultCategory: "Music",
+  },
+  {
     // Denver Central Market — RiNo food hall. IG posts real events (ticketed
     // Book Swaps, the recurring free RiNo Movie Nights at The Lot on Larimer,
     // Pride parties) among heavy vendor/menu marketing the normalizer filters.
@@ -91,6 +143,12 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://thehighlandsfarmersmarket.com/",
+    // WordPress block theme: <main> holds only the hero (title + date); the
+    // "9 AM – 1 PM" h3 is in a sibling section. Target the whole-site block
+    // wrapper so the captured text carries title, date, AND time.
+    selectors: {
+      item: ".wp-site-blocks",
+    },
     defaultVenueSlug: "highlands-farmers-market",
     defaultCategory: "Markets",
   },
@@ -478,6 +536,9 @@ export const SOURCES: SourceConfig[] = [
     url: "https://denverzoo.org/wp-json/wp/v2/atomic-event",
     maxItems: 40,
     defaultVenueSlug: "denver-zoo",
+    // Zoo events run during the zoo's operating hours; use them when an event
+    // states no time of its own.
+    defaultTime: "9:00 AM – 4:00 PM",
   },
   {
     // Denver Union Station's /experience/event-calendar/ is JS-rendered with no
@@ -541,6 +602,150 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueName: "The Jasmine Bar",
     defaultVenueSlug: "the-jasmine-bar",
     defaultCategory: "Music",
+  },
+  {
+    // The Bread Bar — historic craft-cocktail bar in Silver Plume (mountain town
+    // ~50mi W of Denver). Squarespace events collection in CALENDAR mode (empty
+    // `upcoming`), so squarespaceEvents month-steps the JSON to gather Live Music
+    // / Open Pick nights across the next few months. Single venue.
+    id: "bread-bar-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.breadbarsp.com/events",
+    maxItems: 30,
+    defaultVenueName: "The Bread Bar",
+    defaultVenueAddress: "1010 Main St, Silver Plume, CO 80476",
+    cityHint: "Silver Plume, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Improper City (RiNo beer garden) food-truck schedule — an Elfsight Events
+    // Calendar widget backed by a private Google Calendar (no public feed), so
+    // elfsightCalendar renders the page and reads the FullCalendar grid (truck +
+    // time per day). Single venue; the daily truck is the 'event'.
+    id: "improper-city-food-trucks-web",
+    enabled: true,
+    connector: "elfsightCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.impropercity.com/food-truck-calendar",
+    maxItems: 30,
+    defaultVenueName: "Improper City",
+    defaultVenueAddress: "3201 Walnut St, Denver, CO 80205",
+    defaultNeighborhood: "RiNo",
+    cityHint: "Denver, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // CU Boulder events (colorado.edu/events) — a Localist widget backed by
+    // calendar.colorado.edu. localistEvents reads its JSON API; featured=true
+    // matches the site's curated public feed and skips academic/administrative
+    // deadline noise. Multi-venue (per-event campus/Boulder location from the
+    // API); recurring series arrive pre-expanded into dated instances.
+    id: "cu-boulder-events-web",
+    enabled: true,
+    connector: "localistEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://calendar.colorado.edu/api/2/events?featured=true&days=60&pp=50",
+    maxItems: 30,
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Trident Booksellers & Cafe (Pearl St, Boulder) — busy events calendar on
+    // Squarespace (list mode, ~75 upcoming): live music, open mics, author
+    // series, language-exchange nights. squarespaceEvents reads ?format=json.
+    id: "trident-cafe-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.tridentcafe.com/events",
+    maxItems: 40,
+    defaultVenueName: "Trident Booksellers & Cafe",
+    defaultVenueAddress: "940 Pearl St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Broken Bow Western — honky-tonk bar & dancehall (Five Points/Ballpark,
+    // Denver). Squarespace events (list mode, ~28 upcoming): live country acts +
+    // free swing-dance lessons. Events carry no per-event location, so pin to the
+    // single venue; isEventOrDeal drops the "Closed for a Private Event" notices.
+    id: "broken-bow-western-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.brokenbowwestern.com/events",
+    maxItems: 40,
+    defaultVenueName: "Broken Bow Western",
+    defaultVenueAddress: "2201 Lawrence St, Denver, CO 80205",
+    defaultNeighborhood: "Five Points",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Parker Days Festival (annual, ~June, Parker) — 3 stage lineup pages behind a
+    // SiteGround captcha, each a schedule TABLE (time / band / genre per Fri-Sun).
+    // renderJs + waitForSelector clears the captcha; multiEvent reads each stage's
+    // table into per-band sets. Pin to the festival grounds in Parker. NOTE: the
+    // 2026 edition is past — yields the next edition's lineup when posted.
+    id: "parker-days-festival-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: [
+      "https://parkerdaysfestival.com/main-stage/",
+      "https://parkerdaysfestival.com/east-music-stage/",
+      "https://parkerdaysfestival.com/community-stage/",
+    ],
+    renderJs: true,
+    waitForSelector: ".elementor-heading-title",
+    multiEvent: true,
+    defaultVenueName: "Parker Days Festival",
+    defaultVenueAddress: "10795 Victorian Dr, Parker, CO 80138",
+    cityHint: "Parker, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Rosetta Hall food hall (Walnut St, Boulder) live-music lineup — a hand-built
+    // Elementor page (no feed) behind Cloudflare UA-gating, each show listed as
+    // ARTIST / genre / "weekday month day, time". renderJs passes Cloudflare;
+    // whole-page multiEvent reads the regular triples. Single venue.
+    id: "rosetta-hall-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rosettahall.com/live-music/",
+    renderJs: true,
+    // Each show is its own Elementor top-section (artist heading + genre + date);
+    // target those so we don't dump the whole page (which truncates on nav).
+    selectors: { item: "section.elementor-top-section" },
+    defaultVenueName: "Rosetta Hall",
+    defaultVenueAddress: "1109 Walnut St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Rosetta Hall's inquire/events page publishes featured events (e.g. the
+    // "YogaRita on the rooftop" yoga+margarita series) only as flyer IMAGES — no
+    // scrapeable text — so flyerImage OCRs them. Cloudflare UA-gated; the connector
+    // fetches with a browser UA. Same Rosetta Hall venue as the live-music source.
+    id: "rosetta-hall-flyers-web",
+    enabled: true,
+    connector: "flyerImage",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rosettahall.com/inquire-2/",
+    defaultVenueName: "Rosetta Hall",
+    defaultVenueAddress: "1109 Walnut St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+    maxImages: 6,
+    maxItems: 40,
   },
   {
     // Avery Brewing (Gunbarrel, Boulder) is a Next.js site whose taproom events
@@ -671,6 +876,21 @@ export const SOURCES: SourceConfig[] = [
     url: "https://www.schoolyardbeergarden.com/events/",
     maxItems: 30,
     defaultVenueSlug: "schoolyard-beer-garden-and-cafe",
+  },
+  {
+    // Old Town Lafayette district events (WordPress + The Events Calendar). Its
+    // Tribe REST API is Cloudflare-blocked, but the events page itself serves
+    // clean JSON-LD Event blocks (tz-aware dates, per-event location like
+    // "Festival Plaza", "Little Herbal Apothecary"), so jsonLdEvents reads those.
+    // Lafayette (Boulder County), not Denver; venue resolves per event.
+    id: "old-town-lafayette-web",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://oldtownlafayette.com/events/",
+    maxItems: 30,
+    cityHint: "Lafayette, CO",
   },
   {
     // Denver Botanic Gardens runs a Drupal 10 calendar that server-renders event
@@ -1163,15 +1383,16 @@ export const SOURCES: SourceConfig[] = [
     // so venue resolves per event. Static cheerioWeb; capped to the soonest window.
     id: "cervantes-masterpiece-web",
     enabled: true,
-    connector: "cheerioWeb",
+    connector: "apifyWeb",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://cervantesmasterpiece.com/",
+    // apifyWeb captures each card's FULL text ($el.text()) — date, Doors/Show
+    // time, and venue — which cheerioWeb's title/date/description sub-selectors
+    // dropped (the time has no dedicated element).
     selectors: {
       item: ".rhpSingleEvent",
       title: ".rhp-event__title--list",
-      date: ".eventDateList",
-      description: ".rhp-event__venue",
     },
     maxItems: 40,
     defaultCategory: "Music",
@@ -1472,6 +1693,9 @@ export const SOURCES: SourceConfig[] = [
       date: ".event-card__date",
       description: ".event-card__subtitle",
     },
+    // List cards have no time; the detail page's Drupal billboard carries the
+    // "Time" field (static, cheap to fetch).
+    detailSelector: ".billboard__content",
     cityHint: "Boulder, CO",
     maxItems: 40,
   },
