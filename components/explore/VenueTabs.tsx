@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import type { Listing } from "@/lib/types";
+import { useMemo, useState } from "react";
+import type { Filters, Listing } from "@/lib/types";
+import { applyFilters } from "@/lib/filters/applyFilters";
 import { ListingGrid } from "./ListingGrid";
+import {
+  VenueListingFilterBar,
+  VENUE_LISTING_FILTER_DEFAULTS,
+  type VenueListingFilterState,
+} from "./VenueListingFilterBar";
 
 interface Props {
   upcoming: Listing[];
@@ -26,8 +32,32 @@ export function VenueTabs({ upcoming, deals, past }: Props) {
   };
   const initial: TabId = upcoming.length ? "upcoming" : deals.length ? "deals" : "past";
   const [tab, setTab] = useState<TabId>(initial);
+  const [filters, setFilters] = useState<VenueListingFilterState>(
+    VENUE_LISTING_FILTER_DEFAULTS,
+  );
 
-  const listings = tab === "upcoming" ? upcoming : tab === "deals" ? deals : past;
+  const tabListings = tab === "upcoming" ? upcoming : tab === "deals" ? deals : past;
+
+  // Reuse the explore feed's filter logic so a date window / category /
+  // lifestyle / free filter means exactly what it does there. Type and venue
+  // are already fixed (tabs + this page), so we only feed the active subset.
+  const listings = useMemo(() => {
+    const full: Filters = {
+      type: "all",
+      neighborhoods: [],
+      categories: filters.categories,
+      date: filters.date,
+      from: filters.from,
+      to: filters.to,
+      lifestyle: filters.lifestyle,
+      freeOnly: filters.freeOnly,
+      sort: filters.sort,
+      view: "grid",
+      tab: "all",
+      pageSize: 18,
+    };
+    return applyFilters(tabListings, full);
+  }, [tabListings, filters]);
 
   return (
     <div>
@@ -57,6 +87,7 @@ export function VenueTabs({ upcoming, deals, past }: Props) {
           );
         })}
       </div>
+      <VenueListingFilterBar value={filters} onChange={setFilters} />
       <ListingGrid listings={listings} />
     </div>
   );
