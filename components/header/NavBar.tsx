@@ -36,9 +36,8 @@ const guides = navByLabel.get("Monthly Guides");
 const bestOf = navByLabel.get("Best Of");
 const spotlights = navByLabel.get("Spotlights");
 
-// "Stories" is the umbrella: Guides, Best Of, and Spotlights each open their own
-// submenu. Spotlights has no sub-links of its own, so its submenu lists the
-// latest spotlight articles (from the scraped spotlights JSON).
+// "Stories" is the umbrella: Guides and Best Of each open their own submenu.
+// Spotlights has no sub-links, so it links straight to the website.
 const STORIES_SECTIONS: MenuSection[] = [
   {
     label: "Guides",
