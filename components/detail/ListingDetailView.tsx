@@ -9,7 +9,7 @@ import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
 import { ReportButton } from "./ReportButton";
 import { CalendarButton } from "./CalendarButton";
-import { CompassIcon, HouseIcon, PinIcon } from "./icons";
+import { CompassIcon, PinIcon } from "./icons";
 import { hasSocialProof, formatSaveCount } from "@/lib/socialProof";
 
 interface Props {
@@ -111,32 +111,21 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           {listing.description}
         </p>
 
-        {venue && (
+        {venue?.address && (
           <div className="flex flex-col gap-1">
-            <Link
-              href={`/venues/${venue.slug}`}
-              className="text-coral inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+            <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
+              <PinIcon size={13} className="text-gray" />
+              {venue.address}
+            </div>
+            <a
+              href={buildDirectionsUrl(venue.address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
             >
-              <HouseIcon size={13} />
-              {venue.name}
-            </Link>
-            {venue.address && (
-              <>
-                <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
-                  <PinIcon size={13} className="text-gray" />
-                  {venue.address}
-                </div>
-                <a
-                  href={buildDirectionsUrl(venue.address)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
-                >
-                  <CompassIcon size={13} />
-                  Get Directions
-                </a>
-              </>
-            )}
+              <CompassIcon size={13} />
+              Get Directions
+            </a>
           </div>
         )}
 
@@ -155,12 +144,21 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
               </div>
             </div>
           </div>
-          {listing.venueName && (
+          {(venue || listing.venueName) && (
             <div>
               <InfoLabel>Venue</InfoLabel>
-              <div className="text-dark text-sm font-medium">
-                {listing.venueName}
-              </div>
+              {venue ? (
+                <Link
+                  href={`/venues/${venue.slug}`}
+                  className="text-coral inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+                >
+                  {venue.name}
+                </Link>
+              ) : (
+                <div className="text-dark text-sm font-medium">
+                  {listing.venueName}
+                </div>
+              )}
             </div>
           )}
         </div>
