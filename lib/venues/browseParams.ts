@@ -2,6 +2,9 @@
 // Both the server pipeline (VenuesBrowse) and the client bar (VenueFilterBar)
 // parse and build URLs through here so the param contract can't drift.
 
+import { DATE_PRESETS, LIFESTYLE_TAGS } from "@/lib/filters/types";
+import type { DatePreset, LifestyleTag } from "@/lib/types";
+
 export type VenueSort = "upcoming" | "saved" | "followed";
 
 const VALID_VENUE_SORTS: readonly VenueSort[] = ["upcoming", "saved", "followed"];
@@ -12,6 +15,17 @@ export function parseVenueSort(value: string | undefined): VenueSort {
     : "upcoming";
 }
 
+const VALID_DATES: readonly string[] = DATE_PRESETS.map((d) => d.id);
+const VALID_LIFESTYLE: readonly string[] = LIFESTYLE_TAGS.map((t) => t.id);
+
+export function parseVenueDate(value: string | undefined): DatePreset {
+  return VALID_DATES.includes(value ?? "") ? (value as DatePreset) : "any";
+}
+
+export function parseVenueLifestyle(values: string[]): LifestyleTag[] {
+  return values.filter((v) => VALID_LIFESTYLE.includes(v)) as LifestyleTag[];
+}
+
 export interface VenueFilters {
   mine: boolean;
   q: string;
@@ -19,6 +33,12 @@ export interface VenueFilters {
   locs: string[];
   sort: VenueSort;
   hasUpcoming: boolean;
+  /** "Time" filter — keeps venues with an upcoming event in this window. */
+  date: DatePreset;
+  from?: string;
+  to?: string;
+  /** Lifestyle tags (outdoor, dog-friendly, …) an upcoming event must carry. */
+  lifestyle: LifestyleTag[];
 }
 
 // Build a /venues (or "/") href from venue filters. Always preserves `sticky`
@@ -37,6 +57,10 @@ export function buildVenuesHref(opts: {
   if (f.locs.length) params.set("vloc", f.locs.join(","));
   if (f.sort !== "upcoming") params.set("vsort", f.sort);
   if (!f.hasUpcoming) params.set("vupcoming", "0");
+  if (f.date !== "any") params.set("vdate", f.date);
+  if (f.from) params.set("vfrom", f.from);
+  if (f.to) params.set("vto", f.to);
+  if (f.lifestyle.length) params.set("vlife", f.lifestyle.join(","));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }

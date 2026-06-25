@@ -3,9 +3,13 @@
 import { useRouter } from "next/navigation";
 import { VENUE_CATEGORIES } from "@/lib/data/categories";
 import type { DynamicCity } from "@/lib/data/locations";
+import { LIFESTYLE_TAGS } from "@/lib/filters/types";
+import type { DatePreset, LifestyleTag } from "@/lib/types";
 import { buildVenuesHref, type VenueFilters, type VenueSort } from "@/lib/venues/browseParams";
+import { useAuthContext } from "@/components/auth/AuthProvider";
 import { Pill } from "@/components/ui/Pill";
 import { SearchIcon } from "@/components/detail/icons";
+import { DateDropdown } from "@/components/explore/DateDropdown";
 import { DropdownPill } from "@/components/explore/DropdownPill";
 import { MultiDropdownPill } from "@/components/explore/MultiDropdownPill";
 import { LocationFilterDropdown } from "@/components/explore/LocationFilterDropdown";
@@ -26,14 +30,19 @@ const SORT_OPTIONS: { id: VenueSort; label: string }[] = [
 const CAT_OPTIONS = VENUE_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label }));
 
 export function VenueFilterBar(props: Props) {
-  const { mine, showMineToggle, q, cats, locs, sort, hasUpcoming, basePath, sticky, dynamicCities } = props;
-  const current: VenueFilters = { mine, q, cats, locs, sort, hasUpcoming };
+  const { mine, showMineToggle, q, cats, locs, sort, hasUpcoming, date, from, to, lifestyle, basePath, sticky, dynamicCities } = props;
+  const current: VenueFilters = { mine, q, cats, locs, sort, hasUpcoming, date, from, to, lifestyle };
   const router = useRouter();
+  // Mirror the explore feed: lifestyle filtering is Insider-only.
+  const { profile, isLoggedIn, openUpgrade } = useAuthContext();
+  const lifestyleGated = !isLoggedIn || profile?.plan !== "insider";
 
   const go = (overrides: Partial<VenueFilters>) =>
     router.push(buildVenuesHref({ basePath, sticky, filters: { ...current, ...overrides }, showMineToggle }));
   const toggleIn = (list: string[], slug: string) =>
     list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug];
+  const toggleTag = (tag: LifestyleTag) =>
+    go({ lifestyle: lifestyle.includes(tag) ? lifestyle.filter((t) => t !== tag) : [...lifestyle, tag] });
 
   return (
     <div className="mb-5 flex flex-col gap-3">
@@ -71,8 +80,16 @@ export function VenueFilterBar(props: Props) {
         </button>
       </form>
 
-      {/* Category · Location · Sort · Has-upcoming */}
+      {/* Date · Category · Location · Sort · Lifestyle · Has-upcoming */}
       <div className="flex flex-wrap items-center gap-2">
+        <DateDropdown
+          value={date}
+          from={from}
+          to={to}
+          onChange={(next: { date: DatePreset; from?: string; to?: string }) =>
+            go({ date: next.date, from: next.from, to: next.to })
+          }
+        />
         <MultiDropdownPill
           label="Category"
           options={CAT_OPTIONS}
@@ -95,6 +112,24 @@ export function VenueFilterBar(props: Props) {
         <Pill active={hasUpcoming} onClick={() => go({ hasUpcoming: !hasUpcoming })}>
           Has upcoming events
         </Pill>
+        <div className="mx-0.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
+        {LIFESTYLE_TAGS.map((tag) => (
+          <Pill
+            key={tag.id}
+            active={lifestyle.includes(tag.id)}
+            onClick={() => {
+              if (lifestyleGated) {
+                openUpgrade();
+                return;
+              }
+              toggleTag(tag.id as LifestyleTag);
+            }}
+            title={lifestyleGated ? "Lifestyle filters — Insider only" : undefined}
+          >
+            <span className="text-[13px] leading-none">{tag.emoji}</span>
+            {tag.label}
+          </Pill>
+        ))}
       </div>
     </div>
   );

@@ -8,8 +8,14 @@ import { venueCategoryLabel } from "@/lib/data/categories";
 import { locationMatchesSelection } from "@/lib/data/locations";
 import type { DynamicCity } from "@/lib/data/locations";
 import { first, csv } from "@/lib/filters/parseSearchParams";
+import { getDateRange } from "@/lib/filters/applyFilters";
 import { paginate } from "@/lib/filters/paginate";
-import { buildVenuesHref, parseVenueSort } from "@/lib/venues/browseParams";
+import {
+  buildVenuesHref,
+  parseVenueDate,
+  parseVenueLifestyle,
+  parseVenueSort,
+} from "@/lib/venues/browseParams";
 import { Pagination } from "@/components/explore/Pagination";
 import { PinIcon } from "@/components/detail/icons";
 import { VenueFilterBar } from "@/components/venues/VenueFilterBar";
@@ -42,6 +48,10 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
   // "Has upcoming events" defaults on, so the All view matches its prior behavior;
   // users opt in to seeing quiet venues by turning it off.
   const hasUpcoming = first(sp, "vupcoming") !== "0";
+  const date = parseVenueDate(first(sp, "vdate"));
+  const from = first(sp, "vfrom");
+  const to = first(sp, "vto");
+  const lifestyle = parseVenueLifestyle(csv(first(sp, "vlife")));
 
   const [all, imageMap, signals] = await Promise.all([
     getBrowseVenues({ includeEmpty: true }),
@@ -53,12 +63,31 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
 
   const catSet = new Set(cats);
   const locSet = new Set(locs);
+  const tagSet = new Set<string>(lifestyle);
   const needle = q.toLowerCase();
+  // The "time" filter reuses the explore feed's date logic, so a window here
+  // means exactly what it does for events. null = no date constraint.
+  const dateRange = getDateRange({ date, from, to });
   const filtered = scoped.filter((v) => {
     if (catSet.size && !v.categories.some((c) => catSet.has(c))) return false;
     if (locSet.size && !locationMatchesSelection(v.neighborhood, locSet)) return false;
     if (hasUpcoming && v.upcomingCount === 0) return false;
     if (needle && !`${v.name} ${v.neighborhood}`.toLowerCase().includes(needle)) return false;
+    // Time + lifestyle both filter on the venue's upcoming events: keep the venue
+    // only if one upcoming event satisfies every active constraint at once.
+    if (dateRange || tagSet.size) {
+      const hasMatch = v.upcoming.some((e) => {
+        if (tagSet.size && !e.tags.some((t) => tagSet.has(t))) return false;
+        if (dateRange) {
+          if (!e.startAt) return false;
+          const start = new Date(e.startAt);
+          const end = e.endAt ? new Date(e.endAt) : start;
+          if (!(end >= dateRange.start && start <= dateRange.end)) return false;
+        }
+        return true;
+      });
+      if (!hasMatch) return false;
+    }
     return true;
   });
 
@@ -76,7 +105,7 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
     basePath,
     sticky,
     showMineToggle,
-    filters: { mine, q: "", cats: [], locs: [], sort: "upcoming", hasUpcoming: true },
+    filters: { mine, q: "", cats: [], locs: [], sort: "upcoming", hasUpcoming: true, date: "any", lifestyle: [] },
   });
 
   return (
@@ -89,6 +118,10 @@ export async function VenuesBrowse({ sp, mine, basePath, sticky, showMineToggle,
         locs={locs}
         sort={sort}
         hasUpcoming={hasUpcoming}
+        date={date}
+        from={from}
+        to={to}
+        lifestyle={lifestyle}
         basePath={basePath}
         sticky={sticky}
         dynamicCities={dynamicCities}

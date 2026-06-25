@@ -275,10 +275,20 @@ export interface BrowseVenue {
   neighborhood: string;
   categories: string[];
   upcomingCount: number;
+  /** Upcoming events at this venue, carrying just the fields the browse-grid
+   *  filters need: the date window (for the "time" filter) and lifestyle tags
+   *  (for the outdoor/dog-friendly/etc. filters). Length === upcomingCount. */
+  upcoming: VenueUpcomingEvent[];
   /** Sum of save_count across the venue's published listings ("Most saved"). */
   saveCount: number;
   /** Denormalized venue_follows count ("Most followed"). */
   followerCount: number;
+}
+
+export interface VenueUpcomingEvent {
+  startAt: string | null;
+  endAt: string | null;
+  tags: string[];
 }
 
 // Real venues (from ingestion), sorted by activity. Powers the /venues browse
@@ -302,7 +312,7 @@ export async function getBrowseVenues(
       client.from("venues").select("id, slug, name, description, address, neighborhood, categories, follower_count"),
       client
         .from("listings")
-        .select("venue_id")
+        .select("venue_id, date_start, date_end, tags")
         .not("published_at", "is", null)
         .not("venue_id", "is", null)
         // Match getPublishedListings exactly: an ongoing run (end today-or-later)
@@ -318,10 +328,14 @@ export async function getBrowseVenues(
         .not("venue_id", "is", null),
     ]);
 
-    const counts = new Map<string, number>();
-    for (const r of (upcomingRes.data ?? []) as Array<{ venue_id: string | null }>) {
+    const upcomingByVenue = new Map<string, VenueUpcomingEvent[]>();
+    for (const r of (upcomingRes.data ?? []) as Array<{
+      venue_id: string | null; date_start: string | null; date_end: string | null; tags: string[] | null;
+    }>) {
       if (!r.venue_id) continue;
-      counts.set(r.venue_id, (counts.get(r.venue_id) ?? 0) + 1);
+      const list = upcomingByVenue.get(r.venue_id) ?? [];
+      list.push({ startAt: r.date_start, endAt: r.date_end, tags: r.tags ?? [] });
+      upcomingByVenue.set(r.venue_id, list);
     }
 
     const saves = new Map<string, number>();
@@ -339,7 +353,8 @@ export async function getBrowseVenues(
       // are not real venues and shouldn't appear in the browse grid.
       const name = (v.name ?? "").trim();
       if (!name || name === "<UNKNOWN>") continue;
-      const upcomingCount = counts.get(v.id) ?? 0;
+      const upcoming = upcomingByVenue.get(v.id) ?? [];
+      const upcomingCount = upcoming.length;
       if (upcomingCount === 0 && !opts.includeEmpty) continue;
       out.push({
         slug: v.slug,
@@ -349,6 +364,7 @@ export async function getBrowseVenues(
         neighborhood: v.neighborhood ?? "",
         categories: v.categories ?? [],
         upcomingCount,
+        upcoming,
         saveCount: saves.get(v.id) ?? 0,
         followerCount: v.follower_count ?? 0,
       });
