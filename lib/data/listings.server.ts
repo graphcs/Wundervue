@@ -117,36 +117,46 @@ export async function getPublishedListings(): Promise<Listing[]> {
 export async function getVenueImageMapBySlug(): Promise<Map<string, string>> {
   try {
     const client = await getSupabaseServerClient();
-    const [venuesRes, listingsRes] = await Promise.all([
-      client
-        .from("venues")
-        .select("slug, image_url")
-        .not("image_url", "is", null),
-      client
-        .from("listings")
-        .select("image_url, venues!inner(slug)")
-        .not("image_url", "is", null)
-        .not("published_at", "is", null)
-        .order("created_at", { ascending: false }),
-    ]);
 
     const map = new Map<string, string>();
 
     // Listings first (lower priority) — overwritten by venues.image_url below.
-    for (const row of (listingsRes.data ?? []) as Array<{
-      image_url: string | null;
-      venues: { slug: string } | { slug: string }[] | null;
-    }>) {
-      if (!row.image_url || !row.venues) continue;
-      const slug = Array.isArray(row.venues)
-        ? row.venues[0]?.slug
-        : row.venues.slug;
-      if (!slug || map.has(slug)) continue;
-      map.set(slug, row.image_url);
+    // PostgREST caps a SELECT at 1000 rows, and there are more image-bearing
+    // listings than that, so we MUST page through them — a single query drops
+    // the older tail and leaves venues whose images live there with no photo.
+    // Ordered newest-first; the first image we see per venue wins.
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await client
+        .from("listings")
+        .select("image_url, venues!inner(slug)")
+        .not("image_url", "is", null)
+        .not("published_at", "is", null)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{
+        image_url: string | null;
+        venues: { slug: string } | { slug: string }[] | null;
+      }>;
+      for (const row of rows) {
+        if (!row.image_url || !row.venues) continue;
+        const slug = Array.isArray(row.venues)
+          ? row.venues[0]?.slug
+          : row.venues.slug;
+        if (!slug || map.has(slug)) continue;
+        map.set(slug, row.image_url);
+      }
+      if (rows.length < PAGE) break;
     }
 
     // Venue-curated images take priority.
-    for (const row of (venuesRes.data ?? []) as Array<{
+    const { data: venuesData } = await client
+      .from("venues")
+      .select("slug, image_url")
+      .not("image_url", "is", null);
+    for (const row of (venuesData ?? []) as Array<{
       slug: string;
       image_url: string | null;
     }>) {
