@@ -99,7 +99,19 @@ export async function getPublishedListings(): Promise<Listing[]> {
     ]);
     const venueMap = new Map<string, DbVenueRow>();
     for (const v of (venues ?? []) as DbVenueRow[]) venueMap.set(v.id, v);
-    return ((rows ?? []) as DbListingRow[]).map((r) => rowToListing(r, venueMap));
+    // Sort by EFFECTIVE date = max(date_start, today): a continuous run that
+    // started weeks ago (date_start in the past, still ongoing) sorts as "today"
+    // and interleaves with current events instead of camping at the top on its
+    // stale start. Future events keep their real start; undated rows sort last.
+    const cutoffMs = todayStart.getTime();
+    const effective = (r: DbListingRow): number => {
+      const ds = r.date_start ? Date.parse(r.date_start) : NaN;
+      return Number.isNaN(ds) ? Infinity : Math.max(ds, cutoffMs);
+    };
+    return ((rows ?? []) as DbListingRow[])
+      .slice()
+      .sort((a, b) => effective(a) - effective(b))
+      .map((r) => rowToListing(r, venueMap));
   } catch (err) {
     console.error("[listings] getPublishedListings failed", err);
     return [];

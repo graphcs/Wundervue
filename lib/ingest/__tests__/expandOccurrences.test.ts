@@ -1,0 +1,118 @@
+import { describe, expect, it } from "vitest";
+import { expandRecurringOccurrences, parseWeekdays } from "../expandOccurrences";
+import type { ListingInsert, NormalizedListing } from "../types";
+
+const NOW = Date.parse("2026-06-24T12:00:00Z"); // Wednesday
+
+function row(over: Partial<ListingInsert>): ListingInsert {
+  return {
+    slug: "s", type: "event", title: "Highlands Farmers Market", description: "d",
+    venue_id: "v1", address: null, neighborhood: null, region_slug: null, city_slug: null,
+    neighborhood_slug: null, category: "Markets", date_start: null, date_end: null,
+    date_display: null, time_display: null, is_free: true, deal_value: null,
+    image_url: "https://img/market.jpg", image_source: "generated", source: "Website",
+    source_url: null, source_id: "boulder:1", event_key: "k0", dedup_of: null, tags: [],
+    lat: null, lng: null, published_at: "2026-06-24T00:00:00Z",
+    ...over,
+  };
+}
+
+function norm(over: Partial<NormalizedListing>): NormalizedListing {
+  return {
+    isEventOrDeal: true, type: "event", title: "Highlands Farmers Market",
+    canonicalTitle: "highlands farmers market", description: "d", category: "Markets",
+    neighborhood: "", dateStart: null, dateEnd: null, dateDisplay: "", timeDisplay: "",
+    isFree: true, dealValue: null, recurring: false, tags: [], venueName: null, address: null,
+    ...over,
+  };
+}
+
+describe("parseWeekdays", () => {
+  it("reads a single weekday", () => {
+    expect([...parseWeekdays("Every Sunday")]).toEqual([0]);
+    expect([...parseWeekdays("Saturdays")]).toEqual([6]);
+  });
+  it("reads multiple weekdays incl. abbreviations", () => {
+    expect([...parseWeekdays("Tue & Thu")].sort()).toEqual([2, 4]);
+    expect([...parseWeekdays("Mondays and Wednesdays")].sort()).toEqual([1, 3]);
+  });
+  it("returns empty when no weekday named", () => {
+    expect(parseWeekdays("Open daily").size).toBe(0);
+    expect(parseWeekdays("").size).toBe(0);
+  });
+});
+
+describe("expandRecurringOccurrences", () => {
+  // Every Sunday, 9 AM–1 PM. date_start is the first Sunday at 9 AM MDT (15:00 UTC).
+  const sundayMarket = () => {
+    const base = row({
+      date_start: "2026-06-28T15:00:00Z",
+      date_display: "Every Sunday",
+      time_display: "9:00 AM – 1:00 PM",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: true, dateDisplay: "Every Sunday" })]]);
+    return { base, map };
+  };
+
+  it("splits a weekly event into capped, dated occurrences", () => {
+    const { base, map } = sundayMarket();
+    const out = expandRecurringOccurrences([base], map, NOW);
+
+    expect(out).toHaveLength(8); // MAX_OCCURRENCES
+    // Consecutive Sundays, anchored at midday Denver (18:00Z) so the UTC day
+    // matches the local day.
+    expect(out[0].date_start).toBe("2026-06-28T18:00:00.000Z");
+    expect(out[1].date_start).toBe("2026-07-05T18:00:00.000Z");
+    // Specific-day display + preserved time label, 4-hour span.
+    expect(out[0].date_display).toBe("Sun, Jun 28");
+    expect(out[0].time_display).toBe("9:00 AM – 1:00 PM");
+    expect(out[0].date_end).toBe("2026-06-28T22:00:00.000Z");
+  });
+
+  it("gives each occurrence a stable, distinct id/key but shares the image", () => {
+    const { base, map } = sundayMarket();
+    const out = expandRecurringOccurrences([base], map, NOW);
+
+    expect(out[0].source_id).toBe("boulder:1#2026-06-28");
+    expect(out[1].source_id).toBe("boulder:1#2026-07-05");
+    expect(new Set(out.map((o) => o.event_key)).size).toBe(out.length); // all distinct
+    expect(new Set(out.map((o) => o.source_id)).size).toBe(out.length);
+    expect(out.every((o) => o.image_url === "https://img/market.jpg")).toBe(true);
+  });
+
+  it("caps to a real series end inside the window", () => {
+    const { base } = sundayMarket();
+    const map = new Map([
+      [base.source_id, norm({ recurring: true, dateDisplay: "Every Sunday", dateEnd: "2026-07-12T13:00:00Z" })],
+    ]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    // Only Jun 28, Jul 5, Jul 12 fall on/before the series end.
+    expect(out.map((o) => o.date_display)).toEqual(["Sun, Jun 28", "Sun, Jul 5", "Sun, Jul 12"]);
+  });
+
+  it("handles multiple weekdays", () => {
+    // Jun 30 2026 is a Tuesday.
+    const base = row({
+      source_id: "x:1", date_start: "2026-06-30T18:00:00Z",
+      date_display: "Tuesdays & Thursdays", time_display: "6:00 PM",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: true, dateDisplay: "Tue & Thu" })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    const labels = out.map((o) => o.date_display ?? "");
+    expect(labels.some((l) => l.startsWith("Tue"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Thu"))).toBe(true);
+  });
+
+  it("passes through non-recurring, recurring deals, and weekday-less rows", () => {
+    const oneOff = row({ source_id: "a", date_start: "2026-07-04T18:00:00Z", date_display: "Sat, Jul 4" });
+    const deal = row({ source_id: "b", type: "deal", date_display: "Every Friday" });
+    const daily = row({ source_id: "c", date_display: "Open daily" });
+    const map = new Map<string, NormalizedListing>([
+      [oneOff.source_id, norm({ recurring: false })],
+      [deal.source_id, norm({ recurring: true, type: "deal", dateDisplay: "Every Friday" })],
+      [daily.source_id, norm({ recurring: true, dateDisplay: "Open daily" })],
+    ]);
+    const out = expandRecurringOccurrences([oneOff, deal, daily], map, NOW);
+    expect(out).toEqual([oneOff, deal, daily]); // untouched
+  });
+});
