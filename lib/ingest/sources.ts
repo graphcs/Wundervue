@@ -711,6 +711,29 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Music",
   },
   {
+    // Edgewater Beer Garden — The Events Calendar (Tribe) behind a SiteGround
+    // captcha that blocks the REST API, so renderJs clears it and we read the
+    // Tribe LIST view events (title + date/time per row). Mix of recurring deals
+    // (happy hours, Wingsday, spritz) and events (trivia, live music).
+    id: "edgewater-beer-garden-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.edgewaterbeergarden.com/calendar/list/",
+    renderJs: true,
+    waitForSelector: ".tribe-events-calendar-list__event-title",
+    selectors: {
+      item: ".tribe-events-calendar-list__event",
+      title: ".tribe-events-calendar-list__event-title",
+    },
+    maxItems: 40,
+    defaultVenueName: "Edgewater Beer Garden",
+    defaultVenueAddress: "2508 Gray St, Edgewater, CO 80214",
+    defaultNeighborhood: "Edgewater",
+    cityHint: "Edgewater, CO",
+  },
+  {
     // Rosetta Hall food hall (Walnut St, Boulder) live-music lineup — a hand-built
     // Elementor page (no feed) behind Cloudflare UA-gating, each show listed as
     // ARTIST / genre / "weekday month day, time". renderJs passes Cloudflare;
