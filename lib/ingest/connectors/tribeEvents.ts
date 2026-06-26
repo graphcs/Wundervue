@@ -93,6 +93,7 @@ export async function fetchTribeEvents(source: SourceConfig): Promise<RawItem[]>
   // group occurrences — so a weekly series can't flood the cap but its next
   // dates stay filterable. Page until we hit `cap` total rows.
   const perProgram = new Map<string, number>();
+  const seenId = new Set<string>(); // skip exact-duplicate feed entries (same id)
   const out: RawItem[] = [];
 
   for (let page = 0; endpoint && out.length < cap && page < MAX_PAGES; page++) {
@@ -112,6 +113,12 @@ export async function fetchTribeEvents(source: SourceConfig): Promise<RawItem[]>
       const key =
         (e.url ? e.url.replace(/\/\d{4}-\d{2}-\d{2}\/?$/, "").replace(/\/+$/, "") : "") ||
         title.toLowerCase();
+      // Per-occurrence id (date-specific url). The feed can repeat the same entry
+      // (across pages/categories, or a single event listed several times) — skip
+      // ids already emitted, since duplicate source_ids crash the upsert batch.
+      const id = e.url || String(e.id ?? `${key}-${e.start_date}`);
+      if (seenId.has(id)) continue;
+      seenId.add(id);
       const kept = perProgram.get(key) ?? 0;
       if (kept >= PER_PROGRAM) continue; // already have enough of this series
       perProgram.set(key, kept + 1);
@@ -134,8 +141,6 @@ export async function fetchTribeEvents(source: SourceConfig): Promise<RawItem[]>
         .filter(Boolean)
         .join("\n");
 
-      // Per-occurrence id (date-specific url) so each kept date is its own row.
-      const id = e.url || String(e.id ?? `${key}-${e.start_date}`);
       out.push({
         sourceId: `${source.id}:${id}`,
         sourceUrl: e.url,
@@ -144,6 +149,10 @@ export async function fetchTribeEvents(source: SourceConfig): Promise<RawItem[]>
         fetchedAt,
         venueName: venue?.name,
         address: venue?.address,
+        // The API already returns recurring series as separate dated occurrences
+        // (we keep the soonest few per program), so each row is a specific
+        // instance — never re-expand it from a description's "every <weekday>".
+        recurring: false,
       });
       if (out.length >= cap) break;
     }

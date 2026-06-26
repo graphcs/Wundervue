@@ -103,16 +103,56 @@ describe("expandRecurringOccurrences", () => {
     expect(labels.some((l) => l.startsWith("Thu"))).toBe(true);
   });
 
-  it("passes through non-recurring, recurring deals, and weekday-less rows", () => {
+  it("passes through non-recurring and weekday-less (perpetual) rows", () => {
     const oneOff = row({ source_id: "a", date_start: "2026-07-04T18:00:00Z", date_display: "Sat, Jul 4" });
-    const deal = row({ source_id: "b", type: "deal", date_display: "Every Friday" });
     const daily = row({ source_id: "c", date_display: "Open daily" });
     const map = new Map<string, NormalizedListing>([
       [oneOff.source_id, norm({ recurring: false })],
-      [deal.source_id, norm({ recurring: true, type: "deal", dateDisplay: "Every Friday" })],
-      [daily.source_id, norm({ recurring: true, dateDisplay: "Open daily" })],
+      // Perpetual deal with no specific weekday → keeps its rolling window.
+      [daily.source_id, norm({ recurring: true, type: "deal", dateDisplay: "Open daily" })],
     ]);
-    const out = expandRecurringOccurrences([oneOff, deal, daily], map, NOW);
-    expect(out).toEqual([oneOff, deal, daily]); // untouched
+    const out = expandRecurringOccurrences([oneOff, daily], map, NOW);
+    expect(out).toEqual([oneOff, daily]); // untouched
+  });
+
+  it("splits a weekly listing the LLM marked non-recurring (text says 'every Thursday')", () => {
+    const base = row({
+      source_id: "p", date_start: "2026-07-02T18:00:00Z", date_display: "Thu, Jul 2",
+      time_display: "8:00 PM – 11:00 PM",
+    });
+    const map = new Map([[base.source_id, norm({
+      recurring: false, title: "Thursday Poker Night",
+      description: "Join us each Thursday evening for complimentary poker.",
+      dateDisplay: "Thu, Jul 2",
+    })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    expect(out.length).toBeGreaterThan(1);
+    expect(out.every((o) => (o.date_display ?? "").startsWith("Thu"))).toBe(true);
+  });
+
+  it("does NOT re-split a connector's pre-expanded instance (connectorRecurring=false)", () => {
+    // tribeEvents/localist emit specific dated occurrences; a description saying
+    // "every Monday" must not re-trigger splitting (would invent duplicate dates).
+    const base = row({
+      source_id: "i", date_start: "2026-06-29T16:00:00Z", date_display: "Mon, Jun 29",
+      description: "A weekly tour offered every Monday.",
+    });
+    const map = new Map([[base.source_id, norm({
+      recurring: false, connectorRecurring: false,
+      description: "A weekly tour offered every Monday.", dateDisplay: "Mon, Jun 29",
+    })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    expect(out).toEqual([base]); // untouched
+  });
+
+  it("does NOT split a recurring DEAL with a weekday — it keeps its rolling window", () => {
+    // A weekly happy hour / ladies night is an ongoing offer, not a per-week event.
+    const base = row({
+      source_id: "d", type: "deal", date_start: "2026-06-29T15:00:00Z",
+      date_display: "Mondays", time_display: "3:00 PM – 10:00 PM",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: true, type: "deal", dateDisplay: "Mondays" })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    expect(out).toEqual([base]); // untouched
   });
 });

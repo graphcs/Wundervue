@@ -223,6 +223,12 @@ export interface NormalizedListing {
   // rolling visibility window in buildListingInsert so they don't vanish from
   // the date-based feed (see persist.ts).
   recurring?: boolean;
+  // The connector's explicit recurrence assertion (RawItem.recurring), kept apart
+  // from `recurring` so occurrence-splitting can distinguish a connector that
+  // emitted pre-expanded, specific-day instances (false → never re-split, even if
+  // a description says "every Thursday") from the LLM merely defaulting to false
+  // (undefined → the weekly-text heuristic may still split).
+  connectorRecurring?: boolean;
   tags: LifestyleTag[];
   // Free-text venue / address extracted from the source. Used to look up an
   // existing venue row or create a new one (with geocoded lat/lng) so the map

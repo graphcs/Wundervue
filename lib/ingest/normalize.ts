@@ -259,6 +259,7 @@ function mapRawEvent(raw: Record<string, unknown>, item: RawItem): NormalizedLis
     // instances (e.g. localistEvents) sets `false` so the LLM's "Every Thursday" read
     // of a description doesn't re-trigger occurrence splitting. Undefined → trust the LLM.
     recurring: item.recurring ?? Boolean(raw.recurring),
+    connectorRecurring: item.recurring,
     tags: (raw.tags as NormalizedListing["tags"]) ?? [],
     // Prefer the LLM extraction, but fall back to connector-provided structured
     // data so we never discard a known-good venue/address the LLM omitted.

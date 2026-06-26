@@ -16,6 +16,12 @@ const WEEKDAY_NUM: Record<string, number> = {
   sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
 };
 
+// A weekly cadence stated in the source text ("Weekly Thu", "every Thursday",
+// "Thursdays") — a deterministic backstop for when the LLM sets recurring=false
+// on a weekly listing because the widget also shows a specific next date.
+const WEEKLY_TEXT_RE =
+  /\b(?:every|each|weekly)\s+(?:on\s+)?(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|\b(?:mon|tues|wednes|thurs|fri|satur|sun)days\b/i;
+
 // Weekday(s) named in a recurrence label ("Every Sunday", "Tuesdays",
 // "Tue & Thu"). Returns the set of 0–6 (Sun–Sat) day numbers, empty when none —
 // the caller only reaches here for `recurring` rows, so a specific-date display
@@ -116,11 +122,13 @@ function generateOccurrences(
 
   let endMs = now + OCCURRENCE_WINDOW_DAYS * DAY;
   const seriesEnd = norm.dateEnd ? Date.parse(norm.dateEnd) : NaN;
-  // Cap to a real series end only when it falls within the window and is still
-  // ahead — a stale/past end means the series rolls on. Compared at DAY
-  // granularity so the final day's occurrence isn't dropped by an end timestamp
-  // that falls earlier that same day.
-  if (!Number.isNaN(seriesEnd) && seriesEnd > now && seriesEnd < endMs) endMs = seriesEnd;
+  // Cap to a real series end only when it's a genuine multi-week range — more than
+  // a day past the anchor. A single-occurrence dateEnd (the LLM read "Weekly Thu"
+  // as one-off, so dateEnd == that day) must NOT cap the series to one occurrence;
+  // those roll on for the full window. Compared at DAY granularity so the final
+  // day's occurrence isn't dropped by an end timestamp earlier that same day.
+  const seriesSpansWeeks = !Number.isNaN(seriesEnd) && !Number.isNaN(anchor) && seriesEnd > anchor + DAY;
+  if (seriesSpansWeeks && seriesEnd > now && seriesEnd < endMs) endMs = seriesEnd;
   const endDayKey = denverDayKey(endMs);
 
   const time = parseTimeRange(base.time_display ?? "");
@@ -140,9 +148,13 @@ function generateOccurrences(
   return occurrences;
 }
 
-// Replace each recurring WEEKLY EVENT row with its upcoming occurrences. Rows
-// pass through unchanged when not recurring, not an event (deals keep the
-// rolling window), have no parseable weekday, or yield no occurrence.
+// Replace each recurring WEEKLY EVENT row with its upcoming occurrences. Splits a
+// recurring event (or event+deal "both") that names a weekday — a weekly
+// "Thursday Poker Night" should appear once per week, not once. Pure DEALS are NOT
+// split: a weekly happy hour / ladies-night discount is an ongoing offer, so it
+// keeps its single rolling-window listing (splitting them floods the feed with one
+// row per week). Rows also pass through when not recurring, when no weekday is
+// named, or when no occurrence is generated.
 export function expandRecurringOccurrences(
   rows: ListingInsert[],
   normalizedBySourceId: Map<string, NormalizedListing>,
@@ -151,7 +163,16 @@ export function expandRecurringOccurrences(
   const out: ListingInsert[] = [];
   for (const row of rows) {
     const norm = normalizedBySourceId.get(row.source_id);
-    if (norm?.recurring && norm.type === "event") {
+    const recurs =
+      norm &&
+      norm.type !== "deal" &&
+      // A connector that emitted pre-expanded, specific-day instances (tribeEvents,
+      // localistEvents) asserts recurring:false — never re-split those, or the
+      // text heuristic would invent overlapping occurrences (duplicate event_keys).
+      norm.connectorRecurring !== false &&
+      (Boolean(norm.recurring) ||
+        WEEKLY_TEXT_RE.test(`${norm.title} ${norm.description} ${row.date_display ?? ""}`));
+    if (recurs && norm) {
       const weekdays = parseWeekdays(row.date_display ?? norm.dateDisplay ?? "");
       if (weekdays.size > 0) {
         const occ = generateOccurrences(row, norm, weekdays, now);
