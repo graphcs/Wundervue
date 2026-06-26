@@ -29,9 +29,11 @@ interface ApifyInstagramPost {
 
 const ACTOR_ID = "apify/instagram-scraper";
 const MAX_POSTS = 30;
-// Sidecar posts carry several images (flyer + photos); a couple is enough to
-// catch the flyer without ballooning the vision payload.
-const MAX_IMAGES_PER_POST = 3;
+// Sidecar posts can carry a full set of flyers — e.g. a venue group's monthly
+// "events & happenings" carousel with one schedule graphic per location. Read up
+// to 8 so the later-location flyers aren't missed (single-image posts are
+// unaffected; the cost only grows for genuinely multi-flyer carousels).
+const MAX_IMAGES_PER_POST = 8;
 const MAX_CAPTION_CHARS = 1500;
 
 function asArray(v: string | string[] | undefined): string[] {
