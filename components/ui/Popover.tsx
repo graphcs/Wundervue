@@ -66,12 +66,19 @@ export function Popover({ trigger, children, panelClassName = "" }: Props) {
   // Dismiss on scroll/resize (the menu is positioned once and doesn't chase).
   useEffect(() => {
     if (!open) return;
-    const dismiss = () => setOpen(false);
-    window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
+    // Scroll fires on the capture phase, so a scroll *inside* the menu's own
+    // overflow list reaches this window listener too — ignore those, or a tall
+    // dropdown (Location/Category/Lifestyle) closes the moment you scroll it.
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Node && panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
