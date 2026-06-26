@@ -10,7 +10,7 @@ import { Pill } from "@/components/ui/Pill";
 import { SearchIcon } from "@/components/detail/icons";
 import { DateDropdown } from "@/components/explore/DateDropdown";
 import { DropdownPill } from "@/components/explore/DropdownPill";
-import { LifestyleFilterPills } from "@/components/explore/LifestyleFilterPills";
+import { LifestyleDropdown } from "@/components/explore/LifestyleDropdown";
 import { MultiDropdownPill } from "@/components/explore/MultiDropdownPill";
 import { LocationFilterDropdown } from "@/components/explore/LocationFilterDropdown";
 
@@ -104,7 +104,7 @@ export function VenueFilterBar({ filters, showMineToggle, basePath, sticky, dyna
           Has upcoming events
         </Pill>
         <div className="mx-0.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-        <LifestyleFilterPills
+        <LifestyleDropdown
           selected={lifestyle}
           onToggle={(tag) => go({ lifestyle: toggleInArray(lifestyle, tag) })}
         />

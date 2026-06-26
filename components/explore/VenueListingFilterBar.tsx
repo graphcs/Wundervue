@@ -5,7 +5,7 @@ import { toggleInArray } from "@/lib/array";
 import type { DatePreset, LifestyleTag, SortOption } from "@/lib/types";
 import { Pill } from "@/components/ui/Pill";
 import { DateDropdown } from "./DateDropdown";
-import { LifestyleFilterPills } from "./LifestyleFilterPills";
+import { LifestyleDropdown } from "./LifestyleDropdown";
 import { MultiDropdownPill } from "./MultiDropdownPill";
 import { SortDropdown } from "./SortDropdown";
 
@@ -57,7 +57,7 @@ export function VenueListingFilterBar({ value, onChange }: Props) {
         Free Only
       </Pill>
       <div className="mx-0.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-      <LifestyleFilterPills
+      <LifestyleDropdown
         selected={value.lifestyle}
         onToggle={(tag) => set({ lifestyle: toggleInArray(value.lifestyle, tag) })}
       />

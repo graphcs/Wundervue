@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Pill } from "@/components/ui/Pill";
+import { Popover, DropdownChevron } from "@/components/ui/Popover";
 import { LOCATIONS, type DynamicCity } from "@/lib/data/locations";
 
 interface Props {
@@ -118,18 +119,7 @@ export function LocationFilterDropdown({
   onClear,
   dynamicCities = [],
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
 
   const sel = new Set(selected);
   const isExpanded = (slug: string) => expanded.has(slug);
@@ -145,23 +135,17 @@ export function LocationFilterDropdown({
   const displayLabel = count > 0 ? `${label} (${count})` : label;
 
   return (
-    <div ref={ref} className="relative">
-      <Pill active={count > 0} onClick={() => setOpen((v) => !v)}>
-        {displayLabel}
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </Pill>
-      {open && (
-        <div className="border-border absolute left-0 top-full z-50 mt-1 max-h-[380px] min-w-[260px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
+    <Popover
+      panelClassName="border-border max-h-[380px] min-w-[260px] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border bg-white py-1 shadow-lg"
+      trigger={({ open, toggle }) => (
+        <Pill active={count > 0} onClick={toggle}>
+          {displayLabel}
+          <DropdownChevron open={open} />
+        </Pill>
+      )}
+    >
+      {() => (
+        <>
           {LOCATIONS[0].regions.map((region) => {
             const regionSelected = sel.has(region.slug);
             return (
@@ -247,8 +231,8 @@ export function LocationFilterDropdown({
               </button>
             </div>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </Popover>
   );
 }

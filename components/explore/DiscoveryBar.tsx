@@ -6,13 +6,14 @@ import { MultiDropdownPill } from "./MultiDropdownPill";
 import { LocationFilterDropdown } from "./LocationFilterDropdown";
 import { SortDropdown } from "./SortDropdown";
 import { DateDropdown } from "./DateDropdown";
-import { LifestyleFilterPills } from "./LifestyleFilterPills";
+import { DropdownPill } from "./DropdownPill";
+import { LifestyleDropdown } from "./LifestyleDropdown";
 import { useFilters } from "@/lib/hooks/useFilters";
 import { CATEGORY_FILTER_OPTIONS } from "@/lib/data/categories";
 import { TYPE_FILTERS } from "@/lib/filters/types";
 import { registerDynamicCities, type DynamicCity } from "@/lib/data/locations";
 import { SearchIcon } from "@/components/detail/icons";
-import type { TypeFilter, ViewMode } from "@/lib/types";
+import type { ViewMode } from "@/lib/types";
 
 function GridIcon({ active }: { active: boolean }) {
   return (
@@ -171,78 +172,60 @@ export function DiscoveryBar({
           </form>
         )}
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {TYPE_FILTERS.map((t) => (
-            <Pill
-              key={t.id}
-              active={filters.type === t.id}
-              onClick={() =>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1.5">
+          {/* Filter group: wraps onto multiple lines as space runs out, so no
+              control is ever hidden. Dropdown menus are portaled (Popover). */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <DropdownPill
+              label="Type"
+              options={TYPE_FILTERS}
+              value={filters.type}
+              onChange={(type) => replaceFilters({ type })}
+            />
+
+            <DateDropdown
+              value={filters.date}
+              from={filters.from}
+              to={filters.to}
+              onChange={({ date, from, to }) => replaceFilters({ date, from, to })}
+            />
+
+            <LocationFilterDropdown
+              label="Location"
+              selected={filters.neighborhoods.filter((s) => s !== pathNeighborhood)}
+              onToggle={toggleNeighborhood}
+              onClear={() =>
                 replaceFilters({
-                  type:
-                    t.id === "all"
-                      ? "all"
-                      : filters.type === t.id
-                        ? "all"
-                        : (t.id as TypeFilter),
+                  neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
                 })
               }
+              dynamicCities={dynamicCities}
+            />
+
+            <MultiDropdownPill
+              label="Category"
+              options={catOptions}
+              selected={filters.categories.filter((s) => s !== pathCategory)}
+              onToggle={toggleCategory}
+            />
+
+            <LifestyleDropdown
+              selected={filters.lifestyle}
+              onToggle={toggleLifestyle}
+            />
+
+            <Pill
+              active={filters.freeOnly}
+              onClick={() => replaceFilters({ freeOnly: !filters.freeOnly })}
             >
-              {t.label}
+              Free Only
             </Pill>
-          ))}
 
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-
-          <DateDropdown
-            value={filters.date}
-            from={filters.from}
-            to={filters.to}
-            onChange={({ date, from, to }) =>
-              replaceFilters({ date, from, to })
-            }
-          />
-
-          <LocationFilterDropdown
-            label="Location"
-            selected={filters.neighborhoods.filter(
-              (s) => s !== pathNeighborhood,
-            )}
-            onToggle={toggleNeighborhood}
-            onClear={() =>
-              replaceFilters({
-                neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
-              })
-            }
-            dynamicCities={dynamicCities}
-          />
-
-          <MultiDropdownPill
-            label="Category"
-            options={catOptions}
-            selected={filters.categories.filter((s) => s !== pathCategory)}
-            onToggle={toggleCategory}
-          />
-
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-
-          <LifestyleFilterPills
-            selected={filters.lifestyle}
-            onToggle={toggleLifestyle}
-          />
-
-          <Pill
-            active={filters.freeOnly}
-            onClick={() => replaceFilters({ freeOnly: !filters.freeOnly })}
-          >
-            Free Only
-          </Pill>
-
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-
-          <SortDropdown
-            value={filters.sort}
-            onChange={(sort) => replaceFilters({ sort })}
-          />
+            <SortDropdown
+              value={filters.sort}
+              onChange={(sort) => replaceFilters({ sort })}
+            />
+          </div>
 
           <div className="w-full sm:ml-auto sm:w-auto">
             <ViewToggle
