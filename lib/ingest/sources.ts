@@ -823,6 +823,57 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 30,
   },
   {
+    // /por/ Wine House - wine bar / tapas in historic downtown Louisville.
+    // PopMenu events widget (Whiskey Wednesday, Craft Cocktail Night, Thursday
+    // Poker Night), so popmenuEvents renders the calendar and reads the cards
+    // (each carries its "Weekly Wed at 3pm-10pm" schedule). Single venue.
+    id: "por-wine-house-web",
+    enabled: true,
+    connector: "popmenuEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.porwinehouse.com/wine-events",
+    defaultVenueName: "Pôr Wine House",
+    defaultVenueAddress: "701 A Main St, Louisville, CO 80027",
+    cityHint: "Louisville, CO",
+    defaultCategory: "Food & Drink",
+    maxItems: 40,
+  },
+  {
+    // /pôr/ Wine House IG — its "Weekly Specials" post + reminders carry the full
+    // recurring lineup (Ladies Night, half-price bottle/whiskey, poker, brunch,
+    // flight night, happy hours) the website's PopMenu only partly lists.
+    // instagram + multiEvent reads the captions; recurring-split makes each a
+    // weekly occurrence. Same venue as por-wine-house-web (dedups the overlap).
+    id: "por-wine-house-ig",
+    enabled: false, // noisy: multiEvent over the whole account fragments recurring specials + overlaps por-wine-house-web
+    connector: "instagram",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "porwinehouse_",
+    multiEvent: true,
+    defaultVenueName: "Pôr Wine House",
+    defaultVenueAddress: "701 A Main St, Louisville, CO 80027",
+    cityHint: "Louisville, CO",
+    defaultCategory: "Food & Drink",
+    maxItems: 30,
+  },
+  {
+    // Colorado Chautauqua (Boulder) — historic NPS landmark: Auditorium concerts
+    // plus campus hikes, tours, and talks. WordPress + The Events Calendar, so
+    // tribeEvents reads its Tribe REST API. Multi-venue within the campus
+    // (Auditorium, Academic Hall, Café), each with its own Boulder address;
+    // cityHint covers the few entries with a bare-state address.
+    id: "colorado-chautauqua-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.chautauqua.com/events/",
+    maxItems: 40,
+    cityHint: "Boulder, CO",
+  },
+  {
     // Rosetta Hall food hall (Walnut St, Boulder) live-music lineup — a hand-built
     // Elementor page (no feed) behind Cloudflare UA-gating, each show listed as
     // ARTIST / genre / "weekday month day, time". renderJs passes Cloudflare;
