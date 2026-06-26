@@ -734,6 +734,95 @@ export const SOURCES: SourceConfig[] = [
     cityHint: "Edgewater, CO",
   },
   {
+    // Denver PorchFest — annual one-day front-porch music festival in Baker
+    // (Denver, ~early Oct). The homepage embeds a JSON-LD MusicFestival (date,
+    // Denver), so jsonLdEvents reads it as one festival event. No single venue
+    // (porches across Baker), so pin to the Baker neighborhood.
+    id: "denver-porchfest-web",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denverporchfest.com/",
+    defaultVenueName: "Denver PorchFest",
+    defaultVenueAddress: "400 S Broadway, Denver, CO 80209",
+    defaultNeighborhood: "Baker",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Downtown Boulder events — a City Light Studio BBQ widget whose events load
+    // from an open data API (HTML fragment grouped by date). Multi-venue (each
+    // event names its downtown Boulder venue); cityLightEvents parses it.
+    id: "downtown-boulder-web",
+    enabled: true,
+    connector: "cityLightEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://xapi.citylightstudio.net/_bbq/_bbq_results.php?fid=350&key=065263026&bbqparam=",
+    linkBase: "https://boulderdowntown.com",
+    maxItems: 40,
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Golden Farmers Market — recurring Saturday market (10th & Illinois, Golden,
+    // May 30 - Oct 3) + a Wednesday "Midweek Market". IG posts weekly lineup
+    // flyers (vendor lists, dates) as images, so instagramVision OCRs them with
+    // the captions. Pin to the main Saturday market venue.
+    id: "golden-farmers-market-ig",
+    enabled: true,
+    connector: "instagramVision",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "goldenfarmersmarket",
+    defaultVenueName: "Golden Farmers Market",
+    defaultVenueAddress: "1019 10th St, Golden, CO 80401",
+    cityHint: "Golden, CO",
+    defaultCategory: "Markets",
+    maxItems: 30,
+  },
+  {
+    // Ratio Beerworks events — Squarespace LIST section (not an events
+    // collection, so no ?format=json feed), server-rendered. cheerioWeb reads
+    // each .list-item (title + a description carrying the date/time, e.g.
+    // "July 4 | 10:30 AM | Overland"). Music, comedy, yoga, BBQ. Two taprooms
+    // (RiNo + Overland); pin to the main RiNo location.
+    id: "ratio-beerworks-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://ratiobeerworks.com/events",
+    selectors: {
+      item: ".list-item",
+      title: ".list-item-content__title",
+      description: ".list-item-content__description",
+    },
+    maxItems: 30,
+    defaultVenueName: "Ratio Beerworks",
+    defaultVenueAddress: "2920 Larimer St, Denver, CO 80205",
+    defaultNeighborhood: "RiNo",
+    cityHint: "Denver, CO",
+  },
+  {
+    // Little Man Ice Cream Can — iconic LoHi milk-can shop with a packed plaza
+    // events program (movie nights, live music, swing/line dancing, bingo, jazz).
+    // The website location page is info-only; events post on IG, often as monthly
+    // calendar flyers, so instagramVision OCRs them with the captions. Mostly
+    // product marketing the normalizer filters; pin to the Can (LoHi).
+    id: "little-man-ice-cream-ig",
+    enabled: true,
+    connector: "instagramVision",
+    cadence: "weekly",
+    sourceLabel: "Instagram",
+    handle: "littlemanicecream",
+    defaultVenueName: "Little Man Ice Cream Can",
+    defaultVenueAddress: "2620 16th St, Denver, CO 80211",
+    defaultNeighborhood: "LoHi",
+    cityHint: "Denver, CO",
+    maxItems: 30,
+  },
+  {
     // Rosetta Hall food hall (Walnut St, Boulder) live-music lineup — a hand-built
     // Elementor page (no feed) behind Cloudflare UA-gating, each show listed as
     // ARTIST / genre / "weekday month day, time". renderJs passes Cloudflare;

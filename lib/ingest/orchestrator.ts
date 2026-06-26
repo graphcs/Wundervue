@@ -25,6 +25,7 @@ import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
 import { fetchElfsightCalendar } from "./connectors/elfsightCalendar";
 import { fetchLocalistEvents } from "./connectors/localistEvents";
+import { fetchCityLightEvents } from "./connectors/cityLightEvents";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
 import { fetchEventive } from "./connectors/eventive";
@@ -115,6 +116,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchElfsightCalendar(source);
     case "localistEvents":
       return fetchLocalistEvents(source);
+    case "cityLightEvents":
+      return fetchCityLightEvents(source);
     case "libcalEvents":
       return fetchLibCalEvents(source);
     case "potteryWithPurpose":

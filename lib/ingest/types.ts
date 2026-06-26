@@ -38,6 +38,7 @@ export type ConnectorKind =
   | "squarespaceProducts"
   | "elfsightCalendar"
   | "localistEvents"
+  | "cityLightEvents"
   | "flyerImage"
   | "screenshotVision";
 
@@ -130,6 +131,10 @@ export interface SourceConfig {
   // and image resolution. Items are kept in document order, so this yields the
   // soonest N; weekly re-runs pull the window forward.
   maxItems?: number;
+  // cityLightEvents — base URL to resolve the widget's relative event links
+  // (e.g. "/do/<slug>") into absolute source_urls, since the data API lives on a
+  // different host than the display site.
+  linkBase?: string;
 
   // eventive — Eventive event-bucket id + publishable widget api_key (both
   // public, from the <org>.eventive.org tenant bundle). See connectors/eventive.ts.

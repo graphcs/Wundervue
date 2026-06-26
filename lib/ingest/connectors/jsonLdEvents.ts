@@ -32,7 +32,9 @@ interface LdEvent {
 
 function isEvent(type: LdEvent["@type"]): boolean {
   const types = Array.isArray(type) ? type : [type];
-  return types.some((t) => typeof t === "string" && (t.includes("Event") || t === "Festival"));
+  // Match "…Event" plus any "…Festival" subtype (Festival, MusicFestival,
+  // FoodEvent…) — schema.org festival types don't all contain "Event".
+  return types.some((t) => typeof t === "string" && (t.includes("Event") || t.includes("Festival")));
 }
 
 // JSON-LD blocks can be a single object, an array, or an @graph wrapper.
