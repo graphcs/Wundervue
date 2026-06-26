@@ -18,8 +18,11 @@ function endOfDay(d: Date): Date {
   return x;
 }
 
-function getDateRange(
-  filters: Filters,
+// Resolve a date preset (or custom from/to) into a concrete [start, end] window.
+// Exported so the venue browse pipeline can apply the exact same "time" filter
+// as the explore feed. Only reads date/from/to, so callers can pass a slim object.
+export function getDateRange(
+  filters: Pick<Filters, "date" | "from" | "to">,
   now: Date = new Date(),
 ): { start: Date; end: Date } | null {
   const today = startOfDay(now);

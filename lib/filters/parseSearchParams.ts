@@ -23,7 +23,7 @@ const VALID_TYPES: TypeFilter[] = ["all", "events", "deals", "both"];
 // Derived from SORT_OPTIONS so the dropdown + validation can't drift.
 const VALID_SORTS: readonly SortOption[] = SORT_OPTIONS.map((o) => o.id);
 const VALID_VIEWS: ViewMode[] = ["grid", "map", "calendar"];
-const VALID_TABS: FeedTab[] = ["all", "for-you", "my-events"];
+const VALID_TABS: FeedTab[] = ["all", "for-you", "my-events", "my-venues"];
 const VALID_LIFESTYLE: LifestyleTag[] = [
   "date-night",
   "dog-friendly",
@@ -34,7 +34,7 @@ const VALID_LIFESTYLE: LifestyleTag[] = [
 type ParamValue = string | string[] | undefined;
 type ParamMap = Record<string, ParamValue> | URLSearchParams;
 
-function first(params: ParamMap, key: string): string | undefined {
+export function first(params: ParamMap, key: string): string | undefined {
   if (params instanceof URLSearchParams) {
     return params.get(key) ?? undefined;
   }
@@ -43,7 +43,7 @@ function first(params: ParamMap, key: string): string | undefined {
   return v;
 }
 
-function csv(value: string | undefined): string[] {
+export function csv(value: string | undefined): string[] {
   if (!value) return [];
   return value
     .split(",")

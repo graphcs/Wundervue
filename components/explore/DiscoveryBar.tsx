@@ -6,30 +6,14 @@ import { MultiDropdownPill } from "./MultiDropdownPill";
 import { LocationFilterDropdown } from "./LocationFilterDropdown";
 import { SortDropdown } from "./SortDropdown";
 import { DateDropdown } from "./DateDropdown";
+import { DropdownPill } from "./DropdownPill";
+import { LifestyleDropdown } from "./LifestyleDropdown";
 import { useFilters } from "@/lib/hooks/useFilters";
-import { useAuthContext } from "@/components/auth/AuthProvider";
-import { CATEGORIES } from "@/lib/data/categories";
-import { LIFESTYLE_TAGS, TYPE_FILTERS } from "@/lib/filters/types";
+import { CATEGORY_FILTER_OPTIONS } from "@/lib/data/categories";
+import { TYPE_FILTERS } from "@/lib/filters/types";
 import { registerDynamicCities, type DynamicCity } from "@/lib/data/locations";
-import type { LifestyleTag, TypeFilter, ViewMode } from "@/lib/types";
-
-function SearchIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+import { SearchIcon } from "@/components/detail/icons";
+import type { ViewMode } from "@/lib/types";
 
 function GridIcon({ active }: { active: boolean }) {
   return (
@@ -153,9 +137,6 @@ export function DiscoveryBar({
     toggleNeighborhood,
     toggleCategory,
   } = useFilters();
-  const { profile, isLoggedIn, openUpgrade } = useAuthContext();
-  const lifestyleGated = !isLoggedIn || profile?.plan !== "insider";
-
   const [q, setQ] = useState(filters.q ?? "");
 
   const onSearchSubmit = (e: FormEvent) => {
@@ -163,7 +144,7 @@ export function DiscoveryBar({
     replaceFilters({ q: q.trim() || undefined });
   };
 
-  const catOptions = CATEGORIES.filter((c) => c.slug !== pathCategory);
+  const catOptions = CATEGORY_FILTER_OPTIONS.filter((c) => c.slug !== pathCategory);
 
   return (
     <div className="bg-bg border-border border-b">
@@ -172,7 +153,7 @@ export function DiscoveryBar({
           <form onSubmit={onSearchSubmit} className="mb-3 flex gap-2.5">
             <div className="relative flex-1">
               <span className="text-chrome pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                <SearchIcon />
+                <SearchIcon size={16} />
               </span>
               <input
                 type="search"
@@ -191,91 +172,60 @@ export function DiscoveryBar({
           </form>
         )}
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {TYPE_FILTERS.map((t) => (
-            <Pill
-              key={t.id}
-              active={filters.type === t.id}
-              onClick={() =>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1.5">
+          {/* Filter group: wraps onto multiple lines as space runs out, so no
+              control is ever hidden. Dropdown menus are portaled (Popover). */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <DropdownPill
+              label="Type"
+              options={TYPE_FILTERS}
+              value={filters.type}
+              onChange={(type) => replaceFilters({ type })}
+            />
+
+            <DateDropdown
+              value={filters.date}
+              from={filters.from}
+              to={filters.to}
+              onChange={({ date, from, to }) => replaceFilters({ date, from, to })}
+            />
+
+            <LocationFilterDropdown
+              label="Location"
+              selected={filters.neighborhoods.filter((s) => s !== pathNeighborhood)}
+              onToggle={toggleNeighborhood}
+              onClear={() =>
                 replaceFilters({
-                  type:
-                    t.id === "all"
-                      ? "all"
-                      : filters.type === t.id
-                        ? "all"
-                        : (t.id as TypeFilter),
+                  neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
                 })
               }
-            >
-              {t.label}
-            </Pill>
-          ))}
+              dynamicCities={dynamicCities}
+            />
 
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
+            <MultiDropdownPill
+              label="Category"
+              options={catOptions}
+              selected={filters.categories.filter((s) => s !== pathCategory)}
+              onToggle={toggleCategory}
+            />
 
-          <DateDropdown
-            value={filters.date}
-            from={filters.from}
-            to={filters.to}
-            onChange={({ date, from, to }) =>
-              replaceFilters({ date, from, to })
-            }
-          />
+            <LifestyleDropdown
+              selected={filters.lifestyle}
+              onToggle={toggleLifestyle}
+            />
 
-          <LocationFilterDropdown
-            label="Location"
-            selected={filters.neighborhoods.filter(
-              (s) => s !== pathNeighborhood,
-            )}
-            onToggle={toggleNeighborhood}
-            onClear={() =>
-              replaceFilters({
-                neighborhoods: pathNeighborhood ? [pathNeighborhood] : [],
-              })
-            }
-            dynamicCities={dynamicCities}
-          />
-
-          <MultiDropdownPill
-            label="Category"
-            options={catOptions}
-            selected={filters.categories.filter((s) => s !== pathCategory)}
-            onToggle={toggleCategory}
-          />
-
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-
-          {LIFESTYLE_TAGS.map((tag) => (
             <Pill
-              key={tag.id}
-              active={filters.lifestyle.includes(tag.id)}
-              onClick={() => {
-                if (lifestyleGated) {
-                  openUpgrade();
-                  return;
-                }
-                toggleLifestyle(tag.id as LifestyleTag);
-              }}
-              title={lifestyleGated ? "Lifestyle filters — Insider only" : undefined}
+              active={filters.freeOnly}
+              onClick={() => replaceFilters({ freeOnly: !filters.freeOnly })}
             >
-              <span className="text-[13px] leading-none">{tag.emoji}</span>
-              {tag.label}
+              Free Only
             </Pill>
-          ))}
 
-          <Pill
-            active={filters.freeOnly}
-            onClick={() => replaceFilters({ freeOnly: !filters.freeOnly })}
-          >
-            Free Only
-          </Pill>
-
-          <div className="mx-1.5 hidden h-[18px] w-px bg-[#d5d5d5] sm:block" />
-
-          <SortDropdown
-            value={filters.sort}
-            onChange={(sort) => replaceFilters({ sort })}
-          />
+            <SortDropdown
+              value={filters.sort}
+              onChange={(sort) => replaceFilters({ sort })}
+            />
+          </div>
 
           <div className="w-full sm:ml-auto sm:w-auto">
             <ViewToggle

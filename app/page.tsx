@@ -15,6 +15,7 @@ import { ensureDynamicCities } from "@/lib/data/dynamicCities.server";
 import { HomeHero } from "@/components/home/HomeHero";
 import { FeedTabs } from "@/components/home/FeedTabs";
 import { MyEvents } from "@/components/home/MyEvents";
+import { VenuesBrowse } from "@/components/venues/VenuesBrowse";
 
 export const metadata: Metadata = {
   title: "Wundervue — Discover Denver Events & Deals",
@@ -32,6 +33,7 @@ export default async function Home({ searchParams }: PageProps) {
   const filters = parseSearchParams(sp);
 
   const isMyEvents = filters.tab === "my-events";
+  const isMyVenues = filters.tab === "my-venues";
   const dynamicCities = await ensureDynamicCities();
 
   return (
@@ -40,12 +42,27 @@ export default async function Home({ searchParams }: PageProps) {
       <div className="mx-auto max-w-[1100px] px-4 sm:px-7 pt-6">
         <FeedTabs />
       </div>
-      {/* My Events is client-only (favorites); All/For-You filter via DiscoveryBar. */}
-      {!isMyEvents && (
+      {/* My Events / My Venues bring their own controls; All/For-You filter via
+          DiscoveryBar. */}
+      {!isMyEvents && !isMyVenues && (
         <DiscoveryBar showSearch={false} dynamicCities={dynamicCities} />
       )}
       <div className="mx-auto max-w-[1100px] px-4 sm:px-7 py-8">
-        {isMyEvents ? <MyEvents /> : <Feed sp={sp} filters={filters} />}
+        {isMyEvents ? (
+          <MyEvents />
+        ) : isMyVenues ? (
+          <VenuesBrowse
+            sp={sp}
+            mine
+            basePath="/"
+            sticky={{ tab: "my-venues" }}
+            showMineToggle={false}
+            allVenuesHref="/venues"
+            dynamicCities={dynamicCities}
+          />
+        ) : (
+          <Feed sp={sp} filters={filters} />
+        )}
       </div>
     </>
   );

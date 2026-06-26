@@ -29,6 +29,15 @@ export function PinIcon({ size = 14, className }: IconProps) {
   );
 }
 
+export function SearchIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaults}>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 export function CompassIcon({ size = 14, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...defaults}>

@@ -106,6 +106,25 @@ export async function getPublishedListings(): Promise<Listing[]> {
   }
 }
 
+// PostgREST caps a single SELECT at 1000 rows. Page through `buildPage` until a
+// short page signals the end, returning every row. The query MUST apply a stable
+// order (e.g. a unique `id`) so consecutive ranges don't overlap or skip rows.
+// Throws on the first query error so callers' try/catch can fall back.
+async function selectAllPaged<T>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildPage(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 // Returns an image URL for each venue, keyed by venue slug. Source of truth
 // resolution order:
 //   1. `venues.image_url` — populated by scripts/backfill-venue-images.ts
@@ -117,26 +136,32 @@ export async function getPublishedListings(): Promise<Listing[]> {
 export async function getVenueImageMapBySlug(): Promise<Map<string, string>> {
   try {
     const client = await getSupabaseServerClient();
-    const [venuesRes, listingsRes] = await Promise.all([
-      client
-        .from("venues")
-        .select("slug, image_url")
-        .not("image_url", "is", null),
-      client
-        .from("listings")
-        .select("image_url, venues!inner(slug)")
-        .not("image_url", "is", null)
-        .not("published_at", "is", null)
-        .order("created_at", { ascending: false }),
+
+    // Page the listings sweep (there are >1000 image-bearing listings, so a
+    // single query would drop the older tail) concurrently with the curated
+    // venue images — we only APPLY the latter after listings, to preserve its
+    // priority. Listings ordered newest-first; the first image per venue wins.
+    const [listingRows, venuesRes] = await Promise.all([
+      selectAllPaged<{
+        image_url: string | null;
+        venues: { slug: string } | { slug: string }[] | null;
+      }>((from, to) =>
+        client
+          .from("listings")
+          .select("image_url, venues!inner(slug)")
+          .not("image_url", "is", null)
+          .not("published_at", "is", null)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      client.from("venues").select("slug, image_url").not("image_url", "is", null),
     ]);
 
     const map = new Map<string, string>();
 
     // Listings first (lower priority) — overwritten by venues.image_url below.
-    for (const row of (listingsRes.data ?? []) as Array<{
-      image_url: string | null;
-      venues: { slug: string } | { slug: string }[] | null;
-    }>) {
+    for (const row of listingRows) {
       if (!row.image_url || !row.venues) continue;
       const slug = Array.isArray(row.venues)
         ? row.venues[0]?.slug
@@ -275,44 +300,96 @@ export interface BrowseVenue {
   neighborhood: string;
   categories: string[];
   upcomingCount: number;
+  /** Upcoming events at this venue, carrying just the fields the browse-grid
+   *  filters need: the date window (for the "time" filter) and lifestyle tags
+   *  (for the outdoor/dog-friendly/etc. filters). Length === upcomingCount. */
+  upcoming: VenueUpcomingEvent[];
+  /** Sum of save_count across the venue's published listings ("Most saved"). */
+  saveCount: number;
+  /** Denormalized venue_follows count ("Most followed"). */
+  followerCount: number;
 }
 
-// Real venues (from ingestion) that have at least one upcoming listing, sorted
-// by activity. Powers the /venues browse grid. Counts use the same "today UTC"
-// cutoff as the explore feed so "upcoming" means the same thing everywhere.
-export async function getBrowseVenues(): Promise<BrowseVenue[]> {
+export interface VenueUpcomingEvent {
+  startAt: string | null;
+  endAt: string | null;
+  tags: string[];
+}
+
+// Real venues (from ingestion), sorted by activity. Powers the /venues browse
+// grid. Counts use the same "today UTC" cutoff as the explore feed so "upcoming"
+// means the same thing everywhere. By default only venues with at least one
+// upcoming listing are returned; pass { includeEmpty: true } to also get venues
+// with zero upcoming events (used by the "My Venues" / has-upcoming filter).
+export async function getBrowseVenues(
+  opts: { includeEmpty?: boolean } = {},
+): Promise<BrowseVenue[]> {
   try {
     const client = await getSupabaseServerClient();
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
     const cutoff = todayStart.toISOString();
 
-    const [venuesRes, listingsRes] = await Promise.all([
-      client.from("venues").select("id, slug, name, description, address, neighborhood, categories"),
-      client
-        .from("listings")
-        .select("venue_id")
-        .not("published_at", "is", null)
-        .not("venue_id", "is", null)
-        // Match getPublishedListings exactly: an ongoing run (end today-or-later)
-        // or a future single-date event. Keeps the venue count in step with the
-        // explore feed so a mid-run event isn't shown but uncounted.
-        .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`),
+    // Both listings aggregations can exceed PostgREST's 1000-row cap (saves
+    // covers every published listing, ever), so page through them — a single
+    // query would silently drop the tail and undercount. Kept separate from the
+    // upcoming query because that one carries different columns + the date predicate.
+    const [venuesRes, upcomingRows, savesRows] = await Promise.all([
+      client.from("venues").select("id, slug, name, description, address, neighborhood, categories, follower_count"),
+      selectAllPaged<{
+        venue_id: string | null; date_start: string | null; date_end: string | null; tags: string[] | null;
+      }>((from, to) =>
+        client
+          .from("listings")
+          .select("venue_id, date_start, date_end, tags")
+          .not("published_at", "is", null)
+          .not("venue_id", "is", null)
+          // Match getPublishedListings exactly: an ongoing run (end today-or-later)
+          // or a future single-date event. Keeps the venue count in step with the
+          // explore feed so a mid-run event isn't shown but uncounted.
+          .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      // Total saves across each venue's published listings (past included) — the
+      // "Most saved" popularity signal. RLS-safe: save_count rides on listings.
+      selectAllPaged<{ venue_id: string | null; save_count: number | null }>((from, to) =>
+        client
+          .from("listings")
+          .select("venue_id, save_count")
+          .not("published_at", "is", null)
+          .not("venue_id", "is", null)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
-    const counts = new Map<string, number>();
-    for (const r of (listingsRes.data ?? []) as Array<{ venue_id: string | null }>) {
+    const upcomingByVenue = new Map<string, VenueUpcomingEvent[]>();
+    for (const r of upcomingRows) {
       if (!r.venue_id) continue;
-      counts.set(r.venue_id, (counts.get(r.venue_id) ?? 0) + 1);
+      const list = upcomingByVenue.get(r.venue_id) ?? [];
+      list.push({ startAt: r.date_start, endAt: r.date_end, tags: r.tags ?? [] });
+      upcomingByVenue.set(r.venue_id, list);
+    }
+
+    const saves = new Map<string, number>();
+    for (const r of savesRows) {
+      if (!r.venue_id) continue;
+      saves.set(r.venue_id, (saves.get(r.venue_id) ?? 0) + (r.save_count ?? 0));
     }
 
     const out: BrowseVenue[] = [];
     for (const v of (venuesRes.data ?? []) as Array<{
       id: string; slug: string; name: string; description: string | null; address: string | null;
-      neighborhood: string | null; categories: string[] | null;
+      neighborhood: string | null; categories: string[] | null; follower_count: number | null;
     }>) {
-      const upcomingCount = counts.get(v.id) ?? 0;
-      if (upcomingCount === 0) continue;
+      // Drop ingestion placeholders ("<UNKNOWN>", or any blank-named row) — they
+      // are not real venues and shouldn't appear in the browse grid.
+      const name = (v.name ?? "").trim();
+      if (!name || name === "<UNKNOWN>") continue;
+      const upcoming = upcomingByVenue.get(v.id) ?? [];
+      const upcomingCount = upcoming.length;
+      if (upcomingCount === 0 && !opts.includeEmpty) continue;
       out.push({
         slug: v.slug,
         name: v.name,
@@ -321,6 +398,9 @@ export async function getBrowseVenues(): Promise<BrowseVenue[]> {
         neighborhood: v.neighborhood ?? "",
         categories: v.categories ?? [],
         upcomingCount,
+        upcoming,
+        saveCount: saves.get(v.id) ?? 0,
+        followerCount: v.follower_count ?? 0,
       });
     }
     out.sort((a, b) => b.upcomingCount - a.upcomingCount || a.name.localeCompare(b.name));

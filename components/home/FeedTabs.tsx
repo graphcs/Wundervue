@@ -8,10 +8,12 @@ const TABS: { id: FeedTab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "for-you", label: "✨ For You" },
   { id: "my-events", label: "My Events" },
+  { id: "my-venues", label: "My Venues" },
 ];
 
-// All · For You · My Events. For You is Insider-only (→ upgrade); My Events
-// needs a login (→ onboarding). Drives the `tab` URL param via useFilters.
+// All · For You · My Events · My Venues. For You is Insider-only (→ upgrade);
+// My Events and My Venues need a login (→ onboarding). Drives the `tab` URL
+// param via useFilters.
 export function FeedTabs() {
   const { filters, replaceFilters } = useFilters();
   const { isLoggedIn, profile, openUpgrade, openOnboarding } = useAuthContext();
@@ -19,7 +21,7 @@ export function FeedTabs() {
 
   function select(tab: FeedTab) {
     if (tab === "for-you" && !insider) return openUpgrade();
-    if (tab === "my-events" && !isLoggedIn) return openOnboarding(0);
+    if ((tab === "my-events" || tab === "my-venues") && !isLoggedIn) return openOnboarding(0);
     replaceFilters({ tab });
   }
 
