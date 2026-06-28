@@ -47,26 +47,46 @@ function addressOf(loc: SqsLocation | undefined): string | null {
 export async function fetchSquarespaceEvents(source: SourceConfig): Promise<RawItem[]> {
   const base = Array.isArray(source.url) ? source.url[0] : source.url;
   if (!base) throw new Error(`source ${source.id} missing url`);
-  const url = `${base}${base.includes("?") ? "&" : "?"}format=json`;
-
-  const json = await withRetry(async () => {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "WundervueBot/1.0 (+https://wundervue.com)" },
+  const origin = base.split("?")[0];
+  const fetchJson = (u: string): Promise<SqsResponse> =>
+    withRetry(async () => {
+      const res = await fetch(u, {
+        headers: { "User-Agent": "WundervueBot/1.0 (+https://wundervue.com)" },
+      });
+      if (!res.ok) throw new Error(`squarespace fetch failed: status ${res.status}`);
+      return (await res.json()) as SqsResponse;
     });
-    if (!res.ok) throw new Error(`squarespace fetch failed: status ${res.status}`);
-    return (await res.json()) as SqsResponse;
-  });
 
-  // List-mode collections pre-filter into `upcoming`; calendar-mode ones (e.g.
-  // New Terrain) leave it empty and put the month's events in `items` (past +
-  // future), so fall back to those, keeping only upcoming, soonest first.
+  const json = await fetchJson(`${origin}?format=json`);
+
+  // List-mode collections pre-filter into `upcoming`. Calendar-mode ones (e.g.
+  // New Terrain, Bread Bar) leave it empty and return only the CURRENT month's
+  // events in `items` — so also fetch the next few months via &month=MM-YYYY,
+  // merge, keep only upcoming, dedupe, soonest first. Without this, events past
+  // the current month are missed until the calendar rolls into their month.
   const now = Date.now();
   const upcoming = json.upcoming ?? [];
-  const items = upcoming.length
-    ? upcoming
-    : (json.items ?? [])
-        .filter((e) => e.startDate && e.startDate >= now)
-        .sort((a, b) => (a.startDate ?? 0) - (b.startDate ?? 0));
+  let items: SqsItem[];
+  if (upcoming.length) {
+    items = upcoming;
+  } else {
+    const MONTHS_AHEAD = 3;
+    const d = new Date();
+    const monthResponses = await Promise.all(
+      Array.from({ length: MONTHS_AHEAD }, (_, i) => {
+        const m = new Date(d.getFullYear(), d.getMonth() + i + 1, 1);
+        const mp = `${String(m.getMonth() + 1).padStart(2, "0")}-${m.getFullYear()}`;
+        return fetchJson(`${origin}?view=calendar&month=${mp}&format=json`).catch(() => ({}) as SqsResponse);
+      }),
+    );
+    const byId = new Map<string, SqsItem>();
+    for (const r of [json, ...monthResponses]) {
+      for (const e of r.items ?? []) {
+        if (e.startDate && e.startDate >= now) byId.set(e.id ?? e.fullUrl ?? String(e.startDate), e);
+      }
+    }
+    items = [...byId.values()].sort((a, b) => (a.startDate ?? 0) - (b.startDate ?? 0));
+  }
   const fetchedAt = new Date().toISOString();
   const out: RawItem[] = [];
 

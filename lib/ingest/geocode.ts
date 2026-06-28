@@ -7,12 +7,15 @@
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 
-// Denver Metro bounding box (generous: Boulder/Lyons/Longmont in the north,
-// Parker/Lone Tree in the south, Golden/Morrison west, Aurora east). Any
-// geocode result outside this is a mismatch — e.g. "Washington Park" resolving
-// to Washington *state*, or "Lincoln St" to Nebraska. We reject those rather
-// than pin a Denver listing thousands of miles away on the map.
-const DENVER_BBOX = { minLat: 39.3, maxLat: 40.4, minLng: -105.5, maxLng: -104.4 };
+// Denver Metro + I-70 mountain corridor bounding box (generous: Boulder/Lyons/
+// Longmont north, Parker/Lone Tree south, Aurora east; west extends past
+// Golden/Morrison up the I-70 corridor to Idaho Springs/Georgetown/Silver Plume,
+// which carry real day-trip venues like The Bread Bar). Any geocode result
+// outside this is a mismatch — e.g. "Washington Park" resolving to Washington
+// *state*, or "Lincoln St" to Nebraska — which we reject rather than pin a
+// listing thousands of miles away. The west edge stays east of the Continental
+// Divide, so out-of-state rejects still hold.
+const DENVER_BBOX = { minLat: 39.3, maxLat: 40.4, minLng: -105.85, maxLng: -104.4 };
 
 export function inDenverMetro(lat: number, lng: number): boolean {
   return (

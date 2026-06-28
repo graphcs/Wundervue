@@ -1,5 +1,6 @@
-import type { IngestResult, ListingInsert, RawItem, SourceConfig } from "./types";
+import type { IngestResult, ListingInsert, NormalizedListing, RawItem, SourceConfig } from "./types";
 import { fetchInstagram } from "./connectors/instagram";
+import { fetchInstagramVision } from "./connectors/instagramVision";
 import { fetchSerpEvents } from "./connectors/serpEvents";
 import { fetchApifyWeb } from "./connectors/apifyWeb";
 import { fetchCheerioWeb } from "./connectors/cheerioWeb";
@@ -22,10 +23,22 @@ import { fetchDenverSummitFcSchedule } from "./connectors/denverSummitFcSchedule
 import { fetchTicketmasterVenue } from "./connectors/ticketmasterVenue";
 import { fetchJsonLdEvents } from "./connectors/jsonLdEvents";
 import { fetchIcsCalendar } from "./connectors/icsCalendar";
+import { fetchElfsightCalendar } from "./connectors/elfsightCalendar";
+import { fetchLocalistEvents } from "./connectors/localistEvents";
+import { fetchCityLightEvents } from "./connectors/cityLightEvents";
 import { fetchLibCalEvents } from "./connectors/libcalEvents";
 import { fetchPotteryWithPurpose } from "./connectors/potteryWithPurpose";
+import { fetchEventive } from "./connectors/eventive";
+import { fetchDmnsEvents } from "./connectors/dmnsEvents";
+import { fetchAegEvents } from "./connectors/aegEvents";
+import { fetchCherryCricketDeals } from "./connectors/cherryCricketDeals";
+import { fetchPopmenuEvents } from "./connectors/popmenuEvents";
+import { fetchSquarespaceProducts } from "./connectors/squarespaceProducts";
+import { fetchFlyerImage } from "./connectors/flyerImage";
+import { fetchScreenshotVision } from "./connectors/screenshotVision";
 import { fetchAveryTaproomEvents } from "./connectors/averyTaproomEvents";
-import { normalize } from "./normalize";
+import { createHash } from "node:crypto";
+import { normalize, normalizeMulti } from "./normalize";
 import { checkUrl } from "./checkUrl";
 import {
   clusterAndMarkDuplicates,
@@ -33,6 +46,7 @@ import {
   reconcileVenueDuplicates,
 } from "./dedupCluster";
 import { mergeDuplicateVenues } from "./venueMerge";
+import { expandRecurringOccurrences } from "./expandOccurrences";
 import { resolveListingImage } from "./imagePipeline";
 import {
   applyBatch,
@@ -52,6 +66,8 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
   switch (source.connector) {
     case "instagram":
       return fetchInstagram(source);
+    case "instagramVision":
+      return fetchInstagramVision(source);
     case "serpEvents":
       return fetchSerpEvents(source);
     case "apifyWeb":
@@ -96,12 +112,34 @@ async function fetchRaw(source: SourceConfig): Promise<RawItem[]> {
       return fetchJsonLdEvents(source);
     case "icsCalendar":
       return fetchIcsCalendar(source);
+    case "elfsightCalendar":
+      return fetchElfsightCalendar(source);
+    case "localistEvents":
+      return fetchLocalistEvents(source);
+    case "cityLightEvents":
+      return fetchCityLightEvents(source);
     case "libcalEvents":
       return fetchLibCalEvents(source);
     case "potteryWithPurpose":
       return fetchPotteryWithPurpose(source);
     case "averyTaproomEvents":
       return fetchAveryTaproomEvents(source);
+    case "eventive":
+      return fetchEventive(source);
+    case "dmnsEvents":
+      return fetchDmnsEvents(source);
+    case "aegEvents":
+      return fetchAegEvents(source);
+    case "cherryCricketDeals":
+      return fetchCherryCricketDeals(source);
+    case "popmenuEvents":
+      return fetchPopmenuEvents(source);
+    case "squarespaceProducts":
+      return fetchSquarespaceProducts(source);
+    case "flyerImage":
+      return fetchFlyerImage(source);
+    case "screenshotVision":
+      return fetchScreenshotVision(source);
   }
 }
 
@@ -140,17 +178,62 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     // Cheaper than an LLM normalize call, so do it first.
     const liveItems = await filterLiveUrls(rawItems, source.id);
 
-    const normalized = await Promise.all(
-      liveItems.map(async (item) => {
-        try {
-          const result = await normalize({ item, source });
-          return result ? { item, result } : null;
-        } catch (err) {
-          console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);
-          return null;
+    // Normalize with BOUNDED concurrency. An unbounded Promise.all over a large
+    // batch fires 20+ simultaneous LLM calls; OpenRouter throttles per key, and a
+    // throttled call returns without a tool block, so normalize yields null and
+    // the event is silently dropped (it passes in isolation but loses the race in
+    // the full run). Cap it like the image/URL stages.
+    type NormPair = { item: RawItem; result: NormalizedListing };
+    const normalizeItem = async (item: RawItem): Promise<NormPair[]> => {
+      try {
+        // Instagram captions describe events relative to when the POST was made
+        // ("tonight", "this Friday", a year-less "April 25"). The IG connectors
+        // set item.fetchedAt to the post timestamp, so anchor relative-date
+        // resolution to that instead of today — otherwise an old post resurfaces
+        // as a fake future event. Other connectors fetchedAt ≈ now, so this is a
+        // no-op for them; undefined falls back to normalize()'s today default.
+        const isInstagram =
+          source.connector === "instagram" || source.connector === "instagramVision";
+        const currentDate =
+          isInstagram && item.fetchedAt && !Number.isNaN(Date.parse(item.fetchedAt))
+            ? item.fetchedAt.slice(0, 10)
+            : undefined;
+        // Opt-in multi-event sources only (e.g. venues that post monthly
+        // roundups). Every other source takes the unchanged single-event path.
+        if (source.multiEvent) {
+          const results = await normalizeMulti({ item, source, currentDate });
+          return results.map((result) => {
+            // Content-stable per-event id (order-independent) so re-runs update
+            // rather than duplicate the same event from the same post. A
+            // recurring event advances dateStart to the next occurrence every
+            // run, so keying on that day would re-key (and duplicate) it each
+            // run — use the stable dateDisplay ("Every Tuesday") instead.
+            const dateKey = result.recurring
+              ? result.dateDisplay || "recurring"
+              : (result.dateStart?.slice(0, 10) ?? result.dateDisplay);
+            const key = `${result.canonicalTitle}|${dateKey}`;
+            const suffix = createHash("sha1").update(key).digest("hex").slice(0, 10);
+            return { item: { ...item, sourceId: `${item.sourceId}#${suffix}` }, result };
+          });
+        }
+        const result = await normalize({ item, source, currentDate });
+        return result ? [{ item, result }] : [];
+      } catch (err) {
+        console.error(`[ingest:${source.id}] normalize failed for ${item.sourceId}`, err);
+        return [];
+      }
+    };
+    const normalizedNested = new Array<NormPair[]>(liveItems.length);
+    let normCursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(NORMALIZE_CONCURRENCY, liveItems.length) }, async () => {
+        while (normCursor < liveItems.length) {
+          const idx = normCursor++;
+          normalizedNested[idx] = await normalizeItem(liveItems[idx]);
         }
       }),
     );
+    const normalized = normalizedNested.flat();
 
     // Resolve a venue per item. Sequential because the geocoder rate-limits
     // (1 req/sec public Nominatim quota) — parallelising would just queue
@@ -161,11 +244,23 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     }> = [];
     for (const n of normalized) {
       if (!n) continue;
+      // A source with a configured address is single-venue: pin every post to it
+      // authoritatively. The per-post name/neighborhood the LLM guesses from
+      // captions otherwise spawns duplicate venue rows and a wrong neighborhood
+      // (e.g. an IG caption placing a S. Broadway bar in "LoDo"), so prefer the
+      // config and reverse-geocode the neighborhood from the pin. Multi-venue
+      // sources (no defaultVenueAddress) keep resolving per post.
+      const pinSingle = Boolean(source.defaultVenueAddress);
       const venue = await resolveOrCreateVenue({
         defaultVenueSlug: source.defaultVenueSlug,
-        venueName: n.result.venueName,
-        address: n.result.address,
-        neighborhood: n.result.neighborhood,
+        venueName: pinSingle
+          ? source.defaultVenueName ?? n.result.venueName
+          : n.result.venueName ?? source.defaultVenueName ?? null,
+        address: pinSingle
+          ? source.defaultVenueAddress ?? n.result.address
+          : n.result.address ?? source.defaultVenueAddress ?? null,
+        neighborhood: pinSingle ? source.defaultNeighborhood ?? null : n.result.neighborhood,
+        city: source.cityHint,
       });
       pairs.push({
         row: buildListingInsert({ source, item: n.item, normalized: n.result, venue }),
@@ -179,12 +274,18 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
     // showing a broken card or a low-quality thumbnail.
     const withImages = await resolveImagesForBatch(pairs, source.id);
 
-    const actions = await classifyForUpsert(withImages);
+    // Split recurring WEEKLY events into one row per upcoming occurrence (a
+    // specific day + time). Done after image resolution so every occurrence
+    // clones the series' single resolved image instead of generating its own.
+    const normalizedBySourceId = new Map(normalized.map((n) => [n.item.sourceId, n.result]));
+    const expanded = expandRecurringOccurrences(withImages, normalizedBySourceId);
+
+    const actions = await classifyForUpsert(expanded);
     const counts = await applyBatch(actions);
 
     let batchVenueIds = [
       ...new Set(
-        withImages.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
+        expanded.map((r) => r.venue_id).filter((v): v is string => Boolean(v)),
       ),
     ];
 
@@ -295,6 +396,9 @@ export async function ingestSource(source: SourceConfig): Promise<IngestResult> 
 }
 
 const URL_CHECK_CONCURRENCY = 8;
+// One LLM tool call per item; OpenRouter throttles concurrent calls per key, so
+// cap the batch (an unbounded fan-out drops events to tool-less throttled responses).
+const NORMALIZE_CONCURRENCY = 5;
 // Image gen + upload is slow (~5-10s per AI image) and OpenRouter rate-limits
 // concurrent calls per key. Keep this low so a 30-item Instagram pull doesn't
 // blow through the rate limit on its first run.

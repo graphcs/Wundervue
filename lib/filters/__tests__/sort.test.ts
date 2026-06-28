@@ -87,4 +87,39 @@ describe("sortListings", () => {
       "lowLate",
     ]);
   });
+
+  // Default browse = "soonest, but new first". Fixed `now` so the clamp is stable.
+  const NOW = Date.parse("2026-06-28T12:00:00Z");
+
+  it("soonest: within a day, newly-scraped (isNew) events lead, then by start time", () => {
+    const oldEarly = mk("oldEarly", "2026-07-04T18:00:00Z", { isNew: false });
+    const freshLate = mk("freshLate", "2026-07-04T22:00:00Z", { isNew: true });
+    const oldLate = mk("oldLate", "2026-07-04T23:00:00Z", { isNew: false });
+    expect(sortListings([oldEarly, freshLate, oldLate], "soonest", NOW).map((l) => l.id)).toEqual([
+      "freshLate",
+      "oldEarly",
+      "oldLate",
+    ]);
+  });
+
+  it("soonest: a recurring 'Every Thursday' deal sorts to its next Thursday, not to today", () => {
+    // NOW is Sunday Jun 28; the next Thursday is Jul 2, so a same-day event leads.
+    const sundayEvt = mk("sun", "2026-06-28T20:00:00Z");
+    const thuDeal = mk("thuDeal", "2026-06-28T18:00:00Z", {
+      type: "deal", dateDisplay: "Every Thursday", isNew: true,
+    });
+    expect(sortListings([thuDeal, sundayEvt], "soonest", NOW).map((l) => l.id)).toEqual([
+      "sun",
+      "thuDeal",
+    ]);
+  });
+
+  it("soonest: an ongoing past-start run sorts as today, not above genuinely-future events", () => {
+    const ongoing = mk("ongoing", "2026-05-01T18:00:00Z"); // started long ago, still listed
+    const today = mk("today", "2026-06-28T20:00:00Z");
+    const future = mk("future", "2026-07-10T18:00:00Z");
+    const ids = sortListings([future, ongoing, today], "soonest", NOW).map((l) => l.id);
+    expect(ids[2]).toBe("future"); // future is genuinely later → last
+    expect(ids.slice(0, 2).sort()).toEqual(["ongoing", "today"]); // both clamp to today
+  });
 });

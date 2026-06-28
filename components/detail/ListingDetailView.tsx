@@ -111,57 +111,54 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
           {listing.description}
         </p>
 
-        {venue?.address && (
-          <div className="flex flex-col gap-1">
-            <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
-              <PinIcon size={13} className="text-gray" />
-              {venue.address}
-            </div>
-            <a
-              href={buildDirectionsUrl(venue.address)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
-            >
-              <CompassIcon size={13} />
-              Get Directions
-            </a>
+        {/* One consolidated block: venue link + address + directions, with the
+            Date/Time moved in (the old gray Date/Time/Venue box is gone, and its
+            Venue row was redundant with the link below). Empty fields are hidden. */}
+        {(venue || listing.dateDisplay || listing.timeDisplay) && (
+          <div className="flex flex-col gap-1.5">
+            {venue && (
+              <Link
+                href={`/venues/${venue.slug}`}
+                className="text-coral inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+              >
+                {venue.name}
+              </Link>
+            )}
+            {venue?.address && (
+              <>
+                <div className="text-graphite inline-flex items-center gap-1.5 text-[13px]">
+                  <PinIcon size={13} className="text-gray" />
+                  {venue.address}
+                </div>
+                <a
+                  href={buildDirectionsUrl(venue.address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-coral inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
+                >
+                  <CompassIcon size={13} />
+                  Get Directions
+                </a>
+              </>
+            )}
+            {(listing.dateDisplay || listing.timeDisplay) && (
+              <div className="flex gap-10 pt-2">
+                {listing.dateDisplay && (
+                  <div>
+                    <InfoLabel>Date</InfoLabel>
+                    <div className="text-dark text-sm font-medium">{listing.dateDisplay}</div>
+                  </div>
+                )}
+                {listing.timeDisplay && (
+                  <div>
+                    <InfoLabel>Time</InfoLabel>
+                    <div className="text-dark text-sm font-medium">{listing.timeDisplay}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
-
-        <div className="flex flex-col gap-3 rounded-[10px] bg-[#f9f9f9] px-4 py-3.5">
-          <div className="flex items-start justify-between">
-            <div>
-              <InfoLabel>Date</InfoLabel>
-              <div className="text-dark text-sm font-medium">
-                {listing.dateDisplay}
-              </div>
-            </div>
-            <div className="text-right">
-              <InfoLabel>Time</InfoLabel>
-              <div className="text-dark text-sm font-medium">
-                {listing.timeDisplay}
-              </div>
-            </div>
-          </div>
-          {(venue || listing.venueName) && (
-            <div>
-              <InfoLabel>Venue</InfoLabel>
-              {venue ? (
-                <Link
-                  href={`/venues/${venue.slug}`}
-                  className="text-coral inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
-                >
-                  {venue.name}
-                </Link>
-              ) : (
-                <div className="text-dark text-sm font-medium">
-                  {listing.venueName}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         <div className="flex items-stretch gap-2.5">
           <FavoriteToggle listingId={listing.id} />

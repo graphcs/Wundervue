@@ -426,6 +426,31 @@ export async function resolveOrCreateVenue(args: {
   return created;
 }
 
+// A recurring/ongoing deal (daily happy hour, "now available") has no fixed end,
+// so it would fall outside the date-based feed window and never surface. Give it
+// a rolling visibility window — start now (if undated), end PERPETUAL_DEAL_DAYS
+// out — re-extended on every ingest so it stays live without manual upkeep.
+const PERPETUAL_DEAL_DAYS = 60;
+function dealVisibilityWindow(n: NormalizedListing): {
+  dateStart: string | null;
+  dateEnd: string | null;
+} {
+  const isDeal = n.type === "deal" || n.type === "both";
+  // A recurring/ongoing deal gets a rolling visibility window. Ignore any
+  // dateEnd the LLM extracted: for an ongoing offering that's just one
+  // occurrence's end (e.g. an icsCalendar happy-hour RRULE where each entry
+  // carries a single 4–5 PM slot), not the real end of the deal — keeping it
+  // would expire a perpetual deal after the next occurrence.
+  if (n.recurring && isDeal) {
+    const now = Date.now();
+    return {
+      dateStart: n.dateStart ?? new Date(now).toISOString(),
+      dateEnd: new Date(now + PERPETUAL_DEAL_DAYS * 86400000).toISOString(),
+    };
+  }
+  return { dateStart: n.dateStart, dateEnd: n.dateEnd };
+}
+
 export function buildListingInsert(args: {
   source: SourceConfig;
   item: RawItem;
@@ -433,10 +458,15 @@ export function buildListingInsert(args: {
   venue: VenueRow | null;
 }): ListingInsert {
   const { source, item, normalized, venue } = args;
+  const { dateStart, dateEnd } = dealVisibilityWindow(normalized);
   const key = eventKey({
     canonicalTitle: normalized.canonicalTitle,
     venueId: venue?.id ?? null,
-    dateStart: normalized.dateStart,
+    // Recurring/ongoing items have a rolling or advancing dateStart (the next
+    // occurrence for a weekly event, or "now" for a perpetual deal), so keying
+    // the event_key on the day would change it every run and defeat cross-source
+    // dedup. Key recurring items on title+venue only; reserve the day for one-offs.
+    dateStart: normalized.recurring ? null : dateStart,
   });
   // Prefer the venue's pre-resolved slugs (it already parsed its address /
   // reverse-geocoded). For a venue-less listing, resolve from its own address
@@ -472,10 +502,13 @@ export function buildListingInsert(args: {
     city_slug: ancestry.citySlug,
     neighborhood_slug: ancestry.neighborhoodSlug,
     category: normalized.category || source.defaultCategory || null,
-    date_start: normalized.dateStart,
-    date_end: normalized.dateEnd,
+    date_start: dateStart,
+    date_end: dateEnd,
     date_display: normalized.dateDisplay || null,
-    time_display: normalized.timeDisplay || null,
+    // Fall back to the source's fixed operating hours (e.g. a zoo's "9 AM – 4 PM")
+    // when the listing states no time — opt-in per source, so event venues with
+    // varying times are unaffected.
+    time_display: normalized.timeDisplay || source.defaultTime || null,
     is_free: normalized.isFree,
     deal_value: normalized.dealValue,
     image_url: item.imageUrl ?? null,

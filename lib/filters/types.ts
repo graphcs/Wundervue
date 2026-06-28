@@ -10,6 +10,7 @@ export type {
 
 export const SORT_OPTIONS = [
   { id: "soonest", label: "Soonest" },
+  { id: "newest", label: "Newest" },
   { id: "latest", label: "Latest" },
   { id: "free-first", label: "Free first" },
   { id: "deals-first", label: "Deals first" },

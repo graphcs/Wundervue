@@ -4,6 +4,7 @@ export type Cadence = "hourly" | "daily" | "weekly";
 
 export type ConnectorKind =
   | "instagram"
+  | "instagramVision"
   | "serpEvents"
   | "apifyWeb"
   | "cheerioWeb"
@@ -28,7 +29,18 @@ export type ConnectorKind =
   | "icsCalendar"
   | "libcalEvents"
   | "potteryWithPurpose"
-  | "averyTaproomEvents";
+  | "averyTaproomEvents"
+  | "eventive"
+  | "dmnsEvents"
+  | "aegEvents"
+  | "cherryCricketDeals"
+  | "popmenuEvents"
+  | "squarespaceProducts"
+  | "elfsightCalendar"
+  | "localistEvents"
+  | "cityLightEvents"
+  | "flyerImage"
+  | "screenshotVision";
 
 export interface SourceConfig {
   id: string;
@@ -81,6 +93,13 @@ export interface SourceConfig {
     image?: string;
     link?: string;
   };
+  // cheerioWeb — opt-in detail-page enrichment. Some sites show the date on the
+  // list card but the TIME only on the event's own page (e.g. Boulder's Drupal
+  // events: list cards have no time, the detail page has a "Time" field). When
+  // set, the connector fetches each item's link and appends this selector's text
+  // so normalize() can read the time. Use only for sources with cheap (static,
+  // non-Cloudflare) detail pages — each kept item costs one extra fetch.
+  detailSelector?: string;
   // comedyWorksCalendar — how many months past the current one to crawl (the
   // calendar pages one month per URL). Default 3 (current + next 3 = 4 months).
   monthsAhead?: number;
@@ -112,6 +131,24 @@ export interface SourceConfig {
   // and image resolution. Items are kept in document order, so this yields the
   // soonest N; weekly re-runs pull the window forward.
   maxItems?: number;
+  // cityLightEvents — base URL to resolve the widget's relative event links
+  // (e.g. "/do/<slug>") into absolute source_urls, since the data API lives on a
+  // different host than the display site.
+  linkBase?: string;
+
+  // eventive — Eventive event-bucket id + publishable widget api_key (both
+  // public, from the <org>.eventive.org tenant bundle). See connectors/eventive.ts.
+  eventiveBucket?: string;
+  eventiveApiKey?: string;
+
+  // flyerImage — max content images from the page to send to the vision model.
+  maxImages?: number;
+
+  // icsCalendar — include ACTIVE recurring (RRULE) entries instead of skipping
+  // all of them. Opt-in for calendars whose recurring entries are real events/
+  // deals worth keeping (a weekly happy hour, trivia night); expired series
+  // (UNTIL in the past) are still dropped.
+  icsIncludeRecurring?: boolean;
 
   // metadata hints for the LLM and venue resolution
   defaultVenueSlug?: string;
@@ -119,7 +156,35 @@ export interface SourceConfig {
   // feed's per-item location is often the platform's empty default). Used as the
   // venueName hint in the blob; the normalizer can still refine from the title.
   defaultVenueName?: string;
+  // Street address for a single-venue source whose entries omit it (e.g. an
+  // icsCalendar feed where each event only implies the venue). Injected so the
+  // venue geocodes — and reverse-geocodes to the right metro city — instead of
+  // failing a name-only lookup and defaulting to a wrong neighborhood. Pair with
+  // defaultVenueName.
+  defaultVenueAddress?: string;
+  // Neighborhood label for a single-venue source, used when the reverse-geocode
+  // of the pin resolves only to a broad region (e.g. a S. Broadway bar that
+  // reverse-geocodes to "Central Denver" instead of "Baker"). Mapped to the full
+  // city/neighborhood slug chain. Only honored for single-venue sources (those
+  // with defaultVenueAddress).
+  defaultNeighborhood?: string;
   defaultCategory?: string;
+  // Fixed operating hours for a single-venue source whose events don't state a
+  // time (e.g. a zoo "9:00 AM – 4:00 PM"). Used as the time_display fallback in
+  // buildListingInsert. Only set for venues with genuinely consistent hours —
+  // event venues with varying showtimes should leave it unset.
+  defaultTime?: string;
+  // Single-city sources whose page text gives bare venue names with no city —
+  // appended as the geocode hint ("<venue>, <cityHint>") and venue-slug suffix
+  // so e.g. a Boulder park doesn't resolve to a same-named Denver-area place.
+  // Defaults to "Denver, CO" in resolveOrCreateVenue when unset.
+  cityHint?: string;
+
+  // Opt-in: when true, a single caption that lists several events is split into
+  // one listing per event via normalizeMulti() (vs normalize()'s one-per-caption
+  // default). Reusable on any source whose posts are monthly/weekly roundups;
+  // leave unset for the vast majority. See lib/ingest/normalize.ts.
+  multiEvent?: boolean;
 }
 
 export interface RawItem {
@@ -133,6 +198,10 @@ export interface RawItem {
   // normalize.ts when the LLM fails to extract them from the prose blob.
   venueName?: string;
   address?: string;
+  // Connector-asserted recurrence (e.g. an icsCalendar RRULE master). When true,
+  // mapRawEvent forces the normalized listing recurring regardless of the LLM —
+  // the connector parsed the recurrence rule, so it's authoritative.
+  recurring?: boolean;
 }
 
 export interface NormalizedListing {
@@ -149,6 +218,17 @@ export interface NormalizedListing {
   timeDisplay: string;
   isFree: boolean;
   dealValue: string | null;
+  // True for an ongoing/recurring offering with no fixed end — a daily happy
+  // hour, "now available", a weekly special. Deals flagged recurring get a
+  // rolling visibility window in buildListingInsert so they don't vanish from
+  // the date-based feed (see persist.ts).
+  recurring?: boolean;
+  // The connector's explicit recurrence assertion (RawItem.recurring), kept apart
+  // from `recurring` so occurrence-splitting can distinguish a connector that
+  // emitted pre-expanded, specific-day instances (false → never re-split, even if
+  // a description says "every Thursday") from the LLM merely defaulting to false
+  // (undefined → the weekly-text heuristic may still split).
+  connectorRecurring?: boolean;
   tags: LifestyleTag[];
   // Free-text venue / address extracted from the source. Used to look up an
   // existing venue row or create a new one (with geocoded lat/lng) so the map

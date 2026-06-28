@@ -8,14 +8,123 @@ import type { SourceConfig } from "./types";
 export const SOURCES: SourceConfig[] = [
   // ── Apify Instagram: per-account deep dives for venues we follow closely.
   {
-    id: "mission-ballroom-ig",
+    id: "mission-ballroom-web",
+    // AEG/AXS venue: /upcoming-events embeds an AXS widget backed by a public
+    // static events.json feed (auto-discovered from the page's data-file). Clean
+    // JSON, no auth/JS — far better coverage than the Instagram feed below.
     enabled: true,
+    connector: "aegEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://missionballroom.com/upcoming-events/",
+    defaultVenueSlug: "mission-ballroom",
+    defaultCategory: "Music",
+    maxItems: 60,
+  },
+  {
+    id: "mission-ballroom-ig",
+    // Disabled: redundant with mission-ballroom-web (AEG feed), which is
+    // cleaner and comprehensive; the IG just re-announces the same shows.
+    enabled: false,
     connector: "instagram",
     cadence: "daily",
     sourceLabel: "Instagram",
     handle: "missionballroom",
     defaultVenueSlug: "mission-ballroom",
     defaultCategory: "Music",
+  },
+  {
+    // Coffee roaster (Five Points, Wynkoop, Aurora, W Cedar roastery). IG posts
+    // real events — Pride/vendor markets, monthly Cowpoke Friday hangs, ticketed
+    // cupping workshops, guest-barista takeovers — among shop updates the
+    // normalizer filters. Multi-location, so venue resolves per post.
+    id: "queen-city-coffee-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "queencitycoffee",
+    defaultVenueName: "Queen City Coffee",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // BurnDown — Broadway bar/venue with a main stage + rooftop patio. IG posts
+    // weekly "live music lineup" roundups (Thur/Fri/Sat, each with a time), the
+    // recurring Thursday SunSet Series DJ sets, and one-offs (anniversary
+    // Crawfest, World Cup watch parties) among shop banter the normalizer drops.
+    // Weekend lineup posts list three shows, so multiEvent.
+    id: "burndown-denver-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "burndowndenver",
+    multiEvent: true,
+    defaultVenueName: "BurnDown",
+    defaultVenueAddress: "476 S Broadway, Denver, CO 80209",
+    defaultNeighborhood: "Baker",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Elemental Bakery & Coffeehouse — single cafe at York Street Yards
+    // (Clayton). IG is mostly menu/product marketing the normalizer filters out
+    // via isEventOrDeal; keeps the rare real events/deals (pet-portrait sessions,
+    // proceeds fundraisers, seasonal pop-ups). Poor but non-zero source.
+    id: "elemental-denver-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "elementaldenver",
+    defaultVenueName: "Elemental Bakery & Coffeehouse",
+    defaultVenueAddress: "3875 Steele St, Denver, CO 80205",
+    defaultNeighborhood: "City Park",
+    cityHint: "Denver, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Edgewater Music Festival — annual one-day blues/music festival (~June) at
+    // Citizen's Park, Edgewater. Sparse single-event account (one festival/year),
+    // but worth capturing each edition when announced. isEventOrDeal filters the
+    // sponsor/merch/FAQ promo.
+    id: "edgewater-music-festival-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "edgewatermusicfestival",
+    defaultVenueName: "Citizens Park",
+    defaultVenueAddress: "5560 W 24th Ave, Edgewater, CO 80214",
+    cityHint: "Edgewater, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Denver Central Market — RiNo food hall. IG posts real events (ticketed
+    // Book Swaps, the recurring free RiNo Movie Nights at The Lot on Larimer,
+    // Pride parties) among heavy vendor/menu marketing the normalizer filters.
+    // Venue resolves per post (some events are offsite).
+    id: "denver-central-market-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "dencentralmkt",
+    defaultVenueName: "Denver Central Market",
+  },
+  {
+    // Boulder County Fair (Longmont, Aug 5-9) — IG posts the fair plus dated
+    // grandstand events (CPRA Rodeo, Demolition Derby, Mexican Rodeo Fiesta,
+    // Tractor Pull) among promo/giveaway/hiring noise the normalizer filters.
+    // One venue (the fairgrounds); cityHint pins to Longmont.
+    id: "boulder-county-fair-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "bouldercountyfair",
+    defaultVenueName: "Boulder County Fairgrounds",
+    cityHint: "Longmont, CO",
   },
 
   // ── Denver venue + aggregator scrapes — web + Instagram. Each data source
@@ -34,6 +143,12 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://thehighlandsfarmersmarket.com/",
+    // WordPress block theme: <main> holds only the hero (title + date); the
+    // "9 AM – 1 PM" h3 is in a sibling section. Target the whole-site block
+    // wrapper so the captured text carries title, date, AND time.
+    selectors: {
+      item: ".wp-site-blocks",
+    },
     defaultVenueSlug: "highlands-farmers-market",
     defaultCategory: "Markets",
   },
@@ -64,7 +179,7 @@ export const SOURCES: SourceConfig[] = [
     id: "red-rocks-amphitheatre-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "redrocksco",
     defaultVenueSlug: "red-rocks-amphitheatre",
@@ -87,7 +202,7 @@ export const SOURCES: SourceConfig[] = [
     id: "levitt-pavilion-denver-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "levitt_denver",
     defaultVenueSlug: "levitt-pavilion-denver",
@@ -115,7 +230,7 @@ export const SOURCES: SourceConfig[] = [
     id: "denver-beer-co-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "denverbeerco",
     defaultVenueSlug: "denver-beer-co",
@@ -143,7 +258,7 @@ export const SOURCES: SourceConfig[] = [
     id: "rino-art-district-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "rinoartdistrict",
     defaultVenueSlug: "rino-art-district",
@@ -178,7 +293,7 @@ export const SOURCES: SourceConfig[] = [
     id: "rino-beer-garden-ig",
     enabled: false,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "rinobeergarden",
     defaultVenueSlug: "rino-beer-garden",
@@ -205,33 +320,31 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Markets",
   },
   {
-    // Disabled: goldfinchdenver.com sits behind a Cloudflare JS challenge (every
-    // page 403s a plain fetch), so the free connectors can't read it — only Apify
-    // with JS rendering could, at cost. And the events calendar is overwhelmingly
-    // recurring bar specials ("Exclusive Bar Takeover" daily, Breakfast Club,
-    // Live Music Wednesday, Movies/Tinis/Tacos, Neighborhood Night, Thursday
-    // Specialty) with only the rare one-off (Signal Surrender, Night Shift Pride)
-    // — same low signal-to-noise as rino-beer-garden. Not worth the Apify spend;
-    // its notable events arrive via Visit Denver / Arts & Venues.
     id: "goldfinch-denver-web",
-    enabled: false,
-    connector: "apifyWeb",
+    // PopMenu venue behind a Cloudflare JS challenge: the popmenuEvents
+    // connector drives it with a browser over a residential proxy (clears the
+    // challenge) and reads the event cards. Recurring bar nights (Live Music
+    // Wednesday, Open Mic, Sunday Sessions) now ingest as recurring listings.
+    enabled: true,
+    connector: "popmenuEvents",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.goldfinchdenver.com/events",
+    defaultVenueName: "The Goldfinch",
+    defaultCategory: "Food & Drink",
+    maxItems: 40,
   },
   {
     id: "denver-museum-nature-science-web",
-    // Disabled: dmns.org runs on Blazor Server (UI state over a SignalR
-    // websocket) with no scrapeable HTML or public events API; the editorial
-    // pages are evergreen program categories, not a dated event feed. DMNS
-    // exhibitions arrive via Visit Denver; curated events come from Instagram
-    // below (venue-pinned to the museum).
-    enabled: false,
-    connector: "apifyWeb",
+    // dmns.org/purchase/tickets is a Blazor Server app whose ticketing backend
+    // blocks datacenter IPs — no HTML/JSON/feed. The dmnsEvents connector drives
+    // it with a real browser over a residential proxy: clicks the Events tab and
+    // reads the rendered cards. Slow (~1 min) but weekly. Venue-pinned below.
+    enabled: true,
+    connector: "dmnsEvents",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.dmns.org/",
+    url: "https://www.dmns.org/purchase/tickets/?category=events",
     defaultVenueSlug: "denver-museum-nature-science",
     defaultCategory: "Arts & Culture",
   },
@@ -239,7 +352,7 @@ export const SOURCES: SourceConfig[] = [
     id: "denver-museum-nature-science-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "denvermuseumns",
     defaultVenueSlug: "denver-museum-nature-science",
@@ -261,7 +374,7 @@ export const SOURCES: SourceConfig[] = [
     id: "little-blue-pigeon-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "littlebluepigeonbooks",
     defaultVenueSlug: "little-blue-pigeon",
@@ -283,7 +396,7 @@ export const SOURCES: SourceConfig[] = [
     id: "ball-arena-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "ballarenadenver",
     defaultVenueSlug: "ball-arena",
@@ -350,7 +463,7 @@ export const SOURCES: SourceConfig[] = [
     id: "cerebral-brewing-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "cerebralbrewing",
     defaultVenueSlug: "cerebral-brewing",
@@ -365,9 +478,28 @@ export const SOURCES: SourceConfig[] = [
     id: "cerebral-west-highland-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "cerebral.westhighland",
+    defaultVenueSlug: "cerebral-west-highland",
+    defaultCategory: "Food & Drink",
+    // Posts monthly roundup captions listing several events at once.
+    multiEvent: true,
+  },
+  {
+    // Outside Pizza — independent pizzeria operating out of Cerebral's West
+    // Highland kitchen. Mostly menu/brand posts, but a few real events surface
+    // (Drag Brunch, off-site Gozney pop-ups). Caption-based: the event detail is
+    // in the text, no flyer to OCR, and the normalizer drops the menu posts.
+    // Pinned to its home venue so location-less captions map correctly; an
+    // off-site pop-up (e.g. RiNo) overrides via the LLM-extracted venue, and any
+    // event it shares with the West Highland account dedups on title+venue+day.
+    id: "outside-pizza-ig",
+    enabled: true,
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "outsidepizza",
     defaultVenueSlug: "cerebral-west-highland",
     defaultCategory: "Food & Drink",
   },
@@ -404,6 +536,9 @@ export const SOURCES: SourceConfig[] = [
     url: "https://denverzoo.org/wp-json/wp/v2/atomic-event",
     maxItems: 40,
     defaultVenueSlug: "denver-zoo",
+    // Zoo events run during the zoo's operating hours; use them when an event
+    // states no time of its own.
+    defaultTime: "9:00 AM – 4:00 PM",
   },
   {
     // Denver Union Station's /experience/event-calendar/ is JS-rendered with no
@@ -469,6 +604,313 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Music",
   },
   {
+    // The Bread Bar — historic craft-cocktail bar in Silver Plume (mountain town
+    // ~50mi W of Denver). Squarespace events collection in CALENDAR mode (empty
+    // `upcoming`), so squarespaceEvents month-steps the JSON to gather Live Music
+    // / Open Pick nights across the next few months. Single venue.
+    id: "bread-bar-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.breadbarsp.com/events",
+    maxItems: 30,
+    defaultVenueName: "The Bread Bar",
+    defaultVenueAddress: "1010 Main St, Silver Plume, CO 80476",
+    cityHint: "Silver Plume, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Improper City (RiNo beer garden) food-truck schedule — an Elfsight Events
+    // Calendar widget backed by a private Google Calendar (no public feed), so
+    // elfsightCalendar renders the page and reads the FullCalendar grid (truck +
+    // time per day). Single venue; the daily truck is the 'event'.
+    id: "improper-city-food-trucks-web",
+    enabled: true,
+    connector: "elfsightCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.impropercity.com/food-truck-calendar",
+    maxItems: 30,
+    defaultVenueName: "Improper City",
+    defaultVenueAddress: "3201 Walnut St, Denver, CO 80205",
+    defaultNeighborhood: "RiNo",
+    cityHint: "Denver, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // CU Boulder events (colorado.edu/events) — a Localist widget backed by
+    // calendar.colorado.edu. localistEvents reads its JSON API; featured=true
+    // matches the site's curated public feed and skips academic/administrative
+    // deadline noise. Multi-venue (per-event campus/Boulder location from the
+    // API); recurring series arrive pre-expanded into dated instances.
+    id: "cu-boulder-events-web",
+    enabled: true,
+    connector: "localistEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://calendar.colorado.edu/api/2/events?featured=true&days=60&pp=50",
+    maxItems: 30,
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Trident Booksellers & Cafe (Pearl St, Boulder) — busy events calendar on
+    // Squarespace (list mode, ~75 upcoming): live music, open mics, author
+    // series, language-exchange nights. squarespaceEvents reads ?format=json.
+    id: "trident-cafe-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.tridentcafe.com/events",
+    maxItems: 40,
+    defaultVenueName: "Trident Booksellers & Cafe",
+    defaultVenueAddress: "940 Pearl St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Broken Bow Western — honky-tonk bar & dancehall (Five Points/Ballpark,
+    // Denver). Squarespace events (list mode, ~28 upcoming): live country acts +
+    // free swing-dance lessons. Events carry no per-event location, so pin to the
+    // single venue; isEventOrDeal drops the "Closed for a Private Event" notices.
+    id: "broken-bow-western-web",
+    enabled: true,
+    connector: "squarespaceEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.brokenbowwestern.com/events",
+    maxItems: 40,
+    defaultVenueName: "Broken Bow Western",
+    defaultVenueAddress: "2201 Lawrence St, Denver, CO 80205",
+    defaultNeighborhood: "Five Points",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Parker Days Festival (annual, ~June, Parker) — 3 stage lineup pages behind a
+    // SiteGround captcha, each a schedule TABLE (time / band / genre per Fri-Sun).
+    // renderJs + waitForSelector clears the captcha; multiEvent reads each stage's
+    // table into per-band sets. Pin to the festival grounds in Parker. NOTE: the
+    // 2026 edition is past — yields the next edition's lineup when posted.
+    id: "parker-days-festival-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: [
+      "https://parkerdaysfestival.com/main-stage/",
+      "https://parkerdaysfestival.com/east-music-stage/",
+      "https://parkerdaysfestival.com/community-stage/",
+    ],
+    renderJs: true,
+    waitForSelector: ".elementor-heading-title",
+    multiEvent: true,
+    defaultVenueName: "Parker Days Festival",
+    defaultVenueAddress: "10795 Victorian Dr, Parker, CO 80138",
+    cityHint: "Parker, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Edgewater Beer Garden — The Events Calendar (Tribe) behind a SiteGround
+    // captcha that blocks the REST API, so renderJs clears it and we read the
+    // Tribe LIST view events (title + date/time per row). Mix of recurring deals
+    // (happy hours, Wingsday, spritz) and events (trivia, live music).
+    id: "edgewater-beer-garden-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.edgewaterbeergarden.com/calendar/list/",
+    renderJs: true,
+    waitForSelector: ".tribe-events-calendar-list__event-title",
+    selectors: {
+      item: ".tribe-events-calendar-list__event",
+      title: ".tribe-events-calendar-list__event-title",
+    },
+    maxItems: 40,
+    defaultVenueName: "Edgewater Beer Garden",
+    defaultVenueAddress: "2508 Gray St, Edgewater, CO 80214",
+    defaultNeighborhood: "Edgewater",
+    cityHint: "Edgewater, CO",
+  },
+  {
+    // Denver PorchFest — annual one-day front-porch music festival in Baker
+    // (Denver, ~early Oct). The homepage embeds a JSON-LD MusicFestival (date,
+    // Denver), so jsonLdEvents reads it as one festival event. No single venue
+    // (porches across Baker), so pin to the Baker neighborhood.
+    id: "denver-porchfest-web",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.denverporchfest.com/",
+    defaultVenueName: "Denver PorchFest",
+    defaultVenueAddress: "400 S Broadway, Denver, CO 80209",
+    defaultNeighborhood: "Baker",
+    cityHint: "Denver, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Downtown Boulder events — a City Light Studio BBQ widget whose events load
+    // from an open data API (HTML fragment grouped by date). Multi-venue (each
+    // event names its downtown Boulder venue); cityLightEvents parses it.
+    id: "downtown-boulder-web",
+    enabled: true,
+    connector: "cityLightEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://xapi.citylightstudio.net/_bbq/_bbq_results.php?fid=350&key=065263026&bbqparam=",
+    linkBase: "https://boulderdowntown.com",
+    maxItems: 40,
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Golden Farmers Market — recurring Saturday market (10th & Illinois, Golden,
+    // May 30 - Oct 3) + a Wednesday "Midweek Market". IG posts weekly lineup
+    // flyers (vendor lists, dates) as images, so instagramVision OCRs them with
+    // the captions. Pin to the main Saturday market venue.
+    id: "golden-farmers-market-ig",
+    enabled: true,
+    connector: "instagramVision",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "goldenfarmersmarket",
+    defaultVenueName: "Golden Farmers Market",
+    defaultVenueAddress: "1019 10th St, Golden, CO 80401",
+    cityHint: "Golden, CO",
+    defaultCategory: "Markets",
+    maxItems: 30,
+  },
+  {
+    // Ratio Beerworks events — Squarespace LIST section (not an events
+    // collection, so no ?format=json feed), server-rendered. cheerioWeb reads
+    // each .list-item (title + a description carrying the date/time, e.g.
+    // "July 4 | 10:30 AM | Overland"). Music, comedy, yoga, BBQ. Two taprooms
+    // (RiNo + Overland); pin to the main RiNo location.
+    id: "ratio-beerworks-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://ratiobeerworks.com/events",
+    selectors: {
+      item: ".list-item",
+      title: ".list-item-content__title",
+      description: ".list-item-content__description",
+    },
+    maxItems: 30,
+    defaultVenueName: "Ratio Beerworks",
+    defaultVenueAddress: "2920 Larimer St, Denver, CO 80205",
+    defaultNeighborhood: "RiNo",
+    cityHint: "Denver, CO",
+  },
+  {
+    // Little Man Ice Cream Can — iconic LoHi milk-can shop with a packed plaza
+    // events program (movie nights, live music, swing/line dancing, bingo, jazz).
+    // The website location page is info-only; events post on IG, often as monthly
+    // calendar flyers, so instagramVision OCRs them with the captions. Mostly
+    // product marketing the normalizer filters; pin to the Can (LoHi).
+    id: "little-man-ice-cream-ig",
+    enabled: true,
+    connector: "instagramVision",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "littlemanicecream",
+    defaultVenueName: "Little Man Ice Cream Can",
+    defaultVenueAddress: "2620 16th St, Denver, CO 80211",
+    defaultNeighborhood: "LoHi",
+    cityHint: "Denver, CO",
+    maxItems: 30,
+  },
+  {
+    // /por/ Wine House - wine bar / tapas in historic downtown Louisville.
+    // PopMenu events widget (Whiskey Wednesday, Craft Cocktail Night, Thursday
+    // Poker Night), so popmenuEvents renders the calendar and reads the cards
+    // (each carries its "Weekly Wed at 3pm-10pm" schedule). Single venue.
+    id: "por-wine-house-web",
+    enabled: true,
+    connector: "popmenuEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.porwinehouse.com/wine-events",
+    defaultVenueName: "Pôr Wine House",
+    defaultVenueAddress: "701 A Main St, Louisville, CO 80027",
+    cityHint: "Louisville, CO",
+    defaultCategory: "Food & Drink",
+    maxItems: 40,
+  },
+  {
+    // /pôr/ Wine House IG — its "Weekly Specials" post + reminders carry the full
+    // recurring lineup (Ladies Night, half-price bottle/whiskey, poker, brunch,
+    // flight night, happy hours) the website's PopMenu only partly lists.
+    // instagram + multiEvent reads the captions; recurring-split makes each a
+    // weekly occurrence. Same venue as por-wine-house-web (dedups the overlap).
+    id: "por-wine-house-ig",
+    enabled: false, // noisy: multiEvent over the whole account fragments recurring specials + overlaps por-wine-house-web
+    connector: "instagram",
+    cadence: "daily",
+    sourceLabel: "Instagram",
+    handle: "porwinehouse_",
+    multiEvent: true,
+    defaultVenueName: "Pôr Wine House",
+    defaultVenueAddress: "701 A Main St, Louisville, CO 80027",
+    cityHint: "Louisville, CO",
+    defaultCategory: "Food & Drink",
+    maxItems: 30,
+  },
+  {
+    // Colorado Chautauqua (Boulder) — historic NPS landmark: Auditorium concerts
+    // plus campus hikes, tours, and talks. WordPress + The Events Calendar, so
+    // tribeEvents reads its Tribe REST API. Multi-venue within the campus
+    // (Auditorium, Academic Hall, Café), each with its own Boulder address;
+    // cityHint covers the few entries with a bare-state address.
+    id: "colorado-chautauqua-web",
+    enabled: true,
+    connector: "tribeEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://www.chautauqua.com/events/",
+    maxItems: 40,
+    cityHint: "Boulder, CO",
+  },
+  {
+    // Rosetta Hall food hall (Walnut St, Boulder) live-music lineup — a hand-built
+    // Elementor page (no feed) behind Cloudflare UA-gating, each show listed as
+    // ARTIST / genre / "weekday month day, time". renderJs passes Cloudflare;
+    // whole-page multiEvent reads the regular triples. Single venue.
+    id: "rosetta-hall-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rosettahall.com/live-music/",
+    renderJs: true,
+    // Each show is its own Elementor top-section (artist heading + genre + date);
+    // target those so we don't dump the whole page (which truncates on nav).
+    selectors: { item: "section.elementor-top-section" },
+    defaultVenueName: "Rosetta Hall",
+    defaultVenueAddress: "1109 Walnut St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+    defaultCategory: "Music",
+  },
+  {
+    // Rosetta Hall's inquire/events page publishes featured events (e.g. the
+    // "YogaRita on the rooftop" yoga+margarita series) only as flyer IMAGES — no
+    // scrapeable text — so flyerImage OCRs them. Cloudflare UA-gated; the connector
+    // fetches with a browser UA. Same Rosetta Hall venue as the live-music source.
+    id: "rosetta-hall-flyers-web",
+    enabled: true,
+    connector: "flyerImage",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://rosettahall.com/inquire-2/",
+    defaultVenueName: "Rosetta Hall",
+    defaultVenueAddress: "1109 Walnut St, Boulder, CO 80302",
+    cityHint: "Boulder, CO",
+    maxImages: 6,
+    maxItems: 40,
+  },
+  {
     // Avery Brewing (Gunbarrel, Boulder) is a Next.js site whose taproom events
     // live only in __NEXT_DATA__ (a Strapi taproom-events component), read by the
     // averyTaproomEvents connector. Recurring weekly series (trivia, yoga, Magic,
@@ -484,26 +926,20 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "avery-brewing",
   },
   {
-    // Gothic Theatre (Englewood, AEG venue 14001) renders its calendar with an
-    // AEG/AXS JavaScript widget — no fetchable feed, and the events load slowly
-    // (~30-50s, well past the default 20s wait). apifyWeb renderJs waits for the
-    // titles, then scrapes each `a.c-axs-event-card__header` card (all ~58 upcoming
-    // shows across every month are in the DOM at once); full card text carries the
-    // date, showtime, and support acts to the normalizer. Single venue, pinned.
+    // Gothic Theatre (Englewood, AEG venue). The /calendar AXS widget loads its
+    // events from a public static JSON feed (data-file events.json) — same
+    // pattern as Mission Ballroom — so aegEvents reads the page, follows the
+    // feed, and maps clean structured shows (title, ISO date, support acts,
+    // ticket art). No browser/Apify needed; far cheaper and more reliable than
+    // the prior renderJs scrape, and the feed carries the date the normalizer
+    // needs. Single venue, pinned.
     id: "gothic-theatre-web",
     enabled: true,
-    connector: "apifyWeb",
+    connector: "aegEvents",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://gothictheatre.com/calendar/",
-    renderJs: true,
-    waitForSelector: ".c-axs-event-card__title",
-    waitForTimeoutMs: 55000,
-    selectors: {
-      item: ".c-axs-event-card__header",
-      title: ".c-axs-event-card__title",
-    },
-    maxItems: 50,
+    maxItems: 60,
     defaultVenueSlug: "gothic-theatre",
     defaultCategory: "Music",
   },
@@ -525,48 +961,51 @@ export const SOURCES: SourceConfig[] = [
     maxItems: 40,
   },
   {
-    // Disabled: citymud.com/events is a Squarespace *products* collection
-    // (workshops sold as commerce items), not an events calendar — the
-    // ?format=json `upcoming` events array is empty, so squarespaceEvents finds
-    // nothing. It currently holds a single workshop product with its dates baked
-    // into the title text ("...June 13 & July 11"), not structured fields.
-    // Reading it would need a products connector + LLM date extraction for ~1
-    // item — not worth it. (Apothecary workshops, niche; rare for discovery.)
+    // Squarespace *products* collection: pottery classes sold as commerce items
+    // with dates in variant attributes ("July 3rd"). The squarespaceProducts
+    // connector reads /events?format=json and emits one listing per dated variant
+    // (skips non-dated merch). Low volume but real class events.
     id: "city-mud-web",
-    enabled: false,
-    connector: "squarespaceEvents",
+    enabled: true,
+    connector: "squarespaceProducts",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.citymud.com/events",
+    defaultVenueName: "City Mud",
+    defaultCategory: "Arts & Culture",
     maxItems: 40,
   },
   {
-    // Disabled: junglerumbar.com (Squarespace tiki bar) has no events — /events
-    // 404s, the nav is menus + private-event rentals, and JSON-LD is just
-    // WebSite/LocalBusiness. The only "deal" is a generic everyday happy hour
-    // ("4-6 Everyday & 9-11 Tue+Wed") with no specifics — true of nearly every
-    // bar, not a discoverable dated deal. Nothing structured to ingest.
+    // Events live only in a monthly flyer image on the homepage (no text/feed;
+    // captionless IG). The flyerImage connector sends the page's images to the
+    // vision model to read the calendar (Drag Bingo, Live Jazz Weds, Tea Dance).
     id: "jungle-rum-bar-web",
-    enabled: false,
-    connector: "squarespaceEvents",
+    enabled: true,
+    connector: "flyerImage",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://junglerumbar.com/events",
+    url: "https://junglerumbar.com/",
+    defaultVenueName: "Jungle Rum Bar",
+    defaultCategory: "Food & Drink",
+    maxImages: 6,
     maxItems: 40,
   },
   {
-    // Disabled: waldschankeciders.com/events is a GoDaddy Website Builder events
-    // widget rendered inside a sandboxed iframe whose src is
-    // `javascript:…getAttribute("srcdoc")` — the events are JS-populated at
-    // runtime, with no ICS feed, no JSON, and obfuscated classes, so they're
-    // unreachable by fetch or even a normal renderJs pass. Its partner-run events
-    // are captured by their own organizers; other one-offs arrive via Visit Denver.
+    // Events are a Canva-designed month grid embedded via a GoDaddy widget
+    // (GoDaddy iframe -> Canva embed -> <canvas>): no text, feed, API, fetchable
+    // image, or DOM links (the 'Learn More' buttons are Canva element-links).
+    // The screenshotVision connector screenshots the rendered Canva embed and
+    // vision-OCRs it. The Canva embed URL is auto-discovered from the events page
+    // each run, so a new monthly design is picked up automatically.
     id: "waldschanke-ciders-web",
-    enabled: false,
-    connector: "icsCalendar",
+    enabled: true,
+    connector: "screenshotVision",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://waldschankeciders.com/events",
+    defaultVenueName: "Waldschänke Ciders",
+    defaultCategory: "Food & Drink",
+    waitForTimeoutMs: 15000,
     maxItems: 40,
   },
   {
@@ -600,6 +1039,21 @@ export const SOURCES: SourceConfig[] = [
     url: "https://www.schoolyardbeergarden.com/events/",
     maxItems: 30,
     defaultVenueSlug: "schoolyard-beer-garden-and-cafe",
+  },
+  {
+    // Old Town Lafayette district events (WordPress + The Events Calendar). Its
+    // Tribe REST API is Cloudflare-blocked, but the events page itself serves
+    // clean JSON-LD Event blocks (tz-aware dates, per-event location like
+    // "Festival Plaza", "Little Herbal Apothecary"), so jsonLdEvents reads those.
+    // Lafayette (Boulder County), not Denver; venue resolves per event.
+    id: "old-town-lafayette-web",
+    enabled: true,
+    connector: "jsonLdEvents",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://oldtownlafayette.com/events/",
+    maxItems: 30,
+    cityHint: "Lafayette, CO",
   },
   {
     // Denver Botanic Gardens runs a Drupal 10 calendar that server-renders event
@@ -774,7 +1228,7 @@ export const SOURCES: SourceConfig[] = [
     id: "colorado-rockies-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "rockies",
     defaultVenueSlug: "coors-field",
@@ -801,7 +1255,7 @@ export const SOURCES: SourceConfig[] = [
     id: "denver-broncos-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "broncos",
     defaultVenueSlug: "empower-field",
@@ -826,7 +1280,7 @@ export const SOURCES: SourceConfig[] = [
     id: "denver-nuggets-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "nuggets",
     defaultVenueSlug: "ball-arena",
@@ -860,7 +1314,7 @@ export const SOURCES: SourceConfig[] = [
     // net-new events. Theme nights still arrive via ball-arena-web.
     enabled: false,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "coloradoavalanche",
     defaultVenueSlug: "ball-arena",
@@ -960,6 +1414,9 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.downtowndenver.com/events",
+    // React-hydrated list — static fetch yields empty <h4> titles; render JS.
+    renderJs: true,
+    waitForSelector: "[role=listitem] h4",
     selectors: {
       item: "[role=listitem]:has(h4)",
       title: "h4",
@@ -980,9 +1437,16 @@ export const SOURCES: SourceConfig[] = [
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://mcadenver.org/events",
+    // Events render client-side — the static cheerio fetch returns 0; render JS
+    // (browser) and wait for the cards. Each .block-featured holds category,
+    // date, space, title, description.
+    renderJs: true,
+    waitForSelector: ".block-featured",
     selectors: {
       item: ".block-featured",
     },
+    defaultVenueName: "Museum of Contemporary Art Denver",
+    defaultCategory: "Arts & Culture",
     maxItems: 40,
   },
   {
@@ -1018,6 +1482,104 @@ export const SOURCES: SourceConfig[] = [
     defaultVenueSlug: "lady-justice-brewing",
   },
   {
+    // Foxglove Bar & Hideout (cocktail bar in Lafayette, CO) publishes its events
+    // as an embedded public Google Calendar; the generic icsCalendar connector
+    // reads the .ics feed directly (live music, food trucks, special parties),
+    // skipping recurring masters and "Closed …" entries. No seeded venue, so pin
+    // via defaultVenueName (most entries omit LOCATION); cityHint keeps the
+    // geocode in Lafayette.
+    id: "foxglove-bar-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://calendar.google.com/calendar/ical/c_e9d05360a00c7b7e96f0a8089feb7aaa40f1a8e7ccb19bdf2722b395016b5969%40group.calendar.google.com/public/basic.ics",
+    maxItems: 40,
+    defaultVenueName: "Foxglove Bar & Hideout",
+    defaultVenueAddress: "107 1/2 S Public Rd, Lafayette, CO 80026",
+    cityHint: "Lafayette, CO",
+    // Keep the active recurring entries — the Tue–Fri happy hour ($2 off house
+    // specialties) is a real deal, not noise.
+    icsIncludeRecurring: true,
+  },
+  {
+    // The Rayback Collective (Boulder beer garden / food-truck park) runs its
+    // events through an EventCalendarApp widget; its public ICS feed (the webcal
+    // "Subscribe" URL, /widget-subscription/<acct>/<widgetUuid>) carries the real
+    // programming — Boulder Comedy Show, trivia, live music, watch parties, REI
+    // workshops, story time. All one venue; the feed has no RRULE masters, so the
+    // default skip-recurring is fine. Most entries omit a street address, so pin
+    // via defaultVenueName + defaultVenueAddress (a name-only geocode fails).
+    id: "rayback-collective-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://api.eventcalendarapp.com/widget-subscription/9891/a2e09585-ba01-492a-8efa-7fa0f2b68697",
+    maxItems: 40,
+    defaultVenueName: "The Rayback Collective",
+    defaultVenueAddress: "2775 Valmont Rd, Boulder, CO 80304",
+    cityHint: "Boulder, CO",
+  },
+  {
+    // The Rayback's SECOND EventCalendarApp widget (0352139f) is its daily
+    // food-truck schedule (Pupusas Familia, Passport, Mile High Tikka Express,
+    // Pho Wheels...) — separate from the programming widget above. All at the one
+    // public venue, dated. The ICS is huge (~12k historical entries); icsCalendar
+    // keeps only upcoming, capped at maxItems.
+    id: "rayback-food-trucks-web",
+    enabled: true,
+    connector: "icsCalendar",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://api.eventcalendarapp.com/widget-subscription/9891/0352139f-4e45-49e9-b48b-54c8a73ecadd",
+    maxItems: 40,
+    defaultVenueName: "The Rayback Collective",
+    defaultVenueAddress: "2775 Valmont Rd, Boulder, CO 80304",
+    cityHint: "Boulder, CO",
+    defaultCategory: "Food & Drink",
+  },
+  {
+    // Cervantes' Masterpiece Ballroom + Other Side (Five Points music venues).
+    // WordPress + the RHP events plugin — upcoming shows server-rendered as
+    // .rhpSingleEvent cards (~145). Multi-venue (also promotes Red Rocks shows),
+    // so venue resolves per event. Static cheerioWeb; capped to the soonest window.
+    id: "cervantes-masterpiece-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://cervantesmasterpiece.com/",
+    // apifyWeb captures each card's FULL text ($el.text()) — date, Doors/Show
+    // time, and venue — which cheerioWeb's title/date/description sub-selectors
+    // dropped (the time has no dedicated element).
+    selectors: {
+      item: ".rhpSingleEvent",
+      title: ".rhp-event__title--list",
+    },
+    maxItems: 40,
+    defaultCategory: "Music",
+  },
+  {
+    // DASH Events produces Denver-area art festivals. The Cheesman Park Art Fest
+    // page is one festival behind a SiteGround 202 challenge, dates in a collapsed
+    // accordion — renderJs passes the challenge and whole-page extraction (no item
+    // selector; jQuery .text() includes the collapsed dates) reads it. Garden of
+    // the Gods is Colorado Springs (out of metro), so only Cheesman Park is pulled.
+    id: "dash-events-web",
+    enabled: true,
+    connector: "apifyWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: "https://dashevents.com/productions/cheesman-park-art-fest/",
+    renderJs: true,
+    waitForSelector: "h1",
+    maxItems: 5,
+    defaultVenueName: "Cheesman Park",
+    cityHint: "Denver, CO",
+    defaultCategory: "Arts & Culture",
+  },
+  {
     id: "highlands-square-web",
     enabled: true,
     connector: "apifyWeb",
@@ -1041,7 +1603,7 @@ export const SOURCES: SourceConfig[] = [
     id: "highlands-square-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "visitdenverhighlands",
   },
@@ -1064,7 +1626,7 @@ export const SOURCES: SourceConfig[] = [
     id: "mile-high-on-the-cheap-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "milehighcheap",
   },
@@ -1089,29 +1651,32 @@ export const SOURCES: SourceConfig[] = [
     id: "visit-denver-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "visitdenver",
   },
   {
     id: "denver-film-web",
-    // Disabled: denverfilm.org is an Eventive cinema catalog (1,200+ films +
-    // daily Sie FilmCenter showtimes) — too granular/noisy for a discovery app,
-    // and the clean events endpoint needs a secret API key. Denver Film's
-    // notable events (festival, Film on the Rocks, premieres) arrive via Visit
-    // Denver / Mile High; curated highlights come from Instagram below.
-    enabled: false,
-    connector: "apifyWeb",
+    // denverfilm.org runs on Eventive (a client-rendered widget, no public
+    // feed). The /upcoming API returns the Now Playing set — current films
+    // with showtimes — which the eventive connector collapses to one listing
+    // per film (not per showtime) and pins to Sie FilmCenter. bucket + api_key
+    // are the public widget values from the denverfilm.eventive.org tenant bundle.
+    enabled: true,
+    connector: "eventive",
     cadence: "weekly",
     sourceLabel: "Website",
-    url: "https://www.denverfilm.org/",
+    eventiveBucket: "5ed7cb60eb909700905eb9e4",
+    eventiveApiKey: "285f587b83e6ab326e737e00d62ca378",
+    defaultVenueSlug: "sie-filmcenter",
     defaultCategory: "Arts & Culture",
+    maxItems: 40,
   },
   {
     id: "denver-film-ig",
     enabled: true,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "thedenverfilm",
     defaultCategory: "Arts & Culture",
@@ -1140,7 +1705,7 @@ export const SOURCES: SourceConfig[] = [
     // events. LoDo Love's actual events come from its website calendar above.
     enabled: false,
     connector: "instagram",
-    cadence: "weekly",
+    cadence: "daily",
     sourceLabel: "Instagram",
     handle: "lodolovedenver",
   },
@@ -1152,14 +1717,15 @@ export const SOURCES: SourceConfig[] = [
   // private-bookings, or image-only Instagram) so the sheet↔code mapping is
   // complete and nobody re-investigates them blindly.
   {
-    // The Family Jones (LoHi distillery) publishes a curated "Colorado spirits
-    // events" calendar on WordPress + The Events Calendar, but the whole site
-    // sits behind SiteGround's anti-bot (sgcaptcha): a plain fetch of the
-    // /wp-json tribe REST gets a 202 JS challenge it can't solve, so the
-    // in-process tribeEvents connector can't read it. apifyWeb with renderJs
-    // runs a real browser that passes the challenge, then scrapes the Tribe
-    // list view. The feed mixes the distillery's own events with partnered/
-    // offsite ones, each carrying its own venue/address — so no defaultVenueSlug.
+    // The Family Jones (LoHi distillery) publishes a "Colorado spirits events"
+    // calendar (WordPress + The Events Calendar) — its own tastings plus a heavy
+    // schedule of partnered/offsite stops (farmers markets, bazaars, pop-ups),
+    // each carrying its own venue/address, so no defaultVenueSlug. Kept enabled
+    // for the unique Denver pop-ups it surfaces (craft walks, bazaars) that no
+    // other source has; note some market rows geocode imperfectly. The site sits
+    // behind SiteGround sgcaptcha (a 202 JS challenge the in-process tribeEvents
+    // connector can't pass), so apifyWeb+renderJs runs a real browser to scrape
+    // the Tribe list view.
     id: "family-jones-web",
     enabled: true,
     connector: "apifyWeb",
@@ -1207,17 +1773,20 @@ export const SOURCES: SourceConfig[] = [
     defaultCategory: "Food & Drink",
   },
   {
-    // Disabled: coloradowinewalk.com is a Wix site but does NOT use the Wix
-    // Events app — a trial ingest returned 0 items (the events are static
-    // marketing content, not in warmup-data). Revisit with apifyWeb whole-page
-    // extraction if its event list is ever worth the spend.
+    // Wix site without the Events app — the event lives in static marketing
+    // content (one annual Denver "grand tasting" wine walk), so wixEvents found
+    // nothing. apifyWeb+renderJs renders the Wix page; whole-page LLM extraction
+    // (no item selector) reads the single event.
     id: "colorado-wine-walk-web",
-    enabled: false,
-    connector: "wixEvents",
+    enabled: true,
+    connector: "apifyWeb",
     cadence: "weekly",
     sourceLabel: "Website",
     url: "https://www.coloradowinewalk.com/events",
-    maxItems: 30,
+    renderJs: true,
+    waitForSelector: "h1",
+    waitForTimeoutMs: 15000,
+    maxItems: 5,
     defaultCategory: "Food & Drink",
   },
 
@@ -1235,14 +1804,22 @@ export const SOURCES: SourceConfig[] = [
   { id: "hello-darling-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://hellodarling.cafe/events", maxItems: 40 },
   // /taproom-events is an empty/embedded Squarespace block — no dated event data exposed.
   { id: "crooked-stave-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.crookedstave.com/taproom-events", maxItems: 40 },
-  // Restaurant site (menus/hours), no events calendar or feed.
-  { id: "cherry-cricket-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cherrycricket.com/", maxItems: 40 },
+  // Recurring Happy Hour deal per location (2-5PM & 10PM-12AM daily). Priced
+  // items are image-locked (see connector); window scraped from each location
+  // page. Deals stay visible via the perpetual-deal window in persist.ts.
+  { id: "cherry-cricket-deals", enabled: true, connector: "cherryCricketDeals", cadence: "weekly", sourceLabel: "Website", url: "https://cherrycricket.com/", defaultCategory: "Food & Drink" },
   // Sandwich-shop chain site, no events.
   { id: "snarfs-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.eatsnarfs.com/", maxItems: 40 },
   // Pizza-restaurant site (menus/locations), no events calendar.
   { id: "blue-pan-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/", maxItems: 40 },
   // Weekly food-truck location schedule, not discrete datable events.
   { id: "blue-pan-food-truck-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bluepandenver.com/food-truck/", maxItems: 40 },
+  // Disabled: food-truck schedule IG. multiEvent fans the weekly post + the daily
+  // "we're here today" posts into ~33 rows for ~10 real stops — heavy dups (same
+  // stop, 2-3 title variants), wildly inconsistent geocoding (Cohesion -> 3
+  // different neighborhoods), date-flooding (17 stops on one day), and half the
+  // stops are private apartment complexes. Net feed noise.
+  { id: "blue-pan-food-truck-ig", enabled: false, connector: "instagram", cadence: "daily", sourceLabel: "Instagram", handle: "bluepanfoodtruck", defaultCategory: "Food & Drink", multiEvent: true },
   // Shopify coffee-retail site, no events.
   { id: "queen-city-coffee-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://queencitycollectivecoffee.com/", maxItems: 40 },
   // Square/Shopify coffee-retail site, no events.
@@ -1253,9 +1830,38 @@ export const SOURCES: SourceConfig[] = [
   { id: "cellar-west-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://cellarwest.square.site/", maxItems: 40 },
   // Squarespace tattoo-shop site, no events page (flash drops only on Instagram).
   { id: "love-you-tattoo-web", enabled: false, connector: "squarespaceEvents", cadence: "weekly", sourceLabel: "Website", url: "https://www.loveyoutattooboulder.com/", maxItems: 40 },
-  // Only feed is the city-wide bouldercolorado.gov/events calendar (council meetings etc.) —
-  // too noisy and not arts-scoped; Boulder arts events arrive via aggregators instead.
-  { id: "boulder-arts-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://bouldercolorado.gov/events", maxItems: 40 },
+  // City of Boulder events (Drupal). The full calendar is dominated by civic
+  // meetings (City Council, Advisory Boards); filter to the public categories —
+  // Recreation (event_category=4) + Community (5) — for Pops in the Parks, Walk/Bike,
+  // cultural events and community programs, skipping the meetings. Server-rendered,
+  // so static cheerioWeb. Boulder is in the metro taxonomy.
+  {
+    id: "boulder-events-web",
+    enabled: true,
+    connector: "cheerioWeb",
+    cadence: "weekly",
+    sourceLabel: "Website",
+    url: [
+      "https://bouldercolorado.gov/events?event_category=4",
+      "https://bouldercolorado.gov/events?event_category=5",
+      "https://bouldercolorado.gov/events?event_category=5&page=1",
+    ],
+    selectors: {
+      item: ".event-card",
+      title: ".event-card__title",
+      // Without these the scraped text is title-only, so the normalizer can't
+      // date the event (it never fetches the detail page) and every recurring
+      // occurrence scrapes as identical text. The card carries a visible date
+      // (.event-card__date, e.g. "Wed Jun 24 2026") and a venue subtitle.
+      date: ".event-card__date",
+      description: ".event-card__subtitle",
+    },
+    // List cards have no time; the detail page's Drupal billboard carries the
+    // "Time" field (static, cheap to fetch).
+    detailSelector: ".billboard__content",
+    cityHint: "Boulder, CO",
+    maxItems: 40,
+  },
   // denvergov agency page has no events feed; shelter events are sporadic gov postings.
   { id: "denver-animal-shelter-web", enabled: false, connector: "cheerioWeb", cadence: "weekly", sourceLabel: "Website", url: "https://www.denvergov.org/", maxItems: 40 },
   // Shopify lifestyle brand/blog + merch, not an event source.
@@ -1265,13 +1871,21 @@ export const SOURCES: SourceConfig[] = [
   // any, are in flyer images, not captions; OCR is intentionally out of scope),
   // or redundant with a web source above.
   // Redundant with mcgregor-square-web (same plaza); F+D account posts menus/specials.
-  { id: "mcgregor-square-foodanddrink-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "mcgregorsquare_foodanddrink" },
+  { id: "mcgregor-square-foodanddrink-ig", enabled: false, connector: "instagram", cadence: "daily", sourceLabel: "Instagram", handle: "mcgregorsquare_foodanddrink" },
   // Brewery-location brand account; any events covered by westbound-down-web. Image-heavy.
-  { id: "westbound-denver-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "westbound_denver" },
+  { id: "westbound-denver-ig", enabled: false, connector: "instagram", cadence: "daily", sourceLabel: "Instagram", handle: "westbound_denver" },
   // Covered by stem-ciders-web; account posts brand/image content, not caption events.
-  { id: "stem-ciders-rino-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "stemcidersrino" },
+  { id: "stem-ciders-rino-ig", enabled: false, connector: "instagram", cadence: "daily", sourceLabel: "Instagram", handle: "stemcidersrino" },
   // Brand/image account, no caption-level event data (OCR out of scope).
-  { id: "courtyard-303-ig", enabled: false, connector: "instagram", cadence: "weekly", sourceLabel: "Instagram", handle: "thecourtyard303" },
+  // The Courtyard (by The Jasmine Bar, Louisville CO) posts its live-music
+  // schedule as flyer images — notably a "Summer Concert Series" graphic listing
+  // ~28 dated shows. Disabled: jasmine-bar-web already ingests this exact series
+  // from the venue's Squarespace feed (a cleaner Website source that wins dedup),
+  // so vision-OCR'ing the IG here is redundant — it only adds the occasional
+  // one-off flyer (Derby/Easter) at the cost of ~30 vision calls/run plus
+  // near-dup and year-old-post noise. The instagramVision connector it would use
+  // (vision-OCR per post) stays available for flyer-only IG venues with NO feed.
+  { id: "courtyard-303-ig", enabled: false, connector: "instagramVision", cadence: "daily", sourceLabel: "Instagram", handle: "thecourtyard303", defaultVenueName: "The Courtyard", defaultCategory: "Music", cityHint: "Louisville, CO", maxItems: 60 },
 ];
 
 const BY_ID = new Map(SOURCES.map((s) => [s.id, s]));

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Listing } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
+import { NewBadge } from "@/components/ui/NewBadge";
 import { FreeBadge } from "@/components/ui/FreeBadge";
 import { InsiderBadge } from "@/components/ui/InsiderBadge";
 import { FavButton } from "@/components/ui/FavButton";
@@ -67,6 +68,7 @@ function CardBody({
       )}
       <div className="bg-tag-bg relative h-[150px] w-full overflow-hidden">
         <Badge type={listing.type} />
+        {listing.isNew && <NewBadge />}
         {listing.isFree && <FreeBadge />}
         {isListingInsiderOnly(listing) && (
           <span className="absolute bottom-1.5 left-1.5 z-10">

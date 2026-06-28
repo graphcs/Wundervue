@@ -36,6 +36,14 @@ export interface Listing {
   // before reading; (0,0) is a real point on the globe and not a sentinel.
   lat: number | null;
   lng: number | null;
+  // ISO timestamp of when this listing — or its recurring SERIES — was first
+  // seen by the ingest pipeline. Computed as the series min(created_at) so a
+  // rolling weekly series doesn't look "new" each time the window adds future
+  // occurrences. Only DB-backed reads populate it (fixtures omit it). Drives the
+  // NEW badge + "New this week" rail.
+  firstSeenAt?: string;
+  // Derived from firstSeenAt: first seen within the last NEW_WINDOW_DAYS.
+  isNew?: boolean;
 }
 
 export interface Venue {
@@ -79,7 +87,7 @@ export type PageSize = 9 | 12 | 15 | 18;
 // others fall back to soonest as a tiebreaker. Price low→high stays deferred
 // (deal_value is free text, no numeric price); popularity ("most-saved") is now
 // enabled by the save_count column.
-export type SortOption = "soonest" | "latest" | "free-first" | "deals-first" | "most-saved";
+export type SortOption = "soonest" | "newest" | "latest" | "free-first" | "deals-first" | "most-saved";
 
 // How the listings are rendered. (For-You is a feed tab now, not a view mode.)
 export type ViewMode = "grid" | "map" | "calendar";

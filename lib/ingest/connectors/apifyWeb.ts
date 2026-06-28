@@ -62,7 +62,11 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
       function collect() {
         $(itemSel).each((_, el) => {
           const $el = $(el);
-          const href = $el.find('a').first().attr('href') || request.url;
+          // Resolve to an absolute URL: cheerio returns the raw (often relative)
+          // href, and a relative source_url fails the downstream live-URL check
+          // (new URL() throws) so the listing gets dropped before normalize.
+          let href = $el.find('a').first().attr('href') || request.url;
+          try { href = new URL(href, request.url).href; } catch (e) { href = request.url; }
           const body = $el.text().trim();
           const key = href + '|' + body.slice(0, 120);
           if (seen.has(key)) return;
@@ -124,7 +128,13 @@ export async function fetchApifyWeb(source: SourceConfig): Promise<RawItem[]> {
       if (items.length === 0 && !itemSel) {
         $('script, style, nav, footer, header, noscript').remove();
         const root = $('main').length ? $('main') : $('body');
-        const text = root.text().replace(/\\s+/g, ' ').trim().slice(0, 8000);
+        // Tables (e.g. a festival's time/band/genre schedule grid) flatten with
+        // no gaps between cells ("PMNinety 2k90s") under .text(), which the LLM
+        // can't parse. Inject separators: " | " after each cell, a newline after
+        // each row, so each schedule row reads as one line.
+        root.find('td, th').each(function () { $(this).append(' | '); });
+        root.find('tr').each(function () { $(this).append('\\n'); });
+        const text = root.text().replace(/[ \\t]+/g, ' ').replace(/\\n\\s*/g, '\\n').trim().slice(0, 8000);
         if (text) {
           items.push({
             url: request.url,

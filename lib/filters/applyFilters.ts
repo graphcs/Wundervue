@@ -5,6 +5,26 @@ import {
 } from "@/lib/data/neighborhoods";
 import { locationMatchesSelection } from "@/lib/data/locations";
 import { categoryLabel, categorySlug } from "@/lib/data/categories";
+import { DAY_MS, denverDayKey, denverWeekdayNum, denverStartOfTodayMs } from "@/lib/dates";
+
+// A recurring listing's date_display is a CADENCE ("Every Thursday"), and an
+// un-split recurring deal carries a rolling "today" date_start — so it must sort to
+// its NEXT occurrence of that weekday, not to today. A specific-date row ("Thu, Jul
+// 2") has no cadence words and keeps its real date (returns null here).
+const RECUR_RE = /\b(?:every|each|weekly)\b|\b(?:mon|tues|wednes|thurs|fri|satur|sun)days\b/i;
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+function nextRecurringDayKey(disp: string, todayMs: number): string | null {
+  if (!RECUR_RE.test(disp)) return null;
+  const low = disp.toLowerCase();
+  const todayDow = denverWeekdayNum(todayMs);
+  let best: number | null = null;
+  DAY_NAMES.forEach((name, wd) => {
+    if (!low.includes(name)) return;
+    const ms = todayMs + ((wd - todayDow + 7) % 7) * DAY_MS; // next such weekday (today if it matches)
+    if (best === null || ms < best) best = ms;
+  });
+  return best === null ? null : denverDayKey(best);
+}
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -70,28 +90,76 @@ export function getDateRange(
 // start time sort last regardless of direction (they have no place on a
 // soonest/latest timeline). For the non-date sorts (free/deals/most-saved),
 // "soonest" is the tiebreaker within each group.
-export function sortListings(listings: Listing[], sort: Filters["sort"]): Listing[] {
-  const time = (l: Listing) => {
+export function sortListings(
+  listings: Listing[],
+  sort: Filters["sort"],
+  now: number = Date.now(),
+): Listing[] {
+  const todayMs = denverStartOfTodayMs(now);
+  const todayKey = denverDayKey(todayMs);
+  const UNDATED = "9999-99-99"; // sorts after any real "2026-.." day → undated rows last
+
+  // Precompute each listing's sort keys ONCE — the comparator runs O(n log n) times,
+  // so parsing dates / regexes / Intl inside it would be wasteful.
+  interface SortKey { day: string; isNew: boolean; start: number; first: number }
+  const keys = new Map<Listing, SortKey>();
+  for (const l of listings) {
     const t = l.startAt ? Date.parse(l.startAt) : NaN;
-    return Number.isNaN(t) ? null : t;
+    let day: string;
+    if (Number.isNaN(t)) {
+      day = UNDATED;
+    } else {
+      // EFFECTIVE Denver day = max(start day, today): a still-running range sorts as
+      // today (not its old start); a cadence ("Every Thursday") sorts to its next
+      // occurrence. Denver-day, matching the feed cutoff, so evening events don't
+      // bucket a day late.
+      const recur = nextRecurringDayKey(l.dateDisplay ?? "", todayMs);
+      const startKey = denverDayKey(t);
+      day = recur ?? (startKey > todayKey ? startKey : todayKey);
+    }
+    keys.set(l, {
+      day,
+      isNew: Boolean(l.isNew),
+      start: Number.isNaN(t) ? Infinity : t,
+      first: l.firstSeenAt ? Date.parse(l.firstSeenAt) : NaN,
+    });
+  }
+  const k = (l: Listing) => keys.get(l)!;
+
+  // Default browse = "soonest, but new first": soonest Denver day, then newly-scraped
+  // (last-7-day) events ahead of older ones within that day, then by start time.
+  const bySoonest = (a: Listing, b: Listing) => {
+    const ka = k(a), kb = k(b);
+    if (ka.day !== kb.day) return ka.day < kb.day ? -1 : 1;
+    return Number(kb.isNew) - Number(ka.isNew) || ka.start - kb.start;
   };
-  // Date comparator; undated listings always sort last, both directions.
-  const byDate = (a: Listing, b: Listing, latest: boolean) => {
-    const ta = time(a);
-    const tb = time(b);
-    if (ta === null && tb === null) return 0;
-    if (ta === null) return 1;
-    if (tb === null) return -1;
-    return latest ? tb - ta : ta - tb;
-  };
-  const bySoonest = (a: Listing, b: Listing) => byDate(a, b, false);
   // Grouping sorts: rank desc (higher first), then soonest as the tiebreaker.
   const grouped = (rankOf: (l: Listing) => number) => (a: Listing, b: Listing) =>
     rankOf(b) - rankOf(a) || bySoonest(a, b);
 
+  // Most-recently first-seen first (the "what's new" browse); rows without a
+  // firstSeenAt (fixtures) sort last, then by soonest.
+  const byNewest = (a: Listing, b: Listing) => {
+    const fa = k(a).first, fb = k(b).first;
+    const na = Number.isNaN(fa), nb = Number.isNaN(fb);
+    if (na && nb) return bySoonest(a, b);
+    if (na) return 1;
+    if (nb) return -1;
+    return fb - fa || bySoonest(a, b);
+  };
+  // Latest = real start time descending; undated last.
+  const byLatest = (a: Listing, b: Listing) => {
+    const sa = k(a).start, sb = k(b).start;
+    if (sa === Infinity && sb === Infinity) return 0;
+    if (sa === Infinity) return 1;
+    if (sb === Infinity) return -1;
+    return sb - sa;
+  };
+
   const comparators: Record<Filters["sort"], (a: Listing, b: Listing) => number> = {
     soonest: bySoonest,
-    latest: (a, b) => byDate(a, b, true),
+    newest: byNewest,
+    latest: byLatest,
     "free-first": grouped((l) => (l.isFree ? 1 : 0)),
     // Deal-type listings first (matches the Deals filter + the badges) — an
     // event that merely carries a deal_value string is NOT a deal.

@@ -59,12 +59,16 @@ export async function fetchCheerioWeb(source: SourceConfig): Promise<RawItem[]> 
       ? new URL(link, url).toString()
       : url;
 
-    // Content-hash the visible text instead of using the array index, so re-runs
-    // against a re-ordered DOM still upsert the same row. When `link` is present
-    // sourceUrl is already item-unique; when absent (all items share the page
-    // url) the hash is the only stable discriminator.
+    // Dedup by the per-event link when the item has its own — the same event can
+    // appear under several list/category pages (e.g. Boulder's event_category
+    // views), and keying those by url alone collapses them to one row. Fall back
+    // to url+contentHash for items that only share the list page URL, where the
+    // hash is the sole discriminator between distinct events.
+    const hasOwnLink = Boolean(link) && !urls.includes(sourceUrl);
     const contentHash = createHash("sha1").update(text).digest("hex").slice(0, 12);
-    const sourceId = `${source.id}:${sourceUrl}#${contentHash}`;
+    const sourceId = hasOwnLink
+      ? `${source.id}:${sourceUrl}`
+      : `${source.id}:${sourceUrl}#${contentHash}`;
     if (seen.has(sourceId)) return;
     seen.add(sourceId);
 
@@ -78,6 +82,44 @@ export async function fetchCheerioWeb(source: SourceConfig): Promise<RawItem[]> 
     });
   }
 
-  return source.maxItems ? items.slice(0, source.maxItems) : items;
+  const capped = source.maxItems ? items.slice(0, source.maxItems) : items;
+
+  // Opt-in detail enrichment: fetch each kept item's own page and append the
+  // detail block (the list card often omits the time the detail page carries).
+  // Sequential to stay polite to one host; only items with their own link (a
+  // sourceUrl distinct from the list page) are fetched.
+  if (source.detailSelector) {
+    for (const it of capped) {
+      if (!it.sourceUrl || urls.includes(it.sourceUrl)) continue;
+      try {
+        // Retry + timeout so a transient hiccup doesn't silently leave the event
+        // time-less (the whole point of the fetch). A real 404 throws past the
+        // retries and is caught below.
+        const detailHtml = await withRetry(async () => {
+          const res = await fetch(it.sourceUrl!, {
+            headers: { "User-Agent": "WundervueBot/1.0 (+https://wundervue.com)" },
+            signal: AbortSignal.timeout(20000),
+          });
+          if (!res.ok) throw new Error(`detail fetch ${res.status}`);
+          return res.text();
+        });
+        const $d = cheerio.load(detailHtml);
+        const detail = $d(source.detailSelector).first().text().replace(/\s+/g, " ").trim();
+        if (detail) {
+          // Surface a clean "Time: …" line so normalize reads it deterministically
+          // (mid-blob times get skipped under concurrent normalization).
+          const tm = detail.match(
+            /\b\d{1,2}(?::\d{2})?\s*[AP]M\s*[–-]\s*\d{1,2}(?::\d{2})?\s*[AP]M\b|\b\d{1,2}:\d{2}\s*[AP]M\b/i,
+          );
+          const timeLine = tm ? `Time: ${tm[0]}\n` : "";
+          it.text = `${it.text}\n${timeLine}${detail.slice(0, 1000)}`;
+        }
+      } catch {
+        // detail enrichment is best-effort — keep the list-only item on failure
+      }
+    }
+  }
+
+  return capped;
 }
 
