@@ -4,10 +4,12 @@ import type { Listing, ListingSource, ListingType, LifestyleTag, Venue } from "@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { LISTINGS, getListingBySlug as getFixtureListingBySlug } from "./listings";
 import { getVenueBySlug as getFixtureVenueBySlug } from "./venues";
+import { seriesFirstSeen, seriesBaseKey, isFresh } from "./freshness";
 
 // Single source for the listing column list — shared by the feed + detail reads.
+// created_at + source_id power the freshness signal (series-aware "first seen").
 const LISTING_COLUMNS =
-  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, save_count, lat, lng";
+  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, save_count, lat, lng, created_at, source_id";
 
 interface DbListingRow {
   id: string;
@@ -32,6 +34,8 @@ interface DbListingRow {
   save_count: number | null;
   lat: number | null;
   lng: number | null;
+  created_at: string;
+  source_id: string;
 }
 
 interface DbVenueRow {
@@ -40,7 +44,13 @@ interface DbVenueRow {
   name: string;
 }
 
-function rowToListing(row: DbListingRow, venueBy: Map<string, DbVenueRow>): Listing {
+function rowToListing(
+  row: DbListingRow,
+  venueBy: Map<string, DbVenueRow>,
+  // The series' first-seen (min created_at across its occurrences). Defaults to
+  // this row's own created_at when the caller has no series context (detail page).
+  firstSeenAt: string = row.created_at,
+): Listing {
   const venue = row.venue_id ? venueBy.get(row.venue_id) : undefined;
   // Ingest pipeline (lib/ingest/imagePipeline.ts) writes a Supabase Storage URL
   // here for every published row — either the scraped photo (when it passed
@@ -71,18 +81,37 @@ function rowToListing(row: DbListingRow, venueBy: Map<string, DbVenueRow>): List
     saveCount: row.save_count ?? 0,
     lat: row.lat,
     lng: row.lng,
+    firstSeenAt,
+    isNew: isFresh(firstSeenAt),
   };
+}
+
+// Start of "today" in Denver (the metro we serve), as a UTC ISO string. A bare
+// UTC-midnight cutoff leaked yesterday-evening events into the feed: an 8 PM
+// Denver show is already "tomorrow" in UTC, so it passed a UTC-midnight filter
+// the morning AFTER it happened. Anchoring on Denver's day keeps tonight's events
+// visible while dropping last night's.
+function denverStartOfTodayISO(now: Date = new Date()): string {
+  const p = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  })
+    .formatToParts(now)
+    .reduce((a, x) => ((a[x.type] = x.value), a), {} as Record<string, string>);
+  const hh = Number(p.hour) % 24; // some engines render midnight as "24"
+  // Denver-local wall clock reinterpreted as a UTC instant → the offset to real UTC.
+  const offsetMs = Date.UTC(+p.year, +p.month - 1, +p.day, hh, +p.minute, +p.second) - now.getTime();
+  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, 0, 0, 0) - offsetMs).toISOString();
 }
 
 export async function getPublishedListings(): Promise<Listing[]> {
   try {
     const client = await getSupabaseServerClient();
-    // Today's start in UTC — keeps events that start later today visible even
-    // after their evening kick-off, since users browsing in the morning are
-    // looking for things to do tonight.
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const cutoff = todayStart.toISOString();
+    // Start of today in DENVER (UTC instant) — keeps tonight's events visible to a
+    // morning browser, but drops last night's evening events (which are already
+    // "tomorrow" in UTC).
+    const cutoff = denverStartOfTodayISO();
+    const todayStart = new Date(cutoff);
 
     const [{ data: rows }, { data: venues }] = await Promise.all([
       client
@@ -108,10 +137,15 @@ export async function getPublishedListings(): Promise<Listing[]> {
       const ds = r.date_start ? Date.parse(r.date_start) : NaN;
       return Number.isNaN(ds) ? Infinity : Math.max(ds, cutoffMs);
     };
-    return ((rows ?? []) as DbListingRow[])
+    const dbRows = (rows ?? []) as DbListingRow[];
+    // Series-aware first-seen: a recurring series' future occurrences enter the
+    // rolling window each week, so freshness must key on the series' EARLIEST
+    // occurrence, not each row's own created_at.
+    const firstSeen = seriesFirstSeen(dbRows);
+    return dbRows
       .slice()
       .sort((a, b) => effective(a) - effective(b))
-      .map((r) => rowToListing(r, venueMap));
+      .map((r) => rowToListing(r, venueMap, firstSeen.get(seriesBaseKey(r.source, r.source_id))));
   } catch (err) {
     console.error("[listings] getPublishedListings failed", err);
     return [];
@@ -294,7 +328,11 @@ export async function getVenueListingsAllAsync(venueSlug: string): Promise<Listi
 
     const venueMap = new Map<string, DbVenueRow>();
     venueMap.set((venueRow as DbVenueRow).id, venueRow as DbVenueRow);
-    const fromDb = ((rows ?? []) as DbListingRow[]).map((r) => rowToListing(r, venueMap));
+    const venueRows = (rows ?? []) as DbListingRow[];
+    const firstSeen = seriesFirstSeen(venueRows);
+    const fromDb = venueRows.map((r) =>
+      rowToListing(r, venueMap, firstSeen.get(seriesBaseKey(r.source, r.source_id))),
+    );
     if (fromDb.length > 0) return fromDb;
     // No DB listings (e.g. fixture-only venue) — fall back to fixtures.
     return getListingsByVenueSlugAsync(venueSlug);
@@ -338,9 +376,7 @@ export async function getBrowseVenues(
 ): Promise<BrowseVenue[]> {
   try {
     const client = await getSupabaseServerClient();
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const cutoff = todayStart.toISOString();
+    const cutoff = denverStartOfTodayISO();
 
     // Both listings aggregations can exceed PostgREST's 1000-row cap (saves
     // covers every published listing, ever), so page through them — a single
