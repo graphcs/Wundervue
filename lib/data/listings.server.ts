@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { LISTINGS, getListingBySlug as getFixtureListingBySlug } from "./listings";
 import { getVenueBySlug as getFixtureVenueBySlug } from "./venues";
 import { seriesFirstSeen, seriesBaseKey, isFresh } from "./freshness";
+import { denverStartOfTodayISO } from "@/lib/dates";
 
 // Single source for the listing column list — shared by the feed + detail reads.
 // created_at + source_id power the freshness signal (series-aware "first seen").
@@ -84,24 +85,6 @@ function rowToListing(
     firstSeenAt,
     isNew: isFresh(firstSeenAt),
   };
-}
-
-// Start of "today" in Denver (the metro we serve), as a UTC ISO string. A bare
-// UTC-midnight cutoff leaked yesterday-evening events into the feed: an 8 PM
-// Denver show is already "tomorrow" in UTC, so it passed a UTC-midnight filter
-// the morning AFTER it happened. Anchoring on Denver's day keeps tonight's events
-// visible while dropping last night's.
-function denverStartOfTodayISO(now: Date = new Date()): string {
-  const p = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  })
-    .formatToParts(now)
-    .reduce((a, x) => ((a[x.type] = x.value), a), {} as Record<string, string>);
-  const hh = Number(p.hour) % 24; // some engines render midnight as "24"
-  // Denver-local wall clock reinterpreted as a UTC instant → the offset to real UTC.
-  const offsetMs = Date.UTC(+p.year, +p.month - 1, +p.day, hh, +p.minute, +p.second) - now.getTime();
-  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, 0, 0, 0) - offsetMs).toISOString();
 }
 
 export async function getPublishedListings(): Promise<Listing[]> {

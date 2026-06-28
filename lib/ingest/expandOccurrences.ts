@@ -1,5 +1,6 @@
 import type { ListingInsert, NormalizedListing } from "./types";
 import { eventKey, makeSlug } from "./dedup";
+import { DAY_MS as DAY, WEEKDAY_NUM, denverDayKey, denverDayLabel, denverWeekdayNum } from "../dates";
 
 // Splits multi-day listings into one row per upcoming day so every card carries a
 // concrete date (favoritable, and no range camps at the top of the date-sorted feed):
@@ -12,17 +13,11 @@ import { eventKey, makeSlug } from "./dedup";
 // splits per day like a continuous run. Single-day events and connector-pre-expanded
 // instances are untouched.
 
-const DAY = 86400000;
-const DENVER = "America/Denver";
 const OCCURRENCE_WINDOW_DAYS = 56; // ~8 weeks forward
 const MAX_OCCURRENCES = 8;
 // Passed to generateOccurrences to step EVERY day (a continuous run), vs a weekly
 // series' specific weekday set.
 const EVERY_DAY = new Set([0, 1, 2, 3, 4, 5, 6]);
-
-const WEEKDAY_NUM: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-};
 
 // A weekly cadence stated in the source text ("Weekly Thu", "every Thursday",
 // "Thursdays") — a deterministic backstop for when the LLM sets recurring=false
@@ -53,30 +48,6 @@ function parseTimeRange(text: string): { start: number | null; end: number | nul
     ((parseInt(m[1], 10) % 12) + (/p/i.test(m[3]) ? 12 : 0)) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
   if (matches.length === 0) return { start: null, end: null };
   return { start: toMin(matches[0]), end: matches[1] ? toMin(matches[1]) : null };
-}
-
-// Denver-local weekday number of an instant (DST-correct via Intl), so an
-// evening event whose UTC date_start has rolled to the next calendar day is
-// still placed on its real local weekday.
-function denverWeekdayNum(ms: number): number {
-  const wd = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: DENVER })
-    .format(new Date(ms))
-    .toLowerCase();
-  return WEEKDAY_NUM[wd] ?? new Date(ms).getUTCDay();
-}
-
-// "Sun, Jul 5" — the human day label shown on the card.
-function denverDayLabel(ms: number): string {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short", month: "short", day: "numeric", timeZone: DENVER,
-  }).format(new Date(ms));
-}
-
-// "2026-07-05" — stable per-occurrence key (Denver-local day).
-function denverDayKey(ms: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric", month: "2-digit", day: "2-digit", timeZone: DENVER,
-  }).format(new Date(ms));
 }
 
 // Build one occurrence row from the base, on the instant `ms` (which already
