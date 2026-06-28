@@ -155,4 +155,72 @@ describe("expandRecurringOccurrences", () => {
     const out = expandRecurringOccurrences([base], map, NOW);
     expect(out).toEqual([base]); // untouched
   });
+
+  it("splits a continuous multi-day run into one card per day from today (capped)", () => {
+    const base = row({
+      source_id: "fest", date_start: "2026-05-25T18:00:00Z", date_end: "2026-09-07T18:00:00Z",
+      date_display: "May 25 – Sep 7", time_display: "10:00 AM – 4:00 PM",
+    });
+    const map = new Map([[base.source_id, norm({
+      recurring: false, dateEnd: "2026-09-07T18:00:00Z", dateDisplay: "May 25 – Sep 7",
+    })]]);
+    const out = expandRecurringOccurrences([base], map, NOW); // NOW = Wed 2026-06-24
+    expect(out.length).toBe(8); // MAX_OCCURRENCES
+    const days = out.map((o) => o.date_start!.slice(0, 10));
+    expect(new Set(days).size).toBe(8); // distinct consecutive days
+    expect(days.every((d) => d >= "2026-06-24")).toBe(true); // none before today
+  });
+
+  it("a multi-day range that names a weekday splits WEEKLY on that day, not daily", () => {
+    const base = row({
+      source_id: "yoga", date_start: "2026-07-11T18:00:00Z", date_end: "2026-08-29T18:00:00Z",
+      date_display: "Jul 11 – Aug 29", time_display: "7:00 AM",
+    });
+    const map = new Map([[base.source_id, norm({
+      recurring: false, title: "Yoga on the Rocks",
+      description: "Start your Saturday morning in nature.", dateEnd: "2026-08-29T18:00:00Z",
+    })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    expect(out.length).toBeGreaterThan(1);
+    expect(out.every((o) => (o.date_display ?? "").startsWith("Sat"))).toBe(true);
+  });
+
+  it("splits a short multi-day run only through its end day", () => {
+    const base = row({
+      source_id: "wknd", date_start: "2026-06-26T18:00:00Z", date_end: "2026-06-28T18:00:00Z",
+      date_display: "Jun 26 – 28",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: false, dateEnd: "2026-06-28T18:00:00Z" })]]);
+    const out = expandRecurringOccurrences([base], map, NOW);
+    expect(out.length).toBe(3); // Jun 26, 27, 28
+    expect(out.every((o) => (o.date_start ?? "") <= "2026-06-28T23:59:59Z")).toBe(true);
+  });
+
+  it("does NOT split a single-day event (end same day as start)", () => {
+    const base = row({
+      source_id: "one", date_start: "2026-07-04T18:00:00Z", date_end: "2026-07-04T22:00:00Z",
+      date_display: "Sat, Jul 4",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: false })]]);
+    expect(expandRecurringOccurrences([base], map, NOW)).toEqual([base]);
+  });
+
+  it("does NOT daily-split a RECURRING deal (keeps its rolling window)", () => {
+    const base = row({
+      source_id: "sale", type: "deal", date_start: "2026-06-25T18:00:00Z", date_end: "2026-07-25T18:00:00Z",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: true, type: "deal", dateEnd: "2026-07-25T18:00:00Z" })]]);
+    expect(expandRecurringOccurrences([base], map, NOW)).toEqual([base]);
+  });
+
+  it("splits a non-recurring WINDOWED deal into per-day cards (a limited-time treat)", () => {
+    const base = row({
+      source_id: "treat", type: "deal", date_start: "2026-06-26T18:00:00Z", date_end: "2026-06-30T18:00:00Z",
+      date_display: "Jun 6 – Jun 30",
+    });
+    const map = new Map([[base.source_id, norm({ recurring: false, type: "deal", dateEnd: "2026-06-30T18:00:00Z" })]]);
+    const out = expandRecurringOccurrences([base], map, NOW); // NOW = Jun 24
+    expect(out.length).toBe(5); // Jun 26, 27, 28, 29, 30
+    expect(out.every((o) => o.type === "deal")).toBe(true);
+  });
 });

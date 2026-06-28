@@ -1,16 +1,24 @@
 import type { ListingInsert, NormalizedListing } from "./types";
 import { eventKey, makeSlug } from "./dedup";
 
-// Splits a recurring WEEKLY event (a market posted as "Every Sunday May 10 –
-// Oct 25") into one listing per upcoming occurrence — each a specific day + time
-// — so listings carry a concrete date users can favorite, and a long range no
-// longer camps at the top of the date-sorted feed. Continuous fixed-end runs and
-// recurring DEALS are left untouched (deals keep persist.ts's rolling window).
+// Splits multi-day listings into one row per upcoming day so every card carries a
+// concrete date (favoritable, and no range camps at the top of the date-sorted feed):
+//   - a recurring WEEKLY event ("Every Sunday May 10 – Oct 25") → one row per upcoming
+//     weekday occurrence;
+//   - a continuous multi-day run (a festival, an all-summer residency) → one row per
+//     day it's on, from today forward.
+// A RECURRING deal (weekly happy hour, perpetual offer) is left untouched — it keeps
+// persist.ts's rolling card. But a limited-time WINDOWED deal ("Jun 6 – Jun 30" treat)
+// splits per day like a continuous run. Single-day events and connector-pre-expanded
+// instances are untouched.
 
 const DAY = 86400000;
 const DENVER = "America/Denver";
 const OCCURRENCE_WINDOW_DAYS = 56; // ~8 weeks forward
 const MAX_OCCURRENCES = 8;
+// Passed to generateOccurrences to step EVERY day (a continuous run), vs a weekly
+// series' specific weekday set.
+const EVERY_DAY = new Set([0, 1, 2, 3, 4, 5, 6]);
 
 const WEEKDAY_NUM: Record<string, number> = {
   sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
@@ -148,6 +156,22 @@ function generateOccurrences(
   return occurrences;
 }
 
+// Hours an event must span to count as a genuine multi-day run, so a late-night
+// show (8 PM–1 AM) whose end merely rolls past midnight isn't split into two days.
+const MULTI_DAY_MIN_MS = 20 * 3600 * 1000;
+
+// A still-running/upcoming event that genuinely spans 2+ Denver days — a festival,
+// an all-summer residency. A single-day event (or an overnight one under ~a day)
+// is left alone.
+function isMultiDayRun(row: ListingInsert, now: number): boolean {
+  if (!row.date_start || !row.date_end) return false;
+  const start = Date.parse(row.date_start);
+  const end = Date.parse(row.date_end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < now) return false;
+  if (end - start < MULTI_DAY_MIN_MS) return false;
+  return denverDayKey(end) > denverDayKey(start);
+}
+
 // Replace each recurring WEEKLY EVENT row with its upcoming occurrences. Splits a
 // recurring event (or event+deal "both") that names a weekday — a weekly
 // "Thursday Poker Night" should appear once per week, not once. Pure DEALS are NOT
@@ -163,19 +187,32 @@ export function expandRecurringOccurrences(
   const out: ListingInsert[] = [];
   for (const row of rows) {
     const norm = normalizedBySourceId.get(row.source_id);
-    const recurs =
-      norm &&
-      norm.type !== "deal" &&
-      // A connector that emitted pre-expanded, specific-day instances (tribeEvents,
-      // localistEvents) asserts recurring:false — never re-split those, or the
-      // text heuristic would invent overlapping occurrences (duplicate event_keys).
-      norm.connectorRecurring !== false &&
-      (Boolean(norm.recurring) ||
-        WEEKLY_TEXT_RE.test(`${norm.title} ${norm.description} ${row.date_display ?? ""}`));
-    if (recurs && norm) {
+    // Deals keep persist.ts's rolling window; connector-pre-expanded instances
+    // (tribeEvents, localistEvents) assert recurring:false and are already
+    // specific days — never re-split either.
+    if (norm && norm.connectorRecurring !== false) {
+      const isDeal = norm.type === "deal";
+      // Weekly recurrence applies to EVENTS only ("Thursday Poker Night" → one card
+      // per Thursday). A weekly DEAL ("Every Thursday") keeps its single rolling card.
+      const weekly =
+        !isDeal &&
+        (Boolean(norm.recurring) ||
+          WEEKLY_TEXT_RE.test(`${norm.title} ${norm.description} ${row.date_display ?? ""}`));
       const weekdays = parseWeekdays(row.date_display ?? norm.dateDisplay ?? "");
-      if (weekdays.size > 0) {
+      if (weekly && weekdays.size > 0) {
+        // Weekly series → one occurrence per named weekday.
         const occ = generateOccurrences(row, norm, weekdays, now);
+        if (occ.length > 0) {
+          out.push(...occ);
+          continue;
+        }
+      } else if (isMultiDayRun(row, now) && !(isDeal && norm.recurring)) {
+        // A multi-day range. If a weekday is named in the date label / title /
+        // description, it's a WEEKLY series the LLM rendered as a range (e.g. Yoga
+        // "Jul 11 – Aug 29" whose blurb says "Saturday morning") → split on that
+        // day, not every day. Otherwise it's a continuous run → one card per day.
+        const named = parseWeekdays(`${row.date_display ?? ""} ${norm.title} ${norm.description}`);
+        const occ = generateOccurrences(row, norm, named.size > 0 ? named : EVERY_DAY, now);
         if (occ.length > 0) {
           out.push(...occ);
           continue;
