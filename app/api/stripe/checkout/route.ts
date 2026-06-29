@@ -28,6 +28,10 @@ export async function POST(request: Request) {
     success_url: `${appUrl}/account/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/?upgrade=cancelled`,
     allow_promotion_codes: true,
+    // Skip card collection when nothing is owed (e.g. a 100%-off comp coupon),
+    // so comped users can subscribe without entering a payment method. Paid
+    // upgrades still collect a card because an amount is due.
+    payment_method_collection: "if_required",
     subscription_data: { metadata: { user_id: user.id } },
     client_reference_id: user.id,
   });
