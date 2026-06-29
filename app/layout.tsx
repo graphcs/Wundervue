@@ -7,6 +7,7 @@ import { SavedEventsPanel } from "@/components/account/SavedEventsPanel";
 import { SavedVenuesPanel } from "@/components/account/SavedVenuesPanel";
 import { UpgradeModal } from "@/components/account/UpgradeModal";
 import { ManageSubscriptionModal } from "@/components/account/ManageSubscriptionModal";
+import { SITE_URL } from "@/lib/links";
 import "./globals.css";
 
 const omnes = localFont({
@@ -27,7 +28,7 @@ const omnes = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Wundervue — Denver events & deals",
     template: "%s | Wundervue",

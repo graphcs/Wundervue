@@ -1,0 +1,14 @@
+import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/links";
+
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      // Personalized / auth-gated routes have no SEO value.
+      disallow: ["/account", "/saves", "/folders", "/auth", "/api"],
+    },
+    sitemap: `${SITE_URL}/sitemap.xml`,
+  };
+}

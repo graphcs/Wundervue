@@ -59,3 +59,33 @@
 .wv-map-popup .maplibregl-popup-tip {
   display: none !important;
 }
+
+/* SEO landing-page content blocks (app/things-to-do/[slug]). Team-authored raw
+   HTML gets sensible default typography; their own classes still override. */
+.landing-content {
+  color: var(--color-graphite, #444);
+  line-height: 1.7;
+}
+.landing-content h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--color-dark, #1a1a1a);
+  margin: 0 0 0.75rem;
+}
+.landing-content h2 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-dark, #1a1a1a);
+  margin: 1.75rem 0 0.5rem;
+}
+.landing-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-dark, #1a1a1a);
+  margin: 1.25rem 0 0.5rem;
+}
+.landing-content p { margin: 0 0 1rem; }
+.landing-content ul { margin: 0 0 1rem 1.25rem; list-style: disc; }
+.landing-content li { margin: 0.25rem 0; }
+.landing-content a { color: var(--color-coral, #ff5a5f); text-decoration: underline; }
