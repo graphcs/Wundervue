@@ -1,7 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { getSupabasePublicClient } from "@/lib/supabase/public";
 import {
   getRegisteredDynamicCities,
   registerDynamicCities,
@@ -15,9 +14,7 @@ import {
 // and doesn't get turned into an empty registry that 404s valid city pages.
 const loadDynamicCities = unstable_cache(
   async (): Promise<DynamicCity[]> => {
-    const client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const client = getSupabasePublicClient();
     const { data, error } = await client
       .from("metro_cities")
       .select("slug, label, region_slug");

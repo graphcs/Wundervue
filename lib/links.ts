@@ -32,11 +32,11 @@ export function buildDirectionsUrl(address: string): string {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
+// Absolute site origin for server-side URL building (sitemap, robots, JSON-LD).
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export function buildShareUrl(listing: Listing): string {
-  const base =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = typeof window !== "undefined" ? window.location.origin : SITE_URL;
   const path = listing.type === "deal" ? "/deals" : "/events";
   return `${base}${path}/${listing.slug}`;
 }
