@@ -26,6 +26,13 @@ interface AegEvent {
   description?: string;
   venue?: { title?: string };
   media?: Record<string, AegMedia>;
+  // AXS ticketing block — `url`/`eventUrl` is the per-event purchase page.
+  ticketing?: {
+    url?: string;
+    eventUrl?: string;
+    ticketURL?: string;
+    ticketLinkExists?: boolean;
+  };
 }
 interface AegFeed {
   events?: AegEvent[];
@@ -90,6 +97,9 @@ export async function fetchAegEvents(source: SourceConfig): Promise<RawItem[]> {
     out.push({
       sourceId,
       sourceUrl: pageUrl,
+      // Per-event AXS purchase page → the "Buy Tickets" CTA. The events page
+      // (sourceUrl) is a generic venue list, so it stays as the source link.
+      ticketUrl: e.ticketing?.url || e.ticketing?.eventUrl || undefined,
       text,
       imageUrl: bestImage(e.media),
       fetchedAt,

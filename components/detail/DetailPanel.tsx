@@ -7,9 +7,10 @@ import { ListingDetailView } from "./ListingDetailView";
 
 interface Props {
   listing: Listing;
+  venueTicketUrl?: string;
 }
 
-export function DetailPanel({ listing }: Props) {
+export function DetailPanel({ listing, venueTicketUrl }: Props) {
   const router = useRouter();
 
   const close = () => router.back();
@@ -52,7 +53,12 @@ export function DetailPanel({ listing }: Props) {
             to { transform: translateX(0); }
           }
         `}</style>
-        <ListingDetailView listing={listing} variant="panel" onClose={close} />
+        <ListingDetailView
+          listing={listing}
+          variant="panel"
+          onClose={close}
+          venueTicketUrl={venueTicketUrl}
+        />
       </aside>
     </div>
   );

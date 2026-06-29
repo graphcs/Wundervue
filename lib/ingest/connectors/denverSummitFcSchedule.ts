@@ -89,6 +89,7 @@ export async function fetchDenverSummitFcSchedule(source: SourceConfig): Promise
     out.push({
       sourceId,
       sourceUrl: ticketUrl || url,
+      ticketUrl: ticketUrl || undefined,
       text: blob,
       fetchedAt,
       venueName: VENUE,

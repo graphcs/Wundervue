@@ -64,6 +64,7 @@ export async function fetchFullCalendarFeed(source: SourceConfig): Promise<RawIt
     out.push({
       sourceId,
       sourceUrl: e.url || undefined,
+      ticketUrl: e.url || undefined,
       text,
       imageUrl: feedImage(e),
       fetchedAt,

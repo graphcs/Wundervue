@@ -116,6 +116,7 @@ export async function fetchVenuePilot(source: SourceConfig): Promise<RawItem[]> 
     out.push({
       sourceId,
       sourceUrl: ev.ticketsUrl || undefined,
+      ticketUrl: ev.ticketsUrl || undefined,
       text,
       imageUrl: firstImage(ev.images),
       fetchedAt,

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getListingBySlugAsync } from "@/lib/data/listings.server";
+import { getListingBySlugAsync, getVenueTicketUrl } from "@/lib/data/listings.server";
 import { DetailPanel } from "@/components/detail/DetailPanel";
 
 interface PageProps {
@@ -10,5 +10,6 @@ export default async function InterceptedDealPanel({ params }: PageProps) {
   const { slug } = await params;
   const listing = await getListingBySlugAsync(slug);
   if (!listing || listing.type === "event") notFound();
-  return <DetailPanel listing={listing} />;
+  const venueTicketUrl = await getVenueTicketUrl(listing);
+  return <DetailPanel listing={listing} venueTicketUrl={venueTicketUrl} />;
 }

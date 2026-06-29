@@ -44,7 +44,7 @@ export default function BillingSuccessPage() {
   // a setState updater (which would warn about updating Router during a
   // render of this component).
   useEffect(() => {
-    if (secondsLeft === 0) router.push("/");
+    if (secondsLeft === 0) router.push("/explore");
   }, [secondsLeft, router]);
 
   return (

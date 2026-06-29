@@ -52,12 +52,16 @@ export async function fetchCheerioWeb(source: SourceConfig): Promise<RawItem[]> 
       $el.attr("href") ??
       $el.find("a").first().attr("href");
     const image = selectors.image ? pickImageAttr($el.find(selectors.image).first()) : undefined;
+    const ticketHref = selectors.ticketLink
+      ? $el.find(selectors.ticketLink).first().attr("href")
+      : undefined;
     const text = [title, date, description].filter(Boolean).join("\n");
     if (!text) return;
 
     const sourceUrl = link
       ? new URL(link, url).toString()
       : url;
+    const ticketUrl = ticketHref ? new URL(ticketHref, url).toString() : undefined;
 
     // Dedup by the per-event link when the item has its own — the same event can
     // appear under several list/category pages (e.g. Boulder's event_category
@@ -75,6 +79,7 @@ export async function fetchCheerioWeb(source: SourceConfig): Promise<RawItem[]> 
     items.push({
       sourceId,
       sourceUrl,
+      ticketUrl,
       text,
       imageUrl: image ? new URL(image, url).toString() : undefined,
       fetchedAt,

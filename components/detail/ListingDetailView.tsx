@@ -9,6 +9,7 @@ import { FavoriteToggle } from "./FavoriteToggle";
 import { ShareButton } from "./ShareButton";
 import { ReportButton } from "./ReportButton";
 import { CalendarButton } from "./CalendarButton";
+import { TicketButton } from "./TicketButton";
 import { CompassIcon, PinIcon } from "./icons";
 import { hasSocialProof, formatSaveCount } from "@/lib/socialProof";
 
@@ -16,6 +17,9 @@ interface Props {
   listing: Listing;
   variant: "panel" | "page";
   onClose?: () => void;
+  // Per-venue fallback ticket link, resolved by the detail page when the
+  // listing has no per-event ticketUrl. Optional: the panel context omits it.
+  venueTicketUrl?: string;
 }
 
 function InfoLabel({ children }: { children: React.ReactNode }) {
@@ -26,7 +30,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ListingDetailView({ listing, variant, onClose }: Props) {
+export function ListingDetailView({ listing, variant, onClose, venueTicketUrl }: Props) {
   // The listing already carries its venue: venueId is the venue slug (resolved
   // in rowToListing), plus venueName/address. No fixture lookup needed — that
   // only knew ~13 venues and hid the link for ~99% of real (DB) events.
@@ -159,6 +163,11 @@ export function ListingDetailView({ listing, variant, onClose }: Props) {
             )}
           </div>
         )}
+
+        <TicketButton
+          ticketUrl={listing.ticketUrl ?? venueTicketUrl}
+          sourceUrl={listing.sourceUrl}
+        />
 
         <div className="flex items-stretch gap-2.5">
           <FavoriteToggle listingId={listing.id} />

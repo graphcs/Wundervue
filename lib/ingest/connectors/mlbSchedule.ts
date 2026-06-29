@@ -23,6 +23,9 @@ interface StatsApiGame {
   status?: { detailedState?: string };
   teams?: { home?: StatsApiTeam; away?: StatsApiTeam };
   venue?: { name?: string };
+  // Per-game ticketing (hydrate=game(tickets)) — ticketLinks.home is the
+  // official per-game purchase URL (Ticketmaster for MLB).
+  tickets?: Array<{ ticketType?: string; ticketLinks?: { home?: string } }>;
 }
 interface StatsApiResponse {
   dates?: Array<{ games?: StatsApiGame[] }>;
@@ -39,7 +42,7 @@ export async function fetchMlbSchedule(source: SourceConfig): Promise<RawItem[]>
     .slice(0, 10);
   const url =
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}` +
-    `&startDate=${startDate}&endDate=${endDate}`;
+    `&startDate=${startDate}&endDate=${endDate}&hydrate=game(tickets)`;
 
   const games = await withRetry(async () => {
     const res = await fetch(url, {
@@ -81,6 +84,8 @@ export async function fetchMlbSchedule(source: SourceConfig): Promise<RawItem[]>
       sourceId,
       // Team-agnostic link (the StatsAPI doesn't give a per-team web slug here).
       sourceUrl: "https://www.mlb.com/schedule",
+      // Per-game purchase URL → the "Buy Tickets" CTA.
+      ticketUrl: g.tickets?.find((t) => t.ticketLinks?.home)?.ticketLinks?.home,
       text,
       fetchedAt,
       venueName: venue || undefined,

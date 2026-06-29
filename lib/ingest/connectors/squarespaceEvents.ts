@@ -1,6 +1,23 @@
+import * as cheerio from "cheerio";
 import type { RawItem, SourceConfig } from "../types";
 import { withRetry } from "../retry";
 import { htmlToText } from "./htmlText";
+import { isTicketingUrl } from "@/lib/tickets";
+
+// First link in an HTML blob that points at a known ticketing domain (e.g. an
+// Eventbrite/SimpleTix link embedded in the event body) → the "Buy Tickets" CTA.
+// Parse with cheerio rather than a raw regex so hrefs are entity-decoded — a
+// raw `href="…?a=1&amp;b=2"` would otherwise be stored with a literal `&amp;`
+// and corrupt the affiliate/UTM query params on the live ticket link.
+function firstTicketingHref(html: string | undefined): string | undefined {
+  if (!html) return undefined;
+  const $ = cheerio.load(html);
+  for (const el of $("a[href]").toArray()) {
+    const href = $(el).attr("href");
+    if (isTicketingUrl(href)) return href;
+  }
+  return undefined;
+}
 
 // Generic Squarespace Events connector. Squarespace exposes any event collection
 // as clean JSON at `<collection-url>?format=json`, with an `upcoming` array of
@@ -118,6 +135,7 @@ export async function fetchSquarespaceEvents(source: SourceConfig): Promise<RawI
     out.push({
       sourceId: `${source.id}:${e.id ?? e.fullUrl ?? title}`,
       sourceUrl: e.fullUrl ? new URL(e.fullUrl, base).href : undefined,
+      ticketUrl: firstTicketingHref(e.body) ?? firstTicketingHref(e.excerpt),
       text: blob,
       imageUrl: e.assetUrl || undefined,
       fetchedAt,

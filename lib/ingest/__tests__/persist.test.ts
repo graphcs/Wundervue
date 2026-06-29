@@ -95,6 +95,7 @@ function makeRow(overrides: Partial<ListingInsert> = {}): ListingInsert {
     lng: null,
     source: "Website",
     source_url: null,
+    ticket_url: null,
     source_id: "test-id",
     event_key: "key-1",
     dedup_of: null,
@@ -392,6 +393,75 @@ describe("classifyForUpsert", () => {
     expect(result[0]).toMatchObject({ kind: "update", existingId: "row-skipped" });
     expect(result[0].row.dedup_of).toBe("canonical-7");
     expect(result[0].row.published_at).toBeNull();
+  });
+
+  it("keeps a curated ticket_url on update when the incoming row has none", async () => {
+    // A teammate set listings.ticket_url in Studio; the re-ingesting connector
+    // carries no ticketUrl, so buildListingInsert writes ticket_url:null.
+    // classifyForUpsert must fill from the existing row, not wipe it.
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-1", source: "Website", source_id: "abc", event_key: "key-1",
+            dedup_of: null, published_at: "2027-04-15T10:00:00.000Z",
+            ticket_url: "https://ticketmaster.com/curated",
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const result = await classifyForUpsert([
+      makeRow({ source: "Website", source_id: "abc", event_key: "key-1", ticket_url: null }),
+    ]);
+    expect(result[0].kind).toBe("update");
+    expect(result[0].row.ticket_url).toBe("https://ticketmaster.com/curated");
+  });
+
+  it("lets a fresh ticket_url overwrite a null existing one on update", async () => {
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-1", source: "Website", source_id: "abc", event_key: "key-1",
+            dedup_of: null, published_at: "2027-04-15T10:00:00.000Z", ticket_url: null,
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const result = await classifyForUpsert([
+      makeRow({ source: "Website", source_id: "abc", event_key: "key-1", ticket_url: "https://tm/new" }),
+    ]);
+    expect(result[0].row.ticket_url).toBe("https://tm/new");
+  });
+
+  it("preserves a curated ticket_url even when the connector carries its own", async () => {
+    // Connectors like Ticketmaster/AXS re-ingest with their own ticketUrl. A
+    // teammate may have curated an affiliate-tagged link in Studio; that link
+    // must survive — the connector only ever SEEDS onto a null, never clobbers.
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-1", source: "Website", source_id: "abc", event_key: "key-1",
+            dedup_of: null, published_at: "2027-04-15T10:00:00.000Z",
+            ticket_url: "https://ticketmaster.com/curated?aff=wundervue",
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const result = await classifyForUpsert([
+      makeRow({ source: "Website", source_id: "abc", event_key: "key-1", ticket_url: "https://ticketmaster.com/plain" }),
+    ]);
+    expect(result[0].row.ticket_url).toBe("https://ticketmaster.com/curated?aff=wundervue");
   });
 
   it("re-publishes on update when the existing row's dedup_of is null (canonical was deleted)", async () => {

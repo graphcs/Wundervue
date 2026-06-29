@@ -168,6 +168,8 @@ export const SOURCES: SourceConfig[] = [
       date: ".date",
       link: "a",
       image: "img",
+      // Each card's "Buy Tickets" button is a direct AXS event link → ticket_url.
+      ticketLink: 'a[href*="axs.com"]',
     },
     // The grid lists 150+ shows through the whole season; cap to the soonest
     // batch so one run doesn't normalize the entire calendar.
@@ -797,6 +799,9 @@ export const SOURCES: SourceConfig[] = [
       item: ".list-item",
       title: ".list-item-content__title",
       description: ".list-item-content__description",
+      // Ticketed events link out to Eventbrite/SimpleTix → ticket_url. Free
+      // events (run club, comedy) have no such link and stay "More Info".
+      ticketLink: 'a[href*="eventbrite.com"], a[href*="simpletix.com"]',
     },
     maxItems: 30,
     defaultVenueName: "Ratio Beerworks",

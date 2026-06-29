@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingBySlugAsync } from "@/lib/data/listings.server";
+import { getListingBySlugAsync, getVenueTicketUrl } from "@/lib/data/listings.server";
 import { ListingDetailView } from "@/components/detail/ListingDetailView";
 import { MoreFromVenue } from "@/components/detail/MoreFromVenue";
 import { InsiderLockedPreview } from "@/components/detail/InsiderLockedPreview";
@@ -34,6 +34,8 @@ export default async function EventPage({ params }: PageProps) {
   const { slug } = await params;
   const listing = await getListingBySlugAsync(slug);
   if (!listing || listing.type === "deal") notFound();
+
+  const venueTicketUrl = await getVenueTicketUrl(listing);
 
   const plan = await getServerPlan();
   const allowed = canAccessListing(listing, plan);
@@ -70,7 +72,7 @@ export default async function EventPage({ params }: PageProps) {
       <div className="mx-auto max-w-[720px] px-5 pb-16">
         {allowed ? (
           <>
-            <ListingDetailView listing={listing} variant="page" />
+            <ListingDetailView listing={listing} variant="page" venueTicketUrl={venueTicketUrl} />
             <MoreFromVenue listing={listing} />
           </>
         ) : (
