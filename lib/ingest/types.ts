@@ -92,6 +92,10 @@ export interface SourceConfig {
     date?: string;
     image?: string;
     link?: string;
+    // Per-item ticket/affiliate link (e.g. an AXS anchor inside the card) →
+    // listings.ticket_url, surfaced as the "Buy Tickets" CTA. Kept separate from
+    // `link` (the event page), which stays the source URL.
+    ticketLink?: string;
   };
   // cheerioWeb — opt-in detail-page enrichment. Some sites show the date on the
   // list card but the TIME only on the event's own page (e.g. Boulder's Drupal
@@ -190,6 +194,10 @@ export interface SourceConfig {
 export interface RawItem {
   sourceId: string;
   sourceUrl?: string;
+  // Real ticket/affiliate URL when the connector has one distinct from the page
+  // link (e.g. a Ticketmaster event URL). Written to listings.ticket_url and
+  // surfaced as the "Buy Tickets" CTA.
+  ticketUrl?: string;
   text: string;
   imageUrl?: string;
   fetchedAt: string;
@@ -262,6 +270,7 @@ export interface DbListing {
   image_source: "existing" | "scraped" | "og-image" | "generated" | "placeholder" | null;
   source: string;
   source_url: string | null;
+  ticket_url: string | null;
   source_id: string;
   event_key: string;
   dedup_of: string | null;

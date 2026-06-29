@@ -94,6 +94,7 @@ export async function fetchTicketmasterVenue(source: SourceConfig): Promise<RawI
     out.push({
       sourceId,
       sourceUrl: e.url || undefined,
+      ticketUrl: e.url || undefined,
       text,
       imageUrl: bestImage(e),
       fetchedAt,

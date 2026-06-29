@@ -515,6 +515,7 @@ export function buildListingInsert(args: {
     image_source: null,
     source: source.sourceLabel,
     source_url: item.sourceUrl ?? null,
+    ticket_url: item.ticketUrl ?? null,
     source_id: item.sourceId,
     event_key: key,
     dedup_of: null,
@@ -532,6 +533,14 @@ interface ExistingRow {
   event_key: string;
   dedup_of: string | null;
   published_at: string | null;
+  ticket_url: string | null;
+}
+
+// Keep a Studio-curated (or previously auto-seeded) ticket_url across re-ingest:
+// only ever FILL a null incoming ticket_url, never overwrite a set one. The
+// per-cron rebuild from buildListingInsert would otherwise wipe manual links.
+function keepTicketUrl(row: ListingInsert, existing: ExistingRow): ListingInsert {
+  return { ...row, ticket_url: row.ticket_url ?? existing.ticket_url };
 }
 
 export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAction[]> {
@@ -555,7 +564,7 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
   for (const [sourceLabel, ids] of idsBySource) {
     const { data, error } = await client
       .from("listings")
-      .select("id, source, source_id, event_key, dedup_of, published_at")
+      .select("id, source, source_id, event_key, dedup_of, published_at, ticket_url")
       .eq("source", sourceLabel)
       .in("source_id", ids);
     if (error) throw new Error(`existing-same lookup failed: ${error.message}`);
@@ -571,7 +580,7 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
   const eventKeys = rows.map((r) => r.event_key);
   const { data: existingByKey, error: e2 } = await client
     .from("listings")
-    .select("id, source, source_id, event_key, dedup_of, published_at")
+    .select("id, source, source_id, event_key, dedup_of, published_at, ticket_url")
     .in("event_key", eventKeys);
   if (e2) throw new Error(`existing-by-key lookup failed: ${e2.message}`);
 
@@ -594,7 +603,11 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
       const preservedRow = sameMatch.dedup_of
         ? { ...row, published_at: null, dedup_of: sameMatch.dedup_of }
         : row;
-      return { kind: "update", row: preservedRow, existingId: sameMatch.id };
+      return {
+        kind: "update",
+        row: keepTicketUrl(preservedRow, sameMatch),
+        existingId: sameMatch.id,
+      };
     }
     const crossMatch = byKeyMap.get(row.event_key);
     if (crossMatch) {
@@ -604,7 +617,7 @@ export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAct
       // dedup_of pointers from other rows) while refreshing content and
       // adopting the new source_id format.
       if (crossMatch.source === row.source) {
-        return { kind: "merge", row, existingId: crossMatch.id };
+        return { kind: "merge", row: keepTicketUrl(row, crossMatch), existingId: crossMatch.id };
       }
       // Different source reporting the same event — first-write-wins;
       // the new row gets hidden under the canonical.

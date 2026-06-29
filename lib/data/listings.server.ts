@@ -10,7 +10,7 @@ import { denverStartOfTodayISO } from "@/lib/dates";
 // Single source for the listing column list — shared by the feed + detail reads.
 // created_at + source_id power the freshness signal (series-aware "first seen").
 const LISTING_COLUMNS =
-  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, tags, save_count, lat, lng, created_at, source_id";
+  "id, slug, type, title, description, venue_id, address, neighborhood, category, date_start, date_end, date_display, time_display, is_free, deal_value, image_url, source, source_url, ticket_url, tags, save_count, lat, lng, created_at, source_id";
 
 interface DbListingRow {
   id: string;
@@ -31,6 +31,7 @@ interface DbListingRow {
   image_url: string | null;
   source: string;
   source_url: string | null;
+  ticket_url: string | null;
   tags: string[];
   save_count: number | null;
   lat: number | null;
@@ -78,6 +79,7 @@ function rowToListing(
     imageUrl,
     source: row.source as ListingSource,
     sourceUrl: row.source_url ?? undefined,
+    ticketUrl: row.ticket_url ?? undefined,
     tags: (row.tags ?? []) as LifestyleTag[],
     saveCount: row.save_count ?? 0,
     lat: row.lat,
@@ -256,14 +258,14 @@ export async function getVenueBySlugAsync(slug: string): Promise<Venue | undefin
     const client = await getSupabaseServerClient();
     const { data } = await client
       .from("venues")
-      .select("id, slug, name, description, address, neighborhood, image_url, lat, lng, categories")
+      .select("id, slug, name, description, address, neighborhood, image_url, ticket_url, lat, lng, categories")
       .eq("slug", slug)
       .maybeSingle();
     if (!data) return fixture;
     const r = data as {
       id: string; slug: string; name: string; description: string; address: string;
-      neighborhood: string; image_url: string | null; lat: number | null; lng: number | null;
-      categories: string[] | null;
+      neighborhood: string; image_url: string | null; ticket_url: string | null;
+      lat: number | null; lng: number | null; categories: string[] | null;
     };
     return {
       id: r.slug,
@@ -273,6 +275,7 @@ export async function getVenueBySlugAsync(slug: string): Promise<Venue | undefin
       address: r.address,
       neighborhood: r.neighborhood,
       imageUrl: r.image_url ?? fixture?.imageUrl ?? undefined,
+      ticketUrl: r.ticket_url ?? undefined,
       lat: r.lat ?? 0,
       lng: r.lng ?? 0,
       categories: r.categories ?? [],
@@ -281,6 +284,20 @@ export async function getVenueBySlugAsync(slug: string): Promise<Venue | undefin
     console.error("[listings] getVenueBySlugAsync failed", err);
     return fixture;
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The venue-default "Buy Tickets" link for a detail view. The listing's own
+// ticketUrl always wins (resolved in the view), so this only returns the venue
+// fallback — and only for a PAID event with a real venue slug. venueId is the
+// orphaned venue_id UUID when no venue row joined; a free event shouldn't inherit
+// a box-office link. Skips the DB read entirely in those cases.
+export async function getVenueTicketUrl(listing: Listing): Promise<string | undefined> {
+  if (listing.ticketUrl || listing.isFree || !listing.venueId || UUID_RE.test(listing.venueId)) {
+    return undefined;
+  }
+  return (await getVenueBySlugAsync(listing.venueId))?.ticketUrl;
 }
 
 export async function getListingsByVenueSlugAsync(venueSlug: string): Promise<Listing[]> {

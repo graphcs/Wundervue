@@ -28,6 +28,9 @@ export interface Listing {
   imageUrl: string;
   source: ListingSource;
   sourceUrl?: string;
+  // Affiliate / "Buy Tickets" link. Per-event override, else resolved from the
+  // venue's ticket_url at render time. Absent → the CTA falls back to sourceUrl.
+  ticketUrl?: string;
   tags: LifestyleTag[];
   // How many users have saved this listing (social proof). Optional: only the
   // DB-backed reads populate it; fixtures and other mappers omit it (treated 0).
@@ -54,6 +57,8 @@ export interface Venue {
   address: string;
   neighborhood: string;
   imageUrl?: string;
+  // Per-venue default affiliate / ticket link (fallback for the venue's events).
+  ticketUrl?: string;
   lat: number;
   lng: number;
   // Category slugs the venue is tagged with (derived from its listings).

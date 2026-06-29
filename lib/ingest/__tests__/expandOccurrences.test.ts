@@ -11,7 +11,7 @@ function row(over: Partial<ListingInsert>): ListingInsert {
     neighborhood_slug: null, category: "Markets", date_start: null, date_end: null,
     date_display: null, time_display: null, is_free: true, deal_value: null,
     image_url: "https://img/market.jpg", image_source: "generated", source: "Website",
-    source_url: null, source_id: "boulder:1", event_key: "k0", dedup_of: null, tags: [],
+    source_url: null, ticket_url: null, source_id: "boulder:1", event_key: "k0", dedup_of: null, tags: [],
     lat: null, lng: null, published_at: "2026-06-24T00:00:00Z",
     ...over,
   };

@@ -85,6 +85,9 @@ export async function fetchSerpEvents(source: SourceConfig): Promise<RawItem[]> 
     .map((ev): RawItem => ({
       sourceId: stableSourceId(source, ev),
       sourceUrl: ev.link,
+      // Only a purchase link (link_type "tickets") — skip "more info"/aggregator
+      // entries so the "Buy Tickets" CTA never points at a non-checkout page.
+      ticketUrl: ev.ticket_info?.find((t) => t.link && /ticket/i.test(t.link_type ?? ""))?.link,
       text: eventToText(ev),
       imageUrl: ev.image ?? ev.thumbnail,
       fetchedAt,
