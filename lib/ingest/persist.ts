@@ -536,11 +536,13 @@ interface ExistingRow {
   ticket_url: string | null;
 }
 
-// Keep a Studio-curated (or previously auto-seeded) ticket_url across re-ingest:
-// only ever FILL a null incoming ticket_url, never overwrite a set one. The
-// per-cron rebuild from buildListingInsert would otherwise wipe manual links.
+// Keep a Studio-curated (or previously auto-seeded) ticket_url across re-ingest.
+// An existing value always wins: connectors only ever SEED a ticket_url onto a
+// row that has none. Otherwise the per-cron rebuild from buildListingInsert
+// would clobber a manually-curated (e.g. affiliate-tagged) link with the
+// connector's plain event URL on every tick.
 function keepTicketUrl(row: ListingInsert, existing: ExistingRow): ListingInsert {
-  return { ...row, ticket_url: row.ticket_url ?? existing.ticket_url };
+  return { ...row, ticket_url: existing.ticket_url ?? row.ticket_url };
 }
 
 export async function classifyForUpsert(rows: ListingInsert[]): Promise<DedupAction[]> {

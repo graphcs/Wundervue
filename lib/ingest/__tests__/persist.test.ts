@@ -440,6 +440,30 @@ describe("classifyForUpsert", () => {
     expect(result[0].row.ticket_url).toBe("https://tm/new");
   });
 
+  it("preserves a curated ticket_url even when the connector carries its own", async () => {
+    // Connectors like Ticketmaster/AXS re-ingest with their own ticketUrl. A
+    // teammate may have curated an affiliate-tagged link in Studio; that link
+    // must survive — the connector only ever SEEDS onto a null, never clobbers.
+    handle.setResponses([
+      {
+        data: [
+          {
+            id: "row-1", source: "Website", source_id: "abc", event_key: "key-1",
+            dedup_of: null, published_at: "2027-04-15T10:00:00.000Z",
+            ticket_url: "https://ticketmaster.com/curated?aff=wundervue",
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    ]);
+    const { classifyForUpsert } = await import("../persist");
+    const result = await classifyForUpsert([
+      makeRow({ source: "Website", source_id: "abc", event_key: "key-1", ticket_url: "https://ticketmaster.com/plain" }),
+    ]);
+    expect(result[0].row.ticket_url).toBe("https://ticketmaster.com/curated?aff=wundervue");
+  });
+
   it("re-publishes on update when the existing row's dedup_of is null (canonical was deleted)", async () => {
     // The dedup_of FK is `on delete set null`, so deleting a canonical row
     // clears the pointer on every duplicate that referenced it. The next
