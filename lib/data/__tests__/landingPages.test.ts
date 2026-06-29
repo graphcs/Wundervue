@@ -35,6 +35,12 @@ describe("rowToPage", () => {
     expect(p.filterConfig.type).toBe("events");
   });
 
+  it("normalizes JSON array + boolean filter_config values for the parser", () => {
+    const p = rowToPage({ ...row, filter_config: { lifestyle: ["dog-friendly", "outdoor"], free: true } });
+    expect(p.filterConfig.lifestyle).toEqual(["dog-friendly", "outdoor"]); // array → CSV → parsed
+    expect(p.filterConfig.freeOnly).toBe(true); // boolean → "1"
+  });
+
   it("drops typo'd keys and invalid values, falling back to defaults", () => {
     const p = rowToPage({ ...row, filter_config: { tyype: "events", date: "someday" } });
     expect(p.filterConfig.type).toBe("all"); // unknown key ignored

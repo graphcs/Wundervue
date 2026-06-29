@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Filters } from "@/lib/types";
-import { getLandingPage, getPublishedLandingSlugs } from "@/lib/data/landingPages.server";
+import { getLandingPage } from "@/lib/data/landingPages.server";
 import { getMergedListings } from "@/lib/data/listings.server";
 import { applyFilters } from "@/lib/filters/applyFilters";
 import { buildHref } from "@/lib/filters/buildHref";
@@ -12,12 +12,12 @@ import { ListingGrid } from "@/components/explore/ListingGrid";
 // How many cards to embed before linking out to the full filtered feed.
 const COLLECTION_CAP = 12;
 
+// Render on demand: the embedded collection is date-relative (e.g. "this-weekend")
+// and must re-evaluate per request, never freeze at build time.
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateStaticParams() {
-  return (await getPublishedLandingSlugs()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -103,7 +103,9 @@ export default async function ThingsToDoPage({ params }: PageProps) {
 
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
+        /* Escape `<` so a scraped listing title containing "</script>" can't
+           break out of the JSON-LD block (corruption / injection). */
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd).replace(/</g, "\\u003c") }}
       />
     </main>
   );

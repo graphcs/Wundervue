@@ -20,6 +20,22 @@ export interface LandingPage {
 export const LANDING_COLUMNS =
   "slug, title, meta_title, meta_description, og_image, above_html, below_html, filter_config";
 
+// jsonb config → the URL-param strings parseSearchParams expects: arrays become
+// CSV (hoods/cats/lifestyle), booleans become "1"/"0" (free), scalars stringify.
+// Lets an author write natural JSON like {"hoods":["lodo","rino"],"free":true}.
+function toParamStrings(config: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (v == null) continue;
+    out[k] = Array.isArray(v)
+      ? v.join(",")
+      : typeof v === "boolean"
+        ? v ? "1" : "0"
+        : String(v);
+  }
+  return out;
+}
+
 export function rowToPage(r: Record<string, unknown>): LandingPage {
   return {
     slug: r.slug as string,
@@ -32,8 +48,6 @@ export function rowToPage(r: Record<string, unknown>): LandingPage {
     // Validate the stored config through the same seam as URL params: unknown
     // keys / bad values are dropped and defaults filled in, so a typo'd config
     // in Studio can't produce a malformed Filters.
-    filterConfig: parseSearchParams(
-      (r.filter_config ?? {}) as Record<string, string | string[] | undefined>,
-    ),
+    filterConfig: parseSearchParams(toParamStrings((r.filter_config ?? {}) as Record<string, unknown>)),
   };
 }
