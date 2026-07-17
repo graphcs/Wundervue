@@ -54,3 +54,24 @@ export function denverStartOfTodayMs(now: number = Date.now()): number {
 export function denverStartOfTodayISO(now: number = Date.now()): string {
   return new Date(denverStartOfTodayMs(now)).toISOString();
 }
+
+// A recurring listing's date_display is a CADENCE ("Every Thursday") rather than a
+// single specific day. Used by the sort to advance a cadence card to its next
+// occurrence. Shared source of truth (see lib/filters/applyFilters.ts).
+export const RECUR_RE = /\b(?:every|each|weekly)\b|\b(?:mon|tues|wednes|thurs|fri|satur|sun)days\b/i;
+
+// Does a date_display name a SINGLE concrete calendar day ("Sun, Jul 5", "Jul 5")?
+// This is exactly the shape denverDayLabel emits for one-off occurrences, so the
+// whole string must be an optional weekday + month + day and nothing more. It
+// deliberately does NOT match:
+//   - cadences ("Every Thursday", "Weekends at 10 AM") — no month+day, and
+//   - ranges / ongoing spans ("May 14 - Sep 7", "Through Sept. 7", "Sundays … through
+//     Oct 25") — the trailing text fails the anchor.
+// Positive, tight match keeps the feed filter conservative: we only hide a card when
+// it advertises one specific day, and (per the caller) that day is already past —
+// never an ongoing multi-week run whose display merely mentions a future end date.
+export const SINGLE_DAY_DISPLAY_RE =
+  /^(?:(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?\s*$/i;
+export function isSingleDayDisplay(disp: string): boolean {
+  return SINGLE_DAY_DISPLAY_RE.test((disp ?? "").trim());
+}

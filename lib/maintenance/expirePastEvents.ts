@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL } from "@/lib/supabase/env";
+import { isPastSpecificDateCard } from "@/lib/listings/isPast";
 
 export interface ExpireOptions {
   apply: boolean;
@@ -22,7 +23,10 @@ interface Row {
   type: string;
   date_start: string | null;
   date_end: string | null;
+  date_display: string | null;
 }
+
+const ROW_COLUMNS = "id, slug, title, type, date_start, date_end, date_display";
 
 function client(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -50,7 +54,7 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
   // are skipped so the run is idempotent.
   let q = c
     .from("listings")
-    .select("id, slug, title, type, date_start, date_end")
+    .select(ROW_COLUMNS)
     .eq("is_past", false)
     .or(
       `date_end.lt.${cutoff},and(date_end.is.null,date_start.lt.${cutoff})`,
@@ -61,26 +65,49 @@ export async function expirePastEvents(opts: ExpireOptions): Promise<ExpireResul
   if (error) throw new Error(`query failed: ${error.message}`);
   const rows = (data ?? []) as Row[];
 
-  log(`[expire-past-events] cutoff=${cutoff} found=${rows.length} apply=${opts.apply}`);
-  for (const r of rows.slice(0, 20)) {
+  // Second band: rows still inside the feed window on their date_end (a recurring
+  // deal's rolling future end) but whose date_display names a specific PAST day
+  // ("Thu, Jul 2"). The date-only query above can't see these — their date_end is
+  // in the future. Refine in JS with the same predicate the feed uses.
+  let bandQ = c
+    .from("listings")
+    .select(ROW_COLUMNS)
+    .eq("is_past", false)
+    .lt("date_start", cutoff)
+    .gte("date_end", cutoff);
+  if (opts.limit) bandQ = bandQ.limit(opts.limit);
+  const { data: bandData, error: bandErr } = await bandQ;
+  if (bandErr) throw new Error(`band query failed: ${bandErr.message}`);
+  const byId = new Map<string, Row>();
+  for (const r of rows) byId.set(r.id, r);
+  for (const r of (bandData ?? []) as Row[]) {
+    if (byId.has(r.id)) continue;
+    if (isPastSpecificDateCard({ dateDisplay: r.date_display ?? "", startAt: r.date_start ?? "" })) {
+      byId.set(r.id, r);
+    }
+  }
+  const allRows = [...byId.values()];
+
+  log(`[expire-past-events] cutoff=${cutoff} found=${allRows.length} apply=${opts.apply}`);
+  for (const r of allRows.slice(0, 20)) {
     log(`  ${r.type.padEnd(5)} end=${r.date_end ?? r.date_start ?? "?"}  ${r.title}`);
   }
-  if (rows.length > 20) log(`  …and ${rows.length - 20} more`);
+  if (allRows.length > 20) log(`  …and ${allRows.length - 20} more`);
 
   let flagged = 0;
-  if (opts.apply && rows.length > 0) {
+  if (opts.apply && allRows.length > 0) {
     // Soft-flag, don't delete. The row + its image are kept so a user's
     // previously-saved event still resolves on its detail page and can power
     // the Past Saved tab / venue archives. The main feed already hides these
-    // via its `date_start >= today` filter.
+    // via its date cutoff + past-specific-date filter.
     const { error: updErr } = await c
       .from("listings")
       .update({ is_past: true })
-      .in("id", rows.map((r) => r.id));
+      .in("id", allRows.map((r) => r.id));
     if (updErr) throw new Error(`flag failed: ${updErr.message}`);
-    flagged = rows.length;
+    flagged = allRows.length;
     log(`[expire-past-events] flagged ${flagged} rows is_past`);
   }
 
-  return { cutoff, found: rows.length, flagged, rows };
+  return { cutoff, found: allRows.length, flagged, rows: allRows };
 }
