@@ -6,6 +6,7 @@ import { LISTINGS, getListingBySlug as getFixtureListingBySlug } from "./listing
 import { getVenueBySlug as getFixtureVenueBySlug } from "./venues";
 import { seriesFirstSeen, seriesBaseKey, isFresh } from "./freshness";
 import { denverStartOfTodayISO } from "@/lib/dates";
+import { isPastSpecificDateCard } from "@/lib/listings/isPast";
 
 // Single source for the listing column list — shared by the feed + detail reads.
 // created_at + source_id power the freshness signal (series-aware "first seen").
@@ -130,7 +131,12 @@ export async function getPublishedListings(): Promise<Listing[]> {
     return dbRows
       .slice()
       .sort((a, b) => effective(a) - effective(b))
-      .map((r) => rowToListing(r, venueMap, firstSeen.get(seriesBaseKey(r.source, r.source_id))));
+      .map((r) => rowToListing(r, venueMap, firstSeen.get(seriesBaseKey(r.source, r.source_id))))
+      // Drop cards whose date_display is a specific PAST day: a recurring deal's
+      // rolling date_end keeps it inside the query window, but a stale per-occurrence
+      // date_start/date_display ("Thu, Jul 2") reads as a past event. Cadence cards
+      // ("Every Thursday") are kept — isPastSpecificDateCard ignores them.
+      .filter((l) => !isPastSpecificDateCard(l));
   } catch (err) {
     console.error("[listings] getPublishedListings failed", err);
     return [];

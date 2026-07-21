@@ -5,13 +5,13 @@ import {
 } from "@/lib/data/neighborhoods";
 import { locationMatchesSelection } from "@/lib/data/locations";
 import { categoryLabel, categorySlug } from "@/lib/data/categories";
-import { DAY_MS, denverDayKey, denverWeekdayNum, denverStartOfTodayMs } from "@/lib/dates";
+import { DAY_MS, RECUR_RE, denverDayKey, denverWeekdayNum, denverStartOfTodayMs } from "@/lib/dates";
 
 // A recurring listing's date_display is a CADENCE ("Every Thursday"), and an
 // un-split recurring deal carries a rolling "today" date_start — so it must sort to
 // its NEXT occurrence of that weekday, not to today. A specific-date row ("Thu, Jul
-// 2") has no cadence words and keeps its real date (returns null here).
-const RECUR_RE = /\b(?:every|each|weekly)\b|\b(?:mon|tues|wednes|thurs|fri|satur|sun)days\b/i;
+// 2") has no cadence words and keeps its real date (returns null here). RECUR_RE is
+// shared with the feed filter + is_past sweep (see lib/dates.ts).
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 function nextRecurringDayKey(disp: string, todayMs: number): string | null {
   if (!RECUR_RE.test(disp)) return null;
