@@ -1,12 +1,15 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import type { Listing, ListingSource, ListingType, LifestyleTag, Venue } from "@/lib/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicClient } from "@/lib/supabase/public";
 import { LISTINGS, getListingBySlug as getFixtureListingBySlug } from "./listings";
 import { getVenueBySlug as getFixtureVenueBySlug } from "./venues";
 import { seriesFirstSeen, seriesBaseKey, isFresh } from "./freshness";
 import { denverStartOfTodayISO } from "@/lib/dates";
 import { isPastSpecificDateCard } from "@/lib/listings/isPast";
+import { FEED_CACHE_TAG } from "./feedCache";
 
 // Single source for the listing column list — shared by the feed + detail reads.
 // created_at + source_id power the freshness signal (series-aware "first seen").
@@ -90,30 +93,55 @@ function rowToListing(
   };
 }
 
+// The public feed read, paged past PostgREST's 1000-row cap and cached across
+// requests. Uses the request-independent public client (never cookies) so it's
+// safe inside unstable_cache; the feed is public (published rows only), so RLS as
+// the anon role is correct. `cutoff` is an ARGUMENT so the cache key rotates at the
+// Denver day boundary. Tagged FEED_CACHE_TAG → revalidateFeedCache() drops it after
+// ingest/expire writes; the TTL is the fallback. Only the raw rows are cached —
+// sort/map/isNew/past-filter run per request in getPublishedListings so freshness
+// (isFresh(Date.now())) and today's cutoff sort stay live.
+const loadUpcomingFeed = unstable_cache(
+  async (cutoff: string): Promise<{ rows: DbListingRow[]; venues: DbVenueRow[] }> => {
+    const client = getSupabasePublicClient();
+    const [rows, venues] = await Promise.all([
+      selectAllPaged<DbListingRow>((from, to) =>
+        client
+          .from("listings")
+          .select(LISTING_COLUMNS)
+          .not("published_at", "is", null)
+          // Show anything not yet over: an event whose end is today-or-later (an
+          // ongoing multi-week run that started earlier), or — when there's no
+          // end — whose start is today-or-later. Mirrors expirePastEvents' cutoff
+          // so the feed and the is_past sweep agree.
+          .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`)
+          // date_start orders the feed; id is the stable tiebreaker so consecutive
+          // pages don't overlap or skip rows.
+          .order("date_start", { ascending: true, nullsFirst: false })
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      selectAllPaged<DbVenueRow>((from, to) =>
+        client.from("venues").select("id, slug, name").order("id", { ascending: true }).range(from, to),
+      ),
+    ]);
+    return { rows, venues };
+  },
+  ["published-feed"],
+  { tags: [FEED_CACHE_TAG], revalidate: 120 },
+);
+
 export async function getPublishedListings(): Promise<Listing[]> {
   try {
-    const client = await getSupabaseServerClient();
     // Start of today in DENVER (UTC instant) — keeps tonight's events visible to a
     // morning browser, but drops last night's evening events (which are already
     // "tomorrow" in UTC).
     const cutoff = denverStartOfTodayISO();
     const todayStart = new Date(cutoff);
 
-    const [{ data: rows }, { data: venues }] = await Promise.all([
-      client
-        .from("listings")
-        .select(LISTING_COLUMNS)
-        .not("published_at", "is", null)
-        // Show anything not yet over: an event whose end is today-or-later (an
-        // ongoing multi-week run that started earlier), or — when there's no
-        // end — whose start is today-or-later. Mirrors expirePastEvents' cutoff
-        // so the feed and the is_past sweep agree.
-        .or(`date_end.gte.${cutoff},and(date_end.is.null,date_start.gte.${cutoff})`)
-        .order("date_start", { ascending: true, nullsFirst: false }),
-      client.from("venues").select("id, slug, name"),
-    ]);
+    const { rows, venues } = await loadUpcomingFeed(cutoff);
     const venueMap = new Map<string, DbVenueRow>();
-    for (const v of (venues ?? []) as DbVenueRow[]) venueMap.set(v.id, v);
+    for (const v of venues) venueMap.set(v.id, v);
     // Sort by EFFECTIVE date = max(date_start, today): a continuous run that
     // started weeks ago (date_start in the past, still ongoing) sorts as "today"
     // and interleaves with current events instead of camping at the top on its
@@ -123,7 +151,7 @@ export async function getPublishedListings(): Promise<Listing[]> {
       const ds = r.date_start ? Date.parse(r.date_start) : NaN;
       return Number.isNaN(ds) ? Infinity : Math.max(ds, cutoffMs);
     };
-    const dbRows = (rows ?? []) as DbListingRow[];
+    const dbRows = rows;
     // Series-aware first-seen: a recurring series' future occurrences enter the
     // rolling window each week, so freshness must key on the series' EARLIEST
     // occurrence, not each row's own created_at.

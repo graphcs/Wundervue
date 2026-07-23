@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { authorizeCronRequest } from "@/lib/api/auth";
 import { ingestSource } from "@/lib/ingest/orchestrator";
 import { getEnabledSources } from "@/lib/ingest/sources";
+import { revalidateFeedCache } from "@/lib/data/feedCache";
 import type { Cadence, IngestResult } from "@/lib/ingest/types";
 
 export const runtime = "nodejs";
@@ -82,6 +83,9 @@ async function handle(request: NextRequest): Promise<Response> {
   // 5xx or every source going down looks like a healthy run. Single-source
   // failures stay 200 so a transient SerpAPI 503 doesn't page on-call.
   const allFailed = results.length > 0 && results.every((r) => r.status === "failed");
+  // Drop the cached feed so freshly-ingested events show up now, not after the
+  // loader's TTL. Skip only a total-failure batch (nothing changed).
+  if (!allFailed) revalidateFeedCache();
   const status = allFailed ? 500 : 200;
   return Response.json(
     { tier, shard, shards, count: results.length, results },

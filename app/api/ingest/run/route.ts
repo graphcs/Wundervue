@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { authorizeCronRequest } from "@/lib/api/auth";
 import { ingestSource } from "@/lib/ingest/orchestrator";
 import { getSource } from "@/lib/ingest/sources";
+import { revalidateFeedCache } from "@/lib/data/feedCache";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,6 +20,8 @@ async function handle(request: NextRequest): Promise<Response> {
     return new Response(`unknown source: ${sourceId}`, { status: 404 });
   }
   const result = await ingestSource(source);
+  // Drop the cached feed so this source's new events surface immediately.
+  if (result.status !== "failed") revalidateFeedCache();
   const status = result.status === "failed" ? 500 : 200;
   return Response.json(result, { status });
 }
