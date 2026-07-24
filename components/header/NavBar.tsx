@@ -79,13 +79,6 @@ const isInternal = (href: string) => href.startsWith("/");
 const LINK_CLASS =
   "text-dark text-[14px] font-medium hover:text-graphite transition-colors";
 
-// Mobile menu is a flat list of every destination (no flyouts).
-const MOBILE_LINKS: ChildLink[] = [
-  { label: "Stories", href: "/stories" },
-  ...STORIES_SECTIONS.map((s) => ({ label: s.label, href: s.href })),
-  { label: "About", href: "/about" },
-];
-
 function Chevron({ open, dir = "down" }: { open?: boolean; dir?: "down" | "right" }) {
   return (
     <svg
@@ -125,6 +118,10 @@ export function NavBar() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [openSection, setOpenSection] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Mobile accordion: which top item (Stories/About) and which sub-section
+  // (Guides/Best Of) are expanded. Keyed by label; single-open at each level.
+  const [mobileTop, setMobileTop] = useState<string | null>(null);
+  const [mobileSub, setMobileSub] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -150,6 +147,19 @@ export function NavBar() {
     setOpenIndex(null);
     setOpenSection(null);
   }
+  // Close the mobile drawer and collapse every accordion level.
+  function closeMobile() {
+    setMobileOpen(false);
+    setMobileTop(null);
+    setMobileSub(null);
+  }
+  function toggleMobileTop(label: string) {
+    setMobileTop((prev) => (prev === label ? null : label));
+    setMobileSub(null);
+  }
+  function toggleMobileSub(label: string) {
+    setMobileSub((prev) => (prev === label ? null : label));
+  }
 
   useEffect(() => () => cancelClose(), []);
 
@@ -158,13 +168,13 @@ export function NavBar() {
     function onPointerDown(e: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         closeAll();
-        setMobileOpen(false);
+        closeMobile();
       }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         closeAll();
-        setMobileOpen(false);
+        closeMobile();
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
@@ -283,7 +293,7 @@ export function NavBar() {
             )}
             <a
               href={GET_THE_APP_URL}
-              className="bg-coral rounded-pill px-4 py-2 text-[13px] font-bold text-white transition-opacity hover:opacity-90"
+              className="bg-coral rounded-pill hidden px-4 py-2 text-[13px] font-bold text-white transition-opacity hover:opacity-90 lg:inline-block"
             >
               Get The App
             </a>
@@ -293,7 +303,7 @@ export function NavBar() {
               type="button"
               aria-label="Menu"
               aria-expanded={mobileOpen}
-              onClick={() => setMobileOpen((v) => !v)}
+              onClick={() => (mobileOpen ? closeMobile() : setMobileOpen(true))}
               className="text-dark hover:text-graphite -mr-1 inline-flex h-9 w-9 items-center justify-center lg:hidden"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -314,27 +324,110 @@ export function NavBar() {
 
       {mobileOpen && (
         <div className="lg:hidden" style={{ background: PANEL_BG }}>
-          <ul className="mx-auto flex max-w-[1280px] flex-col px-4 py-2">
-            {MOBILE_LINKS.map((link) => (
-              <li key={link.label} className="border-border/60 border-b last:border-b-0">
-                <ChildAnchor link={link} onClick={() => setMobileOpen(false)} className={`${LINK_CLASS} block py-3`} />
-              </li>
-            ))}
-            {hydrated && !isLoggedIn && (
-              <li>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    openOnboarding(0);
-                  }}
-                  className={`${LINK_CLASS} block w-full py-3 text-left`}
-                >
-                  Log In
-                </button>
-              </li>
-            )}
-          </ul>
+          <div className="mx-auto max-w-[1280px] px-4 py-2">
+            {/* Accordion mirroring the desktop tree: each top item expands to its
+                sections; Guides/Best Of expand again to their category links. */}
+            <ul className="flex flex-col">
+              {NAV.map((item) => {
+                const topOpen = mobileTop === item.label;
+                return (
+                  <li key={item.label} className="border-border/60 border-b">
+                    <button
+                      type="button"
+                      aria-expanded={topOpen}
+                      onClick={() => toggleMobileTop(item.label)}
+                      className="text-dark flex w-full items-center justify-between py-3 text-[15px] font-semibold"
+                    >
+                      {item.label}
+                      <Chevron open={topOpen} />
+                    </button>
+
+                    {topOpen && item.kind === "flat" && (
+                      <div className="pb-2">
+                        {item.children.map((c) => (
+                          <ChildAnchor
+                            key={c.href}
+                            link={c}
+                            onClick={closeMobile}
+                            className="text-dark block py-2 pl-3 text-[14px] font-medium"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {topOpen && item.kind === "stories" && (
+                      <div className="pb-2">
+                        {STORIES_SECTIONS.map((section) => {
+                          // No sub-links (Spotlights) → a plain indented link.
+                          if (section.links.length === 0) {
+                            return (
+                              <ChildAnchor
+                                key={section.label}
+                                link={{ label: section.label, href: section.href }}
+                                onClick={closeMobile}
+                                className="text-dark block py-2 pl-3 text-[14px] font-medium"
+                              />
+                            );
+                          }
+                          const subOpen = mobileSub === section.label;
+                          return (
+                            <div key={section.label}>
+                              <button
+                                type="button"
+                                aria-expanded={subOpen}
+                                onClick={() => toggleMobileSub(section.label)}
+                                className="text-dark flex w-full items-center justify-between py-2 pl-3 text-[14px] font-medium"
+                              >
+                                {section.label}
+                                <Chevron open={subOpen} />
+                              </button>
+                              {subOpen && (
+                                <div className="pb-1">
+                                  {section.links.map((c) => (
+                                    <ChildAnchor
+                                      key={c.href}
+                                      link={c}
+                                      onClick={closeMobile}
+                                      className="text-gray block py-2 pl-6 text-[14px]"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+
+              {hydrated && !isLoggedIn && (
+                <li className="border-border/60 border-b">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      openOnboarding(0);
+                    }}
+                    className="text-dark block w-full py-3 text-left text-[15px] font-semibold"
+                  >
+                    Log In
+                  </button>
+                </li>
+              )}
+            </ul>
+
+            {/* Primary CTA lives here on mobile — it's hidden from the crowded
+                top bar (visible only at lg+, where the hamburger disappears). */}
+            <a
+              href={GET_THE_APP_URL}
+              onClick={closeMobile}
+              className="bg-coral rounded-pill mt-3 mb-1 block px-4 py-2.5 text-center text-[14px] font-bold text-white transition-opacity hover:opacity-90"
+            >
+              Get The App
+            </a>
+          </div>
         </div>
       )}
     </div>
